@@ -1,0 +1,62 @@
+{
+  "channels": {
+    "feishu": {
+      "enabled": true,
+      "defaultAccount": "assistant",
+      "accounts": {
+        "assistant": {
+          "appId": "cli_assistant_xxxxx",
+          "appSecret": "assistant_secret_xxxxx",
+          "connectionMode": "websocket",
+          "dmPolicy": "allowlist",
+          "allowFrom": ["ou_xxxxxxxxxxxxx"],
+          "groupPolicy": "open",
+          "groups": {
+            "oc_ops": { "requireMention": false }
+          }
+        },
+        "finance": {
+          "appId": "cli_finance_xxxxx",
+          "appSecret": "finance_secret_xxxxx",
+          "connectionMode": "websocket",
+          "dmPolicy": "allowlist",
+          "allowFrom": ["ou_xxxxxxxxxxxxx"],
+          "groupPolicy": "open",
+          "groups": {
+            "oc_finance": { "requireMention": false }
+          }
+        }
+      }
+    }
+  },
+  "bindings": [
+    {
+      "agentId": "main",
+      "match": {
+        "channel": "feishu",
+        "accountId": "assistant",
+        "peer": {
+          "kind": "group",
+          "id": "oc_ops"
+        }
+      }
+    },
+    {
+      "agentId": "cfo",
+      "match": {
+        "channel": "feishu",
+        "accountId": "finance",
+        "peer": {
+          "kind": "group",
+          "id": "oc_finance"
+        }
+      }
+    }
+  ],
+  "tools": {
+    "agentToAgent": {
+      "enabled": true,
+      "allow": ["main", "cfo", "writer", "brainstorm"]
+    }
+  }
+}

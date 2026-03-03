@@ -1,0 +1,50 @@
+{
+  "channels": {
+    "feishu": {
+      "enabled": true,
+      "appId": "cli_xxxxxxxxxxxxx",
+      "appSecret": "xxxxxxxxxxxxxxxx",
+      "domain": "feishu",
+      "connectionMode": "websocket",
+      "dmPolicy": "allowlist",
+      "allowFrom": ["ou_xxxxxxxxxxxxx"],
+      "groupPolicy": "open",
+      "groups": {
+        "oc_group_a": {
+          "requireMention": false
+        },
+        "oc_group_b": {
+          "requireMention": false
+        }
+      }
+    }
+  },
+  "bindings": [
+    {
+      "agentId": "main",
+      "match": {
+        "channel": "feishu",
+        "peer": {
+          "kind": "group",
+          "id": "oc_group_a"
+        }
+      }
+    },
+    {
+      "agentId": "writer",
+      "match": {
+        "channel": "feishu",
+        "peer": {
+          "kind": "group",
+          "id": "oc_group_b"
+        }
+      }
+    }
+  ],
+  "tools": {
+    "agentToAgent": {
+      "enabled": true,
+      "allow": ["main", "writer", "brainstorm", "coder"]
+    }
+  }
+}
