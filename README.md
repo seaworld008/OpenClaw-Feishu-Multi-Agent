@@ -108,6 +108,47 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
 - 群 ID（`oc_xxx`）和 Agent ID
 - 是否免 @（若免 @，确认飞书已审批 `im:message.group_msg`）
 
+### 占位值替换对照（重点）
+
+你提到的这三行：
+
+- `oc_sales_group -> sales-agent（accountId=bot-main）`
+- `oc_ops_group -> ops-agent（accountId=bot-main）`
+- `oc_fin_group -> finance-agent（accountId=bot-finance）`
+
+其中每一段都需要替换为你的真实值。按下面对照填：
+
+| 示例占位 | 你要替换成什么 | 来源位置 | 常见错误 |
+|---|---|---|---|
+| `oc_sales_group` / `oc_ops_group` / `oc_fin_group` | 飞书群真实 `chat_id`（通常以 `oc_` 开头） | 飞书事件 `im.message.receive_v1` 的 `chat_id`；或 OpenClaw 日志中收到消息时的会话 ID | 用了群名称而不是 `chat_id`；把多个群写成同一个 ID |
+| `sales-agent` / `ops-agent` / `finance-agent` | OpenClaw 中已存在的 `agentId` | `openclaw agents list` | 写了 persona 名称但不是 `agentId`；拼写不一致 |
+| `bot-main` / `bot-finance` | `channels.feishu.accounts` 里的账号键名（`accountId`） | 你的 `openclaw.json` 中 `channels.feishu.accounts.<key>` | `bindings.match.accountId` 和 accounts 键名不一致 |
+
+### 一份可直接照抄的“替换后”示例
+
+假设你的真实值是：
+- 销售群：`oc_9f31a...`
+- 运营群：`oc_7b22d...`
+- 财务群：`oc_3c88e...`
+- Agent ID：`sales_agent`、`ops_agent`、`finance_agent`
+- 账号：`bot_main`、`bot_finance`
+
+那么路由就应写成：
+
+```text
+- oc_9f31a... -> sales_agent（accountId=bot_main）
+- oc_7b22d... -> ops_agent（accountId=bot_main）
+- oc_3c88e... -> finance_agent（accountId=bot_finance）
+```
+
+### 上线前 5 条强校验（避免配错）
+
+1. `chat_id` 唯一：一个群只对应一条精确 binding。  
+2. `agentId` 存在：`openclaw agents list` 能查到。  
+3. `accountId` 对齐：`bindings.match.accountId` 必须等于 `channels.feishu.accounts` 的键名。  
+4. 顺序正确：精确规则在前，兜底规则在后。  
+5. 先验证再放量：先 canary 群验证通过，再全量。
+
 4. 交付验收建议
 - 先在 canary 群验证，再全量放量
 - 每条 binding 至少做一次实测（群+私聊）

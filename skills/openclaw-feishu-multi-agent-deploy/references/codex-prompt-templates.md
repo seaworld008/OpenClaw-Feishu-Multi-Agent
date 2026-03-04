@@ -20,6 +20,20 @@
 输出最终可粘贴配置和验证清单。
 ```
 
+### 多角色路由占位替换速查
+
+- `oc_sales_group` / `oc_ops_group` / `oc_fin_group`：替换为飞书群真实 `chat_id`（`oc_...`）。
+- `sales-agent` / `ops-agent` / `finance-agent`：替换为 OpenClaw 已存在的 `agentId`。
+- `bot-main` / `bot-finance`：替换为 `channels.feishu.accounts` 里的账号键名（`accountId`）。
+
+示例（替换后）：
+
+```text
+- oc_9f31a... -> sales_agent（accountId=bot_main）
+- oc_7b22d... -> ops_agent（accountId=bot_main）
+- oc_3c88e... -> finance_agent（accountId=bot_finance）
+```
+
 ## 3) 已上线环境增量改造
 ```text
 请使用 openclaw-feishu-multi-agent-deploy skill，按 brownfield 增量方式改造。
