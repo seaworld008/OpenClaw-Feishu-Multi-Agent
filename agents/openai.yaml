@@ -1,0 +1,5 @@
+display_name: Feishu Multi-Agent Deploy
+short_description: 交付级 OpenClaw 飞书多机器人多角色配置与升级
+default_prompt: >-
+  读取部署输入并生成可执行的 OpenClaw Feishu 多 Agent 配置补丁，
+  按增量改造策略输出变更计划、验证步骤和回滚命令。

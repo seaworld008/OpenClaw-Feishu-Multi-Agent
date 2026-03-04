@@ -1,159 +1,131 @@
 ---
 name: openclaw-feishu-multi-agent-deploy
-description: Use when deploying or troubleshooting OpenClaw with Feishu in single-bot or multi-bot multi-agent routing, including credential collection, bindings, verification, and go-live checks.
+description: Use when delivering production-ready OpenClaw Feishu multi-agent setups, including single-bot or multi-bot routing, brownfield incremental rollout, validation, and upgrade-safe configuration.
 ---
 
-# OpenClaw Feishu Multi-Agent Deploy
+# Feishu OpenClaw Multi-Agent
 
-## Overview
+## 目标
+把 OpenClaw + 飞书多 Agent 配置从“能跑”提升到“可交付”：
+- 可配置：单机器人/多机器人、多角色分工
+- 可落地：前提条件清晰、一次配置可执行
+- 可升级：兼容 OpenClaw 持续迭代，能做升级后回归
+- 可回滚：所有生产改动都有备份和回滚路径
 
-Deploy OpenClaw + Feishu with predictable routing, low token cost, and fast validation.
-This skill supports two production modes:
+## 默认技术路线（2026-03 起）
+- 默认使用官方插件：`@openclaw/feishu`
+- 默认 `match.channel = "feishu"`
+- `chat-feishu` 仅作为历史配置兼容路径
 
-1. Single bot, multi-agent routing by chat binding
-2. Multi bot, multi-agent routing by account + chat binding
+## 何时使用
+- 客户要求在飞书里搭建多 Agent 团队（各司其职）
+- 需要把不同群/私聊稳定路由到不同 Agent
+- 需要在已上线环境做增量改造（Brownfield）
+- 需要升级 OpenClaw/插件后做兼容修复
 
-## Preflight Inputs (Collect First)
+## 必读资源（按顺序）
+1. `references/prerequisites-checklist.md`
+2. `templates/deployment-inputs.example.yaml`
+3. `references/openclaw-feishu-multi-agent-notes.md`
+4. `references/source-cross-validation-2026-03-04.md`
+5. `templates/brownfield-change-plan.example.md`
 
-Use `templates/deployment-inputs.example.yaml` and collect all required values before config edits.
+## 交付模式
 
-Minimum required:
-- OpenClaw host and process control command
-- Feishu `appId` and `appSecret` (per bot/account)
-- Feishu chat IDs (`oc_...`) for each target group
-- Feishu user Open IDs (`ou_...`) if DM allowlist is enabled
-- Agent IDs and their model/workspace mapping
+### 1) 拓扑模式
+- `single-bot`：一个飞书机器人，多群分流到多个 Agent
+- `multi-bot`：多个飞书机器人（多 `accountId`）分流到多个 Agent
 
-Optional but recommended:
-- Webhook callback URL + verification token (if using webhook mode)
-- Dedicated supervisor agent ID for orchestration
-- Rollback snapshot path for previous `openclaw.json`
+### 2) 变更模式
+- `incremental`（默认推荐）：生产环境只打最小补丁
+- `full_replace`：仅用于新部署或用户明确要求全量重构
 
-## Mode Selection
+### 3) 发布策略
+- `canary_then_full`（默认推荐）
+- `direct_full`（仅低风险场景）
 
-Use single-bot mode when one visual bot is enough and routing happens by group.
-Use multi-bot mode when each function/team needs a distinct bot identity in Feishu.
+## 执行流程（严格按顺序）
+1. 前置校验
+- 检查 OpenClaw 与插件版本
+- 检查飞书权限与事件订阅
+- 明确变更窗口和回滚责任人
 
-## Existing Deployment Compatibility (Brownfield Mode)
+2. 模式识别
+- 如果现网已用 `channels.feishu.*`，保持插件模式
+- 如果现网仍为 `chat-feishu`，先兼容输出，再计划迁移
 
-This skill is designed to work on already-running OpenClaw deployments.
-Use **non-destructive incremental changes** instead of full-file replacement.
+3. 收集输入
+- 使用 `templates/deployment-inputs.example.yaml`
+- 确认 `agents`、`accounts`、`routes` 完整
+- 群/私聊 ID（`peer.id`）必须真实可用
 
-Brownfield rules:
-- Always back up current `openclaw.json` before edits.
-- Preserve unrelated keys and existing channels.
-- Patch only the minimum required paths:
-  - `channels.feishu`
-  - `bindings`
-  - `tools.agentToAgent` (if explicitly enabled)
-- Do not remove existing routes unless explicitly requested.
-- Run canary validation in one mapped group before full rollout.
-
-Recommended brownfield sequence:
-1. Snapshot current config and service status.
-2. Build a route diff (add/update/delete) and review impact.
-3. Apply additive patch first (new accounts/groups/bindings).
-4. Restart service once, validate canary group.
-5. Expand rollout to remaining groups.
-6. Keep rollback snapshot until final sign-off.
-
-## Deployment Workflow
-
-1. Create and prepare agents
-
+4. 生成配置
+- 优先输出最小 patch（不要覆盖整份配置）
+- 可用脚本：
 ```bash
-openclaw agents add writer --model deepseek/deepseek-chat --workspace ~/.openclaw/workspace-writer
-openclaw agents add brainstorm --model zai/glm-4.7 --workspace ~/.openclaw/workspace-brainstorm
-openclaw agents set-identity --agent writer --name "Writer" --emoji "✍️"
-openclaw agents set-identity --agent brainstorm --name "Brainstorm" --emoji "🧠"
+python3 scripts/build_openclaw_feishu_snippets.py \
+  --input references/input-template.json \
+  --out references/generated
 ```
 
-2. Configure Feishu channel
-- Single-bot template: `templates/openclaw-single-bot-route.example.jsonc`
-- Multi-bot template: `templates/openclaw-multi-bot-route.example.jsonc`
+5. 绑定排序（关键）
+- 先精确规则（`accountId + peer`）
+- 再 `accountId` 级规则
+- 最后渠道兜底规则（如 `accountId="*"`）
+- 重启前必须做冲突检查：
+  - 同一 `channel/accountId/peer.id` 不得映射多个 agent
+  - bindings 里不得引用已删除 agent
 
-3. Add `bindings` routes
-- Route by `channel=feishu` + `peer.kind=group` + `peer.id=oc_xxx`
-- For multi-bot mode, add `accountId` in both channel account and binding match
+6. 提及策略
+- 默认 `requireMention=true`
+- 仅在业务明确要求时启用免 @
+- 免 @ 前必须确认 `im:message.group_msg` 已审批
+- 多 Bot 群默认 `allowMentionlessInMultiBotGroup=false`
 
-4. Optional agent-to-agent orchestration
+7. Brownfield 上线
+- 先备份配置
+- 执行 `openclaw config validate`
+- 重启网关
+- 先 canary 群验收，再全量放量
 
-```json
-{
-  "tools": {
-    "agentToAgent": {
-      "enabled": true,
-      "allow": ["main", "writer", "brainstorm", "coder"]
-    }
-  }
-}
-```
+8. 回归与验收
+- 使用 `templates/verification-checklist.md`
+- 记录验证证据（命令输出、关键日志片段）
+- 输出回滚命令
+- 若启用了卡片交互，验证 `card.action.trigger` 事件链路
 
-5. Restart and verify
-- Restart OpenClaw
-- Send test messages in each mapped Feishu group
-- Confirm replies come from the expected agent identity and model behavior
+## 输出要求（给客户/交付文档）
+必须包含：
+- 最终 patch（只含本次改动）
+- `to_add` / `to_update` / `to_keep_unchanged`
+- 变更命令、验证命令、回滚命令
+- 验收结果（通过/失败 + 证据）
+- （可选）`tools.agentToAgent` 的启用范围与风险说明
 
-## Change Safety (Required for Production)
+## 关键约束
+- 不得虚构 `agentId`、`accountId`、`peer.id`
+- 不得直接覆盖与本次无关配置
+- 不得省略备份步骤
+- 不得把兜底规则放到精确规则前
 
-- Avoid full rewrite of `openclaw.json` on customer environments.
-- Prefer explicit change plan with three lists:
-  - `to_add`
-  - `to_update`
-  - `to_keep_unchanged`
-- Detect and resolve binding conflicts before restart:
-  - same `channel/accountId/peer.id` matching multiple agents
-  - stale bindings targeting removed agents
-- Keep one-command rollback procedure documented in deployment ticket.
+## 常见问题快速处理
+- 收不到消息：优先查事件订阅与权限
+- 群里必须 @：查 `requireMention` 与 `im:message.group_msg`
+- 路由串线：查 `bindings` 顺序和重叠规则
+- 多账号出站错 bot：查 `defaultAccount` 与 `match.accountId`
+- 升级后异常：跑 `openclaw config validate` + canary 回归
 
-## Feishu Platform Settings Checklist
-
-App permissions (pick by interaction mode):
-- Baseline (always):
-  - `im:message:send_as_bot`
-  - `im:message.p2p_msg:readonly`
-- If `requireMention: true` (mention-driven groups):
-  - `im:message.group_at_msg:readonly`
-- If `requireMention: false` (mention-free groups):
-  - `im:message.group_msg` or `im:message.group_msg:readonly` (tenant-dependent naming)
-
-Event subscriptions:
-- `im.message.receive_v1`
-- `card.action.trigger` (if card callbacks are used)
-
-Bot setting:
-- Enable "Bot can be @ in group chat"
-
-Policy defaults for production:
-- Prefer `dmPolicy: allowlist` or `pairing`, avoid `open` unless explicitly required
-- Prefer explicit group control over broad wildcard behavior
-- In multi-bot groups with mention-free mode, validate duplicate-trigger risk before rollout
-
-## Troubleshooting Quick Table
-
-- Symptom: Group message not triggering
-  - Check `requireMention`; if `false`, ensure `group_msg` scope is approved and events are enabled
-  - If `requireMention` is `true`, verify `group_at_msg:readonly` is approved
-  - Check binding `peer.id` matches exact `oc_...` chat ID
-- Symptom: Wrong agent responds
-  - Check overlapping bindings and route precedence
-  - In multi-bot mode, verify `accountId` exists and matches binding
-- Symptom: Bot online but no inbound events
-  - Verify connection mode (`websocket` vs `webhook`) and webhook verification token
-  - Re-check event subscription status in Feishu console
-- Symptom: DM blocked unexpectedly
-  - Check `dmPolicy` and `allowFrom` Open IDs
-
-## Validation SOP (Must Pass Before Go-Live)
-
-1. Routing test: each Feishu group hits only the intended agent
-2. Identity test: agent name/emoji/persona matches expected role
-3. Isolation test: context from one group does not leak into another
-4. Orchestration test: supervisor agent can call allowed sub-agents
-5. Security test: no broad wildcard allowlist unless explicitly required
-
-## Notes
-
-- Some docs/examples use `peer.kind: dm`; newer schema commonly expects `direct`.
-  - If route matching fails unexpectedly, verify against your installed OpenClaw schema/version.
-- Prefer explicit allowlists and explicit bindings over broad open policies.
+## 可直接复用的文件
+- 模板：
+  - `templates/deployment-inputs.example.yaml`
+  - `templates/openclaw-single-bot-route.example.jsonc`
+  - `templates/openclaw-multi-bot-route.example.jsonc`
+  - `templates/brownfield-change-plan.example.md`
+  - `templates/verification-checklist.md`
+- 输入样板：
+  - `references/input-template.json`
+  - `references/input-template-plugin.json`
+  - `references/input-template-legacy-chat-feishu.json`
+- 运行手册：
+  - `references/rollout-and-upgrade-playbook.md`
+  - `references/codex-prompt-templates.md`

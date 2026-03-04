@@ -1,50 +1,55 @@
 {
+  // 增量 patch 到 ~/.openclaw/openclaw.json（官方插件模式）
   "channels": {
     "feishu": {
       "enabled": true,
-      "appId": "cli_xxxxxxxxxxxxx",
-      "appSecret": "xxxxxxxxxxxxxxxx",
-      "domain": "feishu",
       "connectionMode": "websocket",
-      "dmPolicy": "allowlist",
-      "allowFrom": ["ou_xxxxxxxxxxxxx"],
+      "domain": "feishu",
+      "defaultAccount": "main",
+
+      "dmPolicy": "pairing",
       "groupPolicy": "open",
-      "groups": {
-        "oc_group_a": {
-          "requireMention": false
-        },
-        "oc_group_b": {
-          "requireMention": false
+      "requireMention": true,
+      "groupCommandMentionBypass": "single_bot",
+
+      "accounts": {
+        "main": {
+          "appId": "cli_xxx",
+          "appSecret": "xxx",
+          "encryptKey": "xxx",
+          "verificationToken": "xxx"
         }
+      },
+
+      "groups": {
+        "oc_group_a": { "requireMention": false },
+        "oc_group_b": { "requireMention": true }
       }
     }
   },
+
   "bindings": [
     {
-      "agentId": "main",
+      "agentId": "work",
       "match": {
         "channel": "feishu",
-        "peer": {
-          "kind": "group",
-          "id": "oc_group_a"
-        }
+        "accountId": "main",
+        "peer": { "kind": "group", "id": "oc_group_a" }
       }
     },
     {
-      "agentId": "writer",
+      "agentId": "finance",
       "match": {
         "channel": "feishu",
-        "peer": {
-          "kind": "group",
-          "id": "oc_group_b"
-        }
+        "accountId": "main",
+        "peer": { "kind": "group", "id": "oc_group_b" }
       }
     }
   ],
   "tools": {
     "agentToAgent": {
       "enabled": true,
-      "allow": ["main", "writer", "brainstorm", "coder"]
+      "allow": ["work", "finance", "writer"]
     }
   }
 }

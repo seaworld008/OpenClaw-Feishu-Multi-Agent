@@ -1,0 +1,10 @@
+# macOS
+.DS_Store
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Skill runtime outputs
+skills/openclaw-feishu-multi-agent-deploy/references/generated/*
+!skills/openclaw-feishu-multi-agent-deploy/references/generated/.gitkeep

@@ -1,53 +1,32 @@
-# OpenClaw Feishu Multi-Agent Verification Checklist
+# 验收清单
 
-## 1) Config Integrity
+## A. 变更前
+- [ ] `openclaw --version` 已记录
+- [ ] `openclaw plugins list` 已确认 `@openclaw/feishu`
+- [ ] 配置文件已备份（含时间戳）
+- [ ] 飞书权限和事件订阅已完成审批
 
-- `openclaw.json` is valid JSON/JSONC
-- Every `bindings[].agentId` exists in agent registry
-- Every Feishu `peer.id` exists and is reachable
-- In multi-bot mode, every `bindings[].match.accountId` exists in `channels.feishu.accounts`
+## B. 配置校验
+- [ ] `openclaw config validate` 通过
+- [ ] `bindings` 顺序正确（精确在前、兜底在后）
+- [ ] `defaultAccount` 已设置且存在于 `accounts`
+- [ ] 无冲突规则（同一 `channel/accountId/peer.id` 未映射到多个 agent）
+- [ ] 未存在指向已删除 agent 的陈旧 bindings
 
-## 2) Feishu App Readiness
+## C. 功能验证
+- [ ] 私聊路由正确（至少 1 条）
+- [ ] 每个目标群路由正确
+- [ ] requireMention=true 的群必须 @ 才触发
+- [ ] requireMention=false 的群不 @ 可触发（且权限已具备）
+- [ ] 多 Bot 群未出现重复触发
+- [ ] agent 身份（名称/角色行为）符合目标职责
+- [ ] 跨群上下文隔离正常（无串内容）
 
-- App permissions granted:
-  - Baseline:
-    - `im:message:send_as_bot`
-    - `im:message.p2p_msg:readonly`
-  - Mention-required groups:
-    - `im:message.group_at_msg:readonly`
-  - Mention-free groups:
-    - `im:message.group_msg` or `im:message.group_msg:readonly`
-- Event subscriptions enabled:
-  - `im.message.receive_v1`
-  - `card.action.trigger` (if used)
-- Bot setting enabled: can be @ in group chat
+## D. 稳定性验证
+- [ ] 网关重启后路由仍正确
+- [ ] 5 分钟连续对话无异常报错
+- [ ] 日志无权限拒绝与 schema 报错
 
-## 3) Runtime Health
-
-- OpenClaw process restarted successfully
-- No auth/config errors in startup logs
-- Feishu channel connection is established
-
-## 4) Routing Tests
-
-- Group A -> expected agent only
-- Group B -> expected agent only
-- Group C -> expected agent only
-- No cross-group context leak
-
-## 5) Orchestration Tests
-
-- Supervisor agent can call allowed agents
-- Supervisor agent cannot call non-allowlisted agents
-- Failure fallback path logs are observable
-
-## 6) Security Checks
-
-- `allowFrom` is not overly broad in production
-- No plaintext secrets committed to git
-- Rollback file exists and is restorable
-
-## 7) Go/No-Go Gate
-
-- All tests above pass
-- Stakeholder signs off route map and fallback behavior
+## E. 回滚可用性
+- [ ] 回滚命令可执行
+- [ ] 回滚后服务恢复到变更前状态

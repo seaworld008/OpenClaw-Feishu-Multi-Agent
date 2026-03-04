@@ -1,96 +1,101 @@
 project:
-  name: "customer-openclaw-feishu"
-  environment: "prod"
-  timezone: "Asia/Shanghai"
+  name: customer-feishu-multi-agent
+  owner: delivery-team
+  environment: prod
 
 openclaw:
-  host: "https://your-openclaw-host"
-  config_file: "/path/to/openclaw.json"
+  version: "v2026.3.2"
+  config_path: "~/.openclaw/openclaw.json"
+  restart_command: "openclaw gateway restart"
+  healthcheck_command: "openclaw gateway status"
+  plugin:
+    id: "@openclaw/feishu"
+    installed: true
+
+change:
   existing_deployment: true
   change_mode: "incremental" # incremental | full_replace
-  restart_command: "systemctl restart openclaw"
-  healthcheck_command: "systemctl status openclaw --no-pager"
-  rollback_config_snapshot: "/path/to/openclaw.json.bak"
-  preserve_paths:
-    - "channels.*"
-    - "models"
-    - "authProfiles"
-    - "logging"
+  rollout_strategy: "canary_then_full" # canary_then_full | direct_full
+  backup_required: true
   canary_group_id: "oc_group_a"
 
 feishu:
-  connection_mode: "websocket" # websocket | webhook
-  domain: "feishu"
+  connectionMode: "websocket" # websocket | webhook
+  domain: "feishu" # feishu | lark
+  defaultAccount: "main"
   bot_group_mention_enabled: true
-  events:
-    - "im.message.receive_v1"
-  card_callbacks_enabled: false # if true, add card.action.trigger
+  card_callbacks_enabled: false
 
-  # If connection_mode=webhook
+  # 若 connectionMode=webhook 才需要
   webhook:
     callback_url: ""
     verification_token: ""
 
-  accounts:
-    - account_id: "default" # required in multi-bot mode
-      app_id: "cli_xxxxxxxxxxxxx"
-      app_secret: "xxxxxxxxxxxxxxxx"
-      dm_policy: "allowlist" # allowlist | open | closed
-      allow_from_open_ids:
-        - "ou_xxxxxxxxxxxxx"
-      group_policy: "open" # open | closed
-      interaction_mode: "mention_free" # mention_required | mention_free
-      required_scopes:
-        baseline:
-          - "im:message:send_as_bot"
-          - "im:message.p2p_msg:readonly"
-        mention_required:
-          - "im:message.group_at_msg:readonly"
-        mention_free:
-          - "im:message.group_msg OR im:message.group_msg:readonly"
-      group_require_mention:
-        oc_group_a: false
-        oc_group_b: true
+  account_profiles:
+    - accountId: "main"
+      appId: "cli_xxx"
+      appSecret: "xxx"
+      encryptKey: "xxx"
+      verificationToken: "xxx"
+      requireMention: true
+      groupPolicy: "open"
+      dmPolicy: "pairing"
+      allowFrom: []
 
-agent_design:
-  supervisor_agent: "main"
+  # 群策略：可选按群覆盖 requireMention
+  group_overrides:
+    - chatId: "oc_group_a"
+      requireMention: false
+    - chatId: "oc_group_b"
+      requireMention: true
+
+routing:
   agents:
-    - agent_id: "main"
-      model: "openai/gpt-5-mini"
-      workspace: "~/.openclaw/workspace-main"
-      role: "dispatcher"
-      bound_channels:
-        - "feishu:default:oc_group_a"
-    - agent_id: "writer"
-      model: "deepseek/deepseek-chat"
-      workspace: "~/.openclaw/workspace-writer"
-      role: "content"
-      bound_channels:
-        - "feishu:default:oc_group_b"
-    - agent_id: "brainstorm"
-      model: "zai/glm-4.7"
-      workspace: "~/.openclaw/workspace-brainstorm"
-      role: "ideation"
-      bound_channels:
-        - "feishu:default:oc_group_c"
+    - id: "work"
+      workspace: "~/.openclaw/workspace-work"
+      agentDir: "~/.openclaw/agents/work/agent"
+      model: "anthropic/claude-sonnet-4-5"
+    - id: "finance"
+      workspace: "~/.openclaw/workspace-finance"
+      agentDir: "~/.openclaw/agents/finance/agent"
+      model: "openai/gpt-4.1"
 
-agent_to_agent:
-  enabled: true
-  allow:
-    - "main"
-    - "writer"
-    - "brainstorm"
+  # match.channel 对官方插件固定为 "feishu"
+  bindings:
+    - agentId: "work"
+      match:
+        channel: "feishu"
+        accountId: "main"
+        peer:
+          kind: "group"
+          id: "oc_group_a"
+    - agentId: "finance"
+      match:
+        channel: "feishu"
+        accountId: "main"
+        peer:
+          kind: "group"
+          id: "oc_group_b"
 
-validation:
-  rollout_strategy: "canary_then_full" # canary_then_full | full_direct
-  test_messages:
-    - channel: "feishu"
-      account_id: "default"
-      peer_kind: "group"
-      peer_id: "oc_group_a"
-      message: "ping main"
-    - channel: "feishu"
-      account_id: "default"
-      peer_kind: "group"
-      peer_id: "oc_group_b"
-      message: "ping writer"
+permissions:
+  minimum:
+    - "im:message"
+    - "im:message.p2p_msg:readonly"
+    - "im:message.group_at_msg:readonly"
+    - "im:message:send_as_bot"
+    - "im:resource"
+  mentionless_group_required:
+    - "im:message.group_msg"
+  events:
+    - "im.message.receive_v1"
+    - "im.chat.member.bot.added_v1"
+    - "im.chat.member.bot.deleted_v1"
+  card_callback_event:
+    - "card.action.trigger"
+
+acceptance:
+  required:
+    - "openclaw config validate 通过"
+    - "canary 群消息命中目标 agent"
+    - "无重复触发/无串路由"
+    - "回滚命令已验证"

@@ -1,62 +1,67 @@
 {
+  // 多机器人 + 多 Agent
   "channels": {
     "feishu": {
       "enabled": true,
-      "defaultAccount": "assistant",
+      "connectionMode": "websocket",
+      "domain": "feishu",
+      "defaultAccount": "ops-bot",
+
+      "dmPolicy": "pairing",
+      "groupPolicy": "open",
+      "requireMention": true,
+      "groupCommandMentionBypass": "single_bot",
+
       "accounts": {
-        "assistant": {
-          "appId": "cli_assistant_xxxxx",
-          "appSecret": "assistant_secret_xxxxx",
-          "connectionMode": "websocket",
-          "dmPolicy": "allowlist",
-          "allowFrom": ["ou_xxxxxxxxxxxxx"],
-          "groupPolicy": "open",
-          "groups": {
-            "oc_ops": { "requireMention": false }
-          }
+        "ops-bot": {
+          "appId": "cli_ops",
+          "appSecret": "ops_secret",
+          "encryptKey": "ops_encrypt",
+          "verificationToken": "ops_token",
+          "requireMention": true
         },
-        "finance": {
-          "appId": "cli_finance_xxxxx",
-          "appSecret": "finance_secret_xxxxx",
-          "connectionMode": "websocket",
-          "dmPolicy": "allowlist",
-          "allowFrom": ["ou_xxxxxxxxxxxxx"],
-          "groupPolicy": "open",
-          "groups": {
-            "oc_finance": { "requireMention": false }
-          }
+        "finance-bot": {
+          "appId": "cli_finance",
+          "appSecret": "finance_secret",
+          "encryptKey": "finance_encrypt",
+          "verificationToken": "finance_token",
+          "requireMention": false,
+          "allowMentionlessInMultiBotGroup": false
         }
       }
     }
   },
+
   "bindings": [
     {
-      "agentId": "main",
+      "agentId": "ops",
       "match": {
         "channel": "feishu",
-        "accountId": "assistant",
-        "peer": {
-          "kind": "group",
-          "id": "oc_ops"
-        }
+        "accountId": "ops-bot",
+        "peer": { "kind": "group", "id": "oc_ops_group" }
       }
     },
     {
-      "agentId": "cfo",
+      "agentId": "finance",
       "match": {
         "channel": "feishu",
-        "accountId": "finance",
-        "peer": {
-          "kind": "group",
-          "id": "oc_finance"
-        }
+        "accountId": "finance-bot",
+        "peer": { "kind": "group", "id": "oc_finance_group" }
+      }
+    },
+    {
+      // 兜底规则必须放最后
+      "agentId": "ops",
+      "match": {
+        "channel": "feishu",
+        "accountId": "ops-bot"
       }
     }
   ],
   "tools": {
     "agentToAgent": {
       "enabled": true,
-      "allow": ["main", "cfo", "writer", "brainstorm"]
+      "allow": ["ops", "finance", "writer", "brainstorm"]
     }
   }
 }
