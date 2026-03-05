@@ -1,37 +1,28 @@
-# Codex 真实交付模板（唯一目标：自动跨群收口 / 主管模式）
+# 飞书多 Agent 自动跨群收口交付蓝图（V2.1 Pro）
 
-## 客户价值说明（可直接转发）
+## 对客户的价值承诺
 
-这套配置不是“多加一个机器人”，而是把企业协作从“单点问答”升级为“多角色团队协同”：
+这份蓝图的目标不是“多加一个机器人”，而是把企业协同升级为“可执行的 AI 团队作业流”：
 
-1. 从分散沟通到统一决策  
-- 销售、运营、财务各自在自己的群里工作，主管 Agent 自动跨群收口，产出一份统一执行方案。
+1. 自动跨群收口
+- 销售、运营、财务在各自群正常协作，主管 Agent 自动汇总三方结论。
 
-2. 从聊天回复到可执行结果  
-- 输出不再是泛泛建议，而是“结论 + 冲突点 + 优先级 + 明日三件事 + 风险预案”的管理可执行稿。
+2. 管理层可直接决策
+- 输出统一执行稿，固定包含：核心结论、冲突点、优先级、明日三件事、风险预案。
 
-3. 从人肉汇总到自动汇总  
-- 不需要运营负责人每天手工搬运三方结论，主管 Agent 自动拉取并整合，显著减少协同成本。
+3. 最小改造、低风险上线
+- 保留现有业务群路由，仅新增 manager 群 + supervisor_agent + agentToAgent。
 
-4. 从试验性 AI 到可交付体系  
-- 保留现有 3 群 3 bot 业务隔离，仅做最小增量改造（新增 manager 群 + supervisor_agent + agentToAgent），风险可控、可回滚、可验收。
+4. 可交付、可审计、可回滚
+- 提供完整的变更计划、上线命令、验收标准与回滚步骤。
 
-适用场景：
-- 经营例会周报收口
-- 活动上线跨部门决策
-- 销售-交付-财务联动审批
-- 管理层要“一页看全局”的日常经营场景
+## 适用范围
 
-## 本文件唯一目标
+- 已有飞书多群、多机器人、多角色 Agent 的企业环境
+- 需要“跨部门自动收口”的经营管理场景
+- 需要在 brownfield 现网做增量改造而不是重建
 
-只用于一件事：
-- 在你当前 `3群3bot3agent` 的飞书 OpenClaw 现网上，真实交付或扩展“自动跨群收口（主管模式）”。
-
-不讨论其他模式，不给多套分支方案，直接面向可落地交付。
-
-## 固定参数（你当前真实环境）
-
-> 说明：以下为你当前确认过的真实账号、群 ID 与 Agent 基线。
+## 你的当前真实环境基线
 
 ```yaml
 project:
@@ -61,28 +52,9 @@ accounts:
     verificationToken: "<从飞书控制台-事件与回调获取>"
 
 existingRoutes:
-  - peerKind: "group"
-    peerId: "oc_ffab0130d2cfb80f70c150918b4d4e87"
-    accountId: "aoteman"
-    agentId: "sales_agent"
-  - peerKind: "group"
-    peerId: "oc_da719e85a3f75d9a6050343924d9aa62"
-    accountId: "xiaolongxia"
-    agentId: "ops_agent"
-  - peerKind: "group"
-    peerId: "oc_1a3c32a99d6a8120f9ca7c4343263b24"
-    accountId: "yiran_yibao"
-    agentId: "finance_agent"
-
-agents:
-  - id: "sales_agent"
-    role: "销售咨询"
-  - id: "ops_agent"
-    role: "运营执行"
-  - id: "finance_agent"
-    role: "财务分析"
-  - id: "supervisor_agent"
-    role: "自动跨群收口"
+  - { peerKind: "group", peerId: "oc_ffab0130d2cfb80f70c150918b4d4e87", accountId: "aoteman", agentId: "sales_agent" }
+  - { peerKind: "group", peerId: "oc_da719e85a3f75d9a6050343924d9aa62", accountId: "xiaolongxia", agentId: "ops_agent" }
+  - { peerKind: "group", peerId: "oc_1a3c32a99d6a8120f9ca7c4343263b24", accountId: "yiran_yibao", agentId: "finance_agent" }
 
 managerGroup:
   peerKind: "group"
@@ -90,20 +62,26 @@ managerGroup:
   accountId: "aoteman"
   currentDetectedAgentId: "main"
   targetAgentId: "supervisor_agent"
+
+agents:
+  - { id: "sales_agent", role: "销售咨询" }
+  - { id: "ops_agent", role: "运营执行" }
+  - { id: "finance_agent", role: "财务分析" }
+  - { id: "supervisor_agent", role: "自动跨群收口" }
 ```
 
 ## 一次性交付主提示词（直接发给 Codex）
 
 ```text
-请使用 openclaw-feishu-multi-agent-deploy skill，按真实生产标准完成“自动跨群收口（主管模式）”部署。
+请使用 openclaw-feishu-multi-agent-deploy skill，按生产标准完成“自动跨群收口（主管模式）”交付。
 
-# 0) 交付目标
+# 1) 交付目标
 - 在现网 brownfield 上做 incremental 最小改动。
 - 保留现有 3 条业务群路由不变。
 - 新增 manager 群 -> supervisor_agent。
-- 让 supervisor_agent 能调用 sales_agent、ops_agent、finance_agent 自动收口。
+- 让 supervisor_agent 可调用 sales_agent / ops_agent / finance_agent 自动收口。
 
-# 1) 固定输入（必须按原值使用）
+# 2) 固定输入（按原值使用）
 accounts:
 - { accountId: "aoteman", botName: "奥特曼", appId: "cli_a923c749bab6dcba", appSecret: "TWpD207Ri2g1Qqmw4R5YhfkPRhOokCGX", encryptKey: "<真实值>", verificationToken: "<真实值>" }
 - { accountId: "xiaolongxia", botName: "小龙虾找妈妈", appId: "cli_a9f1849b67f9dcc2", appSecret: "g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr", encryptKey: "<真实值>", verificationToken: "<真实值>" }
@@ -115,7 +93,7 @@ existingRoutes:
 - { peerKind: "group", peerId: "oc_1a3c32a99d6a8120f9ca7c4343263b24", accountId: "yiran_yibao", agentId: "finance_agent" }
 
 managerRoute:
-  - { peerKind: "group", peerId: "oc_84677faa225ba8a380d3721c654f17a1", accountId: "aoteman", agentId: "supervisor_agent" }
+- { peerKind: "group", peerId: "oc_84677faa225ba8a380d3721c654f17a1", accountId: "aoteman", agentId: "supervisor_agent" }
 
 agents:
 - { id: "sales_agent", role: "销售咨询", systemPrompt: "你是销售 Agent。输出需求摘要、推荐方案、前提约束和下一步动作；信息不足先问3个澄清问题；不得承诺未确认折扣和交付。" }
@@ -123,17 +101,17 @@ agents:
 - { id: "finance_agent", role: "财务分析", systemPrompt: "你是财务 Agent。输出关键指标表（当前值/目标值/差异/建议）；标注口径与周期；税务合规问题必须提示人工复核。" }
 - { id: "supervisor_agent", role: "跨群收口", systemPrompt: "你是主管收口 Agent。必须先调用 sales/ops/finance 三个 Agent 获取结构化摘要，再输出统一执行方案、冲突点、明日三件事、风险预案；信息不足时列待补数据，不得臆测。" }
 
-# 2) 执行约束
+# 3) 执行约束
 1. 先读取并审计 ~/.openclaw/openclaw.json。
 2. 输出 to_add / to_update / to_keep_unchanged。
 3. 仅允许修改：channels.feishu、agents.list、bindings、tools.agentToAgent。
-4. 绑定顺序必须：peer+accountId 精确 > accountId > 渠道兜底。
-5. 保持三条 existingRoutes 不变，只新增 managerRoute。
+4. bindings 顺序必须：peer+accountId 精确 > accountId > 渠道兜底。
+5. 保持 existingRoutes 不变，只新增 managerRoute。
 6. tools.agentToAgent 必须 enabled=true，allow 至少包含 supervisor_agent、sales_agent、ops_agent、finance_agent。
-7. 默认 requireMention=true；allowMentionlessInMultiBotGroup=false。
+7. 默认 requireMention=true，allowMentionlessInMultiBotGroup=false。
 8. 每个 accountId、peerId、agentId 必须真实存在，不得猜测。
 
-# 3) 输出要求
+# 4) 输出要求
 1. 最小 patch（可直接粘贴）。
 2. 命令清单：
    - 备份
@@ -144,12 +122,36 @@ agents:
    - 回滚
 3. manager 群演示脚本：
    - “请做一次跨群自动收口：输出三方摘要、冲突点、统一执行计划、明日三件事、风险预案。”
-4. 验收报告模板（路由命中、角色边界、收口质量、风险提示、日志证据）。
+4. 验收报告模板：路由命中、角色边界、收口质量、风险提示、日志证据。
 ```
 
-## 扩展模板（只做增量扩展，不重构）
+## 从前到后执行步骤（人工操作）
 
-> 用于“已经跑通主管模式后”，新增一个业务群或新增一个业务 Agent。
+1. 在 manager 群确认机器人 `aoteman` 已在群内。  
+2. 确认 manager 群 ID 已固定为 `oc_84677faa225ba8a380d3721c654f17a1`。  
+3. 确认三条业务路由保持不变。  
+4. 将主提示词发给 Codex，产出最小 patch。  
+5. 先备份配置，再应用 patch。  
+6. 执行 `openclaw config validate`。  
+7. 重启网关并执行 `openclaw agents list --bindings`。  
+8. 在 manager 群发送收口测试指令并验收。  
+9. 记录日志证据与回滚命令归档。  
+
+## 演示与验收脚本（manager 群）
+
+```text
+请做一次跨群自动收口：
+主题：4月促销活动
+输出：销售/运营/财务三方摘要、冲突点、统一执行方案、明日三件事、风险预案。
+```
+
+验收通过标准：
+1. manager 群命中 `supervisor_agent`。  
+2. 回复包含三方结论，不是单团队视角。  
+3. 有统一计划、优先级、风险与依赖。  
+4. 输出可直接用于管理层决策。  
+
+## 增量扩展模板（不重构现网）
 
 ```text
 请使用 openclaw-feishu-multi-agent-deploy skill，在现有自动跨群收口架构上做增量扩展。
@@ -166,22 +168,17 @@ agents:
 4) 给出 canary 验证与回滚步骤。
 ```
 
-## 从前到后实操步骤（人工执行顺序）
+## 常见问题（交付现场）
 
-1. 在飞书新建 manager 群，并拉入 `aoteman` 对应机器人。  
-2. 你当前 manager 群已确认：`oc_84677faa225ba8a380d3721c654f17a1`（`accountId=aoteman`）。  
-3. 若当前路由仍是 `agentId=main`，先改为 `agentId=supervisor_agent` 再做收口演示。  
-4. 把“主提示词”原样发给 Codex 执行。  
-5. 应用 Codex 产出的最小 patch。  
-6. 执行 validate + restart + bindings 检查。  
-7. 在 manager 群发送收口测试指令。  
-8. 检查输出是否包含三方摘要、冲突点、统一计划、明日三件事、风险预案。  
-9. 保存验收记录与回滚命令。  
+1. manager 群仍命中 `main`
+- 将 manager 群路由改为 `agentId=supervisor_agent`。
 
-## 验收标准（必须全部通过）
+2. supervisor 没有跨群信息
+- 检查 `tools.agentToAgent.enabled=true`。
+- 检查 `allow` 是否包含四个 agent。
 
-1. manager 群路由命中 `supervisor_agent`。  
-2. supervisor 输出中包含 sales/ops/finance 三方信息，不是单点回答。  
-3. 输出有统一执行计划和优先级，而非简单拼接。  
-4. 有风险项和依赖项。  
-5. 回滚命令可用且已留档。  
+3. 输出像“聊天”，不是“决策稿”
+- 强化 supervisor 的 systemPrompt：必须按固定结构输出。
+
+4. 担心影响现网
+- 本蓝图是增量改造；保留原业务路由；可回滚。
