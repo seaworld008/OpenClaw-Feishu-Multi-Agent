@@ -9,6 +9,10 @@
   - `openclaw gateway restart`
   - `openclaw logs --follow`
   - `openclaw agents list --bindings`
+- 若使用 V3“主管派单 -> 三群执行”：
+  - `tools.allow` 需包含 `group:sessions`（建议同时包含 `group:messaging`）
+  - `tools.sessions.visibility` 需可见目标会话（建议 `all`）
+  - `session.sendPolicy` 需放行跨会话发送（建议 `default=allow`）
 
 ## 2. 飞书开放平台侧
 - 已创建企业自建应用

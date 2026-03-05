@@ -59,9 +59,24 @@
     }
   ],
   "tools": {
+    "allow": [
+      "group:fs",
+      "group:runtime",
+      "group:web",
+      "group:messaging",
+      "group:sessions"
+    ],
     "agentToAgent": {
       "enabled": true,
       "allow": ["ops", "finance", "writer", "brainstorm"]
+    },
+    "sessions": {
+      "visibility": "all"
+    }
+  },
+  "session": {
+    "sendPolicy": {
+      "default": "allow"
     }
   }
 }

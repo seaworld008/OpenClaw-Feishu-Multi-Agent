@@ -59,6 +59,23 @@
       "finance"
     ]
   },
+  "tools": {
+    "allow": [
+      "group:fs",
+      "group:runtime",
+      "group:web",
+      "group:messaging",
+      "group:sessions"
+    ],
+    "sessions": {
+      "visibility": "all"
+    }
+  },
+  "session": {
+    "sendPolicy": {
+      "default": "allow"
+    }
+  },
   "feishu_console_checklist": {
     "event_subscriptions": [
       "im.message.receive_v1"

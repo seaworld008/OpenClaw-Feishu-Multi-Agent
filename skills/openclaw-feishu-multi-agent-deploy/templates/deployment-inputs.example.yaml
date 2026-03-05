@@ -77,6 +77,22 @@ routing:
           kind: "group"
           id: "oc_group_b"
 
+tooling:
+  # V3（主管派单 -> 三群执行）建议开启
+  tools_allow:
+    - "group:fs"
+    - "group:runtime"
+    - "group:web"
+    - "group:messaging"
+    - "group:sessions"
+  agent_to_agent:
+    enabled: true
+    allow: ["work", "finance"]
+  sessions:
+    visibility: "all"
+  session_send_policy:
+    default: "allow"
+
 permissions:
   minimum:
     - "im:message"

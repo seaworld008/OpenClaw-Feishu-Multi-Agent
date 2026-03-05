@@ -650,6 +650,8 @@ agents:
 2. 三个群提问内容差异太小，看不出角色边界。  
 3. 只演示“能回复”，没有“可执行结果与收口”。  
 4. 未限制免 @ 触发，导致群内噪音干扰演示。  
+5. V3 缺少 `tools.allow=group:sessions`，主管只会“写派单卡”不会真实派发。  
+6. V3 未放行 `tools.sessions.visibility` 或 `session.sendPolicy`，会话派发被拦截。  
 
 ## 维护约定
 

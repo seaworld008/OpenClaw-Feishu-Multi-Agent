@@ -58,11 +58,12 @@ routes:
 
 1. 路由：`bindings` 精确绑定 4 个群（3 业务群 + 1 主管群）。
 2. 协作：`tools.agentToAgent.enabled=true` 且 `allow` 包含 4 个 agent。
-3. 会话派单：开启会话工具可见性，支持主管向目标会话发任务。
+3. 工具组放行：`tools.allow` 必须包含 `group:sessions`（建议同时包含 `group:messaging`）。
+4. 会话派单：开启会话工具可见性，支持主管向目标会话发任务。
 - 建议：`tools.sessions.visibility: "all"`（最稳妥）
-4. 发送策略：确保自动发送不被策略拦截。
+5. 发送策略：确保自动发送不被策略拦截。
 - 建议：`session.sendPolicy.default: "allow"`
-5. 群触发稳定性：默认 `requireMention=true`，主管群/业务群演示时都 `@机器人`。
+6. 群触发稳定性：默认 `requireMention=true`，主管群/业务群演示时都 `@机器人`。
 
 ## 交付前提与权限清单
 
@@ -156,14 +157,15 @@ routes:
 
 # 3) 强约束
 1. 先审计 ~/.openclaw/openclaw.json，输出 to_add / to_update / to_keep_unchanged。
-2. 只允许改：channels.feishu、bindings、agents.list、tools.agentToAgent、tools.sessions、session.sendPolicy。
+2. 只允许改：channels.feishu、bindings、agents.list、tools.allow、tools.agentToAgent、tools.sessions、session.sendPolicy。
 3. bindings 排序必须：peer+accountId 精确 > accountId > channel 兜底。
 4. 开启：tools.agentToAgent.enabled=true。
 5. allow 至少包含：supervisor_agent、sales_agent、ops_agent、finance_agent。
-6. 设置 tools.sessions.visibility="all"（若现网已有更严格策略，说明风险后再最小调整）。
-7. session.sendPolicy.default="allow"；如有 deny 规则，不得影响 feishu group 派单。
-8. requireMention 默认 true；allowMentionlessInMultiBotGroup 默认 false。
-9. 每个 peerId/accountId/agentId 必须真实存在，禁止猜测。
+6. 设置 tools.allow，至少包含：group:sessions、group:messaging。
+7. 设置 tools.sessions.visibility="all"（若现网已有更严格策略，说明风险后再最小调整）。
+8. session.sendPolicy.default="allow"；如有 deny 规则，不得影响 feishu group 派单。
+9. requireMention 默认 true；allowMentionlessInMultiBotGroup 默认 false。
+10. 每个 peerId/accountId/agentId 必须真实存在，禁止猜测。
 
 # 4) 输出
 1. 最小 patch（可直接应用）。
@@ -256,6 +258,7 @@ routes:
 
 1. 主管只给模板总结，没真正派单
 - 检查 `tools.agentToAgent` 是否启用且 allow 完整。
+- 检查 `tools.allow` 是否包含 `group:sessions`。
 - 检查 `tools.sessions.visibility` 是否允许看到目标会话。
 - 检查目标群是否做过 warm-up（会话是否存在）。
 

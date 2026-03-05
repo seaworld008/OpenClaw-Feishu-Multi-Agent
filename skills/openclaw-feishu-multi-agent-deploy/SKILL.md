@@ -101,6 +101,8 @@ python3 scripts/build_openclaw_feishu_snippets.py \
 - 变更命令、验证命令、回滚命令
 - 验收结果（通过/失败 + 证据）
 - （可选）`tools.agentToAgent` 的启用范围与风险说明
+- （V3 可选）`tools.allow`（是否包含 `group:sessions`）
+- （V3 可选）`tools.sessions` 与 `session.sendPolicy` 的放行策略说明
 
 ## 关键约束
 - 不得虚构 `agentId`、`accountId`、`peer.id`
@@ -114,6 +116,9 @@ python3 scripts/build_openclaw_feishu_snippets.py \
 - 路由串线：查 `bindings` 顺序和重叠规则
 - 多账号出站错 bot：查 `defaultAccount` 与 `match.accountId`
 - 升级后异常：跑 `openclaw config validate` + canary 回归
+- 主管只“写派单文本”不真实派发：查 `tools.allow` 是否缺少 `group:sessions`
+- 主管看不到目标群会话：查 `tools.sessions.visibility` 和目标群是否 warm-up 过
+- 主管派发被策略拦截：查 `session.sendPolicy` 是否默认放行
 
 ## 可直接复用的文件
 - 模板：
@@ -129,3 +134,4 @@ python3 scripts/build_openclaw_feishu_snippets.py \
 - 运行手册：
   - `references/rollout-and-upgrade-playbook.md`
   - `references/codex-prompt-templates.md`
+  - `references/codex-prompt-templates-v3.md`

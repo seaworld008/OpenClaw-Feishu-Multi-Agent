@@ -155,8 +155,20 @@ def build_plugin_patch(data: Dict[str, Any]) -> Dict[str, Any]:
             "list": [{"id": agent_id} for agent_id in data["agents"]],
         }
 
+    tools_patch: Dict[str, Any] = {}
     if isinstance(data.get("agentToAgent"), dict) and data["agentToAgent"]:
-        patch["tools"] = {"agentToAgent": data["agentToAgent"]}
+        tools_patch["agentToAgent"] = data["agentToAgent"]
+    if isinstance(data.get("tools"), dict):
+        tools = data["tools"]
+        if isinstance(tools.get("allow"), list) and tools["allow"]:
+            tools_patch["allow"] = tools["allow"]
+        if isinstance(tools.get("sessions"), dict) and tools["sessions"]:
+            tools_patch["sessions"] = tools["sessions"]
+    if tools_patch:
+        patch["tools"] = tools_patch
+
+    if isinstance(data.get("session"), dict) and data["session"]:
+        patch["session"] = data["session"]
 
     return patch
 
@@ -204,8 +216,20 @@ def build_legacy_patch(data: Dict[str, Any]) -> Dict[str, Any]:
         "bindings": bindings,
     }
 
+    tools_patch: Dict[str, Any] = {}
     if isinstance(data.get("agentToAgent"), dict) and data["agentToAgent"]:
-        patch["tools"] = {"agentToAgent": data["agentToAgent"]}
+        tools_patch["agentToAgent"] = data["agentToAgent"]
+    if isinstance(data.get("tools"), dict):
+        tools = data["tools"]
+        if isinstance(tools.get("allow"), list) and tools["allow"]:
+            tools_patch["allow"] = tools["allow"]
+        if isinstance(tools.get("sessions"), dict) and tools["sessions"]:
+            tools_patch["sessions"] = tools["sessions"]
+    if tools_patch:
+        patch["tools"] = tools_patch
+
+    if isinstance(data.get("session"), dict) and data["session"]:
+        patch["session"] = data["session"]
 
     return patch
 
@@ -240,6 +264,8 @@ def write_summary(path: pathlib.Path, mode: str, patch_file: pathlib.Path, data:
         "- 绑定顺序是否为精确规则在前、兜底在后",
         "- defaultAccount 是否存在且可用（插件模式）",
         "- requireMention=false 时是否已申请 im:message.group_msg",
+        "- 若需主管跨会话派单：tools.allow 是否包含 group:sessions",
+        "- 若需主管跨会话派单：tools.sessions.visibility / session.sendPolicy 是否放行",
     ]
     with path.open("w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")

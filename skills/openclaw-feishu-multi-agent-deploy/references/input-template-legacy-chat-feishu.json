@@ -43,5 +43,22 @@
       "work",
       "finance"
     ]
+  },
+  "tools": {
+    "allow": [
+      "group:fs",
+      "group:runtime",
+      "group:web",
+      "group:messaging",
+      "group:sessions"
+    ],
+    "sessions": {
+      "visibility": "all"
+    }
+  },
+  "session": {
+    "sendPolicy": {
+      "default": "allow"
+    }
   }
 }
