@@ -465,7 +465,12 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
 - 上线前：`templates/brownfield-change-plan.example.md`
 - 上线后：`templates/verification-checklist.md`
 - 升级回归：`references/rollout-and-upgrade-playbook.md`
-- 自动跨群收口（主管模式）：`references/auto-cross-group-rollup-playbook.md`
+- 自动跨群收口（主管模式）：[自动跨群收口最小配置手册](skills/openclaw-feishu-multi-agent-deploy/references/auto-cross-group-rollup-playbook.md)
+
+### 跨群收口文档入口
+
+如果你要做“manager 群 + supervisor_agent + agentToAgent”自动汇总，请直接看：  
+[自动跨群收口最小配置手册](skills/openclaw-feishu-multi-agent-deploy/references/auto-cross-group-rollup-playbook.md)
 
 ## 最佳实践来源
 

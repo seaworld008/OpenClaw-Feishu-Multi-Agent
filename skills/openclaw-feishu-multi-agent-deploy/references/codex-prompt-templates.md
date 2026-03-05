@@ -119,3 +119,36 @@
 5) 验收模板：路由正确率、角色行为一致性、误触发率、日志证据。
 6) 若 systemPrompt 为空，先按角色最佳实践补齐再输出 patch。
 ```
+
+## 6) 自动跨群收口（主管模式）专用模板
+```text
+请使用 openclaw-feishu-multi-agent-deploy skill。
+在我当前 3群3bot3agent 的现网基础上，做最小增量改造，实现“自动跨群收口”。
+
+当前基线（已存在）：
+- routes:
+  - { peerKind: "group", peerId: "oc_ffab0130d2cfb80f70c150918b4d4e87", accountId: "aoteman", agentId: "sales_agent" }
+  - { peerKind: "group", peerId: "oc_da719e85a3f75d9a6050343924d9aa62", accountId: "xiaolongxia", agentId: "ops_agent" }
+  - { peerKind: "group", peerId: "oc_1a3c32a99d6a8120f9ca7c4343263b24", accountId: "yiran_yibao", agentId: "finance_agent" }
+
+目标：
+- 新增 manager 群路由到 supervisor_agent
+- supervisor_agent 可调用 sales/ops/finance 三个 agent 汇总输出
+
+输入：
+- managerRoute:
+  - { peerKind: "group", peerId: "oc_manager_xxx", accountId: "aoteman", agentId: "supervisor_agent" }
+- supervisor:
+  - { id: "supervisor_agent", role: "跨群收口", systemPrompt: "先调用 sales/ops/finance 获取摘要，再输出统一执行方案、冲突点、明日三件事、风险预案。" }
+
+要求：
+1) 先读取 ~/.openclaw/openclaw.json，并输出 to_add/to_update/to_keep_unchanged。
+2) 仅修改必要字段：agents.list、bindings、tools.agentToAgent。
+3) tools.agentToAgent:
+   - enabled: true
+   - allow 至少包含 supervisor_agent、sales_agent、ops_agent、finance_agent。
+4) 保持原 3 条业务路由不变，只新增 manager 路由。
+5) 输出完整命令：备份、validate、重启、bindings检查、canary、回滚。
+6) 输出 manager 群演示脚本：
+   - “请做一次跨群自动收口：输出三方摘要、冲突点、统一执行计划、明日三件事、风险预案。”
+```
