@@ -102,22 +102,27 @@ openclaw agents list --bindings
 - 统一来自飞书应用控制台（多 bot 分别独立记录）。  
 - 建议先把应用信息写入一个加密的 `credentials` 表（至少包含 `accountId`、`appId`、`appSecret`、`encryptKey`、`verificationToken`）。
 
+4) 事件校验参数（`encryptKey` / `verificationToken`）  
+- 来源：飞书开放平台 -> 应用 -> 开发配置 -> 事件与回调。  
+- 每个机器人（每个应用）各自独立一套，不能混用。  
+- 生产配置建议必填，避免事件校验或回调链路异常。
+
 ### 三、按你的示例写一版可直接落地的映射
 
-你给的示例值替换后，先用下表确认无误：
+你当前真实值（基于日志探测）可直接用：
 
-- 销售群：`oc_9f31a...`  
-- 运营群：`oc_7b22d...`  
-- 财务群：`oc_3c88e...`  
+- 销售群：`oc_ffab0130d2cfb80f70c150918b4d4e87`  
+- 运营群：`oc_da719e85a3f75d9a6050343924d9aa62`  
+- 财务群：`oc_1a3c32a99d6a8120f9ca7c4343263b24`  
 - Agent ID：`sales_agent`、`ops_agent`、`finance_agent`  
-- 账号：`bot_main`、`bot_finance`
+- 账号：`aoteman`、`xiaolongxia`、`yiran_yibao`
 
 匹配关系应写成：
 
 ```text
-peer: oc_9f31a... -> agentId: sales_agent，accountId: bot_main
-peer: oc_7b22d... -> agentId: ops_agent，accountId: bot_main
-peer: oc_3c88e... -> agentId: finance_agent，accountId: bot_finance
+peer: oc_ffab0130d2cfb80f70c150918b4d4e87 -> agentId: sales_agent，accountId: aoteman
+peer: oc_da719e85a3f75d9a6050343924d9aa62 -> agentId: ops_agent，accountId: xiaolongxia
+peer: oc_1a3c32a99d6a8120f9ca7c4343263b24 -> agentId: finance_agent，accountId: yiran_yibao
 ```
 
 ### 四、群角色与权限（业内最佳实践）
@@ -215,9 +220,9 @@ peer: oc_3c88e... -> agentId: finance_agent，accountId: bot_finance
 
 | 名称 | 示例 | 在哪拿到 | 是否用于路由 |
 |---|---|---|---|
-| 群 ID（`chat_id` / `peer.id`） | `oc_9f31a...` | 群里发消息后看 `openclaw logs --follow` | 是（`match.peer.id`） |
+| 群 ID（`chat_id` / `peer.id`） | `oc_ffab0130d2cfb80f70c150918b4d4e87` | 群里发消息后看 `openclaw logs --follow` | 是（`match.peer.id`） |
 | 用户 Open ID（`open_id`） | `ou_xxx` | 私聊发消息后看 `openclaw logs --follow` 或 `openclaw pairing list feishu` | 否（常用于 allowFrom） |
-| 机器人账号 ID（`accountId`） | `bot_main` | 你在 `channels.feishu.accounts` 的键名（自己定义） | 是（`match.accountId`） |
+| 机器人账号 ID（`accountId`） | `aoteman` | 你在 `channels.feishu.accounts` 的键名（自己定义） | 是（`match.accountId`） |
 | 飞书应用 ID（`appId`） | `cli_xxx` | 飞书开放平台 `凭证与基础信息` | 否（用于账号凭据） |
 | 机器人 Open ID（bot open_id） | `ou_bot_xxx` | 飞书事件体 / 平台调试信息 | 否（通常不直接配路由） |
 | Agent ID（`agentId`） | `sales_agent` | `openclaw agents list` | 是（`binding.agentId`） |
@@ -346,13 +351,19 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
 
 输入信息（请严格按下面结构读取/补齐，后续可扩展）：
 - accountMappings:
-  - accountId: "bot_main"
-    role: "sales_ops_bot"
+  - accountId: "aoteman"
+    role: "sales_bot"
     appId: "..."
     appSecret: "..."
     encryptKey: "..."
     verificationToken: "..."
-  - accountId: "bot_finance"
+  - accountId: "xiaolongxia"
+    role: "ops_bot"
+    appId: "..."
+    appSecret: "..."
+    encryptKey: "..."
+    verificationToken: "..."
+  - accountId: "yiran_yibao"
     role: "finance_bot"
     appId: "..."
     appSecret: "..."
@@ -361,16 +372,16 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
 - agents: ["sales_agent", "ops_agent", "finance_agent"]
 - routes:
   - peerKind: "group"
-    peerId: "oc_9f31a..."
-    accountId: "bot_main"
+    peerId: "oc_ffab0130d2cfb80f70c150918b4d4e87"
+    accountId: "aoteman"
     agentId: "sales_agent"
   - peerKind: "group"
-    peerId: "oc_7b22d..."
-    accountId: "bot_main"
+    peerId: "oc_da719e85a3f75d9a6050343924d9aa62"
+    accountId: "xiaolongxia"
     agentId: "ops_agent"
   - peerKind: "group"
-    peerId: "oc_3c88e..."
-    accountId: "bot_finance"
+    peerId: "oc_1a3c32a99d6a8120f9ca7c4343263b24"
+    accountId: "yiran_yibao"
     agentId: "finance_agent"
 
 可选扩展示例：
@@ -400,33 +411,33 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
 
 你提到的这三行：
 
-- `oc_sales_group -> sales-agent（accountId=bot-main）`
-- `oc_ops_group -> ops-agent（accountId=bot-main）`
-- `oc_fin_group -> finance-agent（accountId=bot-finance）`
+- `oc_ffab0130d2cfb80f70c150918b4d4e87 -> sales_agent（accountId=aoteman）`
+- `oc_da719e85a3f75d9a6050343924d9aa62 -> ops_agent（accountId=xiaolongxia）`
+- `oc_1a3c32a99d6a8120f9ca7c4343263b24 -> finance_agent（accountId=yiran_yibao）`
 
 其中每一段都需要替换为你的真实值。按下面对照填：
 
 | 示例占位 | 你要替换成什么 | 来源位置 | 常见错误 |
 |---|---|---|---|
-| `oc_sales_group` / `oc_ops_group` / `oc_fin_group` | 飞书群真实 `chat_id`（通常以 `oc_` 开头） | 飞书事件 `im.message.receive_v1` 的 `chat_id`；或 OpenClaw 日志中收到消息时的会话 ID | 用了群名称而不是 `chat_id`；把多个群写成同一个 ID |
+| `oc_ff...` / `oc_da...` / `oc_1a3...` | 飞书群真实 `chat_id`（通常以 `oc_` 开头） | 飞书事件 `im.message.receive_v1` 的 `chat_id`；或 OpenClaw 日志中收到消息时的会话 ID | 用了群名称而不是 `chat_id`；把多个群写成同一个 ID |
 | `sales-agent` / `ops-agent` / `finance-agent` | OpenClaw 中已存在的 `agentId` | `openclaw agents list` | 写了 persona 名称但不是 `agentId`；拼写不一致 |
-| `bot-main` / `bot-finance` | `channels.feishu.accounts` 里的账号键名（`accountId`） | 你的 `openclaw.json` 中 `channels.feishu.accounts.<key>` | `bindings.match.accountId` 和 accounts 键名不一致 |
+| `aoteman` / `xiaolongxia` / `yiran_yibao` | `channels.feishu.accounts` 里的账号键名（`accountId`） | 你的 `openclaw.json` 中 `channels.feishu.accounts.<key>` | `bindings.match.accountId` 和 accounts 键名不一致 |
 
 ### 一份可直接照抄的“替换后”示例
 
-假设你的真实值是：
-- 销售群：`oc_9f31a...`
-- 运营群：`oc_7b22d...`
-- 财务群：`oc_3c88e...`
+假设你的真实值是（你当前就是这组）：
+- 销售群：`oc_ffab0130d2cfb80f70c150918b4d4e87`
+- 运营群：`oc_da719e85a3f75d9a6050343924d9aa62`
+- 财务群：`oc_1a3c32a99d6a8120f9ca7c4343263b24`
 - Agent ID：`sales_agent`、`ops_agent`、`finance_agent`
-- 账号：`bot_main`、`bot_finance`
+- 账号：`aoteman`、`xiaolongxia`、`yiran_yibao`
 
 那么路由就应写成：
 
 ```text
-- oc_9f31a... -> sales_agent（accountId=bot_main）
-- oc_7b22d... -> ops_agent（accountId=bot_main）
-- oc_3c88e... -> finance_agent（accountId=bot_finance）
+- oc_ffab0130d2cfb80f70c150918b4d4e87 -> sales_agent（accountId=aoteman）
+- oc_da719e85a3f75d9a6050343924d9aa62 -> ops_agent（accountId=xiaolongxia）
+- oc_1a3c32a99d6a8120f9ca7c4343263b24 -> finance_agent（accountId=yiran_yibao）
 ```
 
 ### 上线前 5 条强校验（避免配错）
@@ -507,12 +518,17 @@ agents:
 
 输入：
 - accountMappings:
-  - accountId: "bot_main"
+  - accountId: "aoteman"
     appId: "..."
     appSecret: "..."
     encryptKey: "..."
     verificationToken: "..."
-  - accountId: "bot_finance"
+  - accountId: "xiaolongxia"
+    appId: "..."
+    appSecret: "..."
+    encryptKey: "..."
+    verificationToken: "..."
+  - accountId: "yiran_yibao"
     appId: "..."
     appSecret: "..."
     encryptKey: "..."
@@ -522,9 +538,9 @@ agents:
   - { id: "ops_agent", role: "运营执行", systemPrompt: "你是运营 Agent。把目标拆成任务清单并给负责人建议、时间节点、依赖和风险；默认给周计划与当日待办；跨部门事项先列待确认项。" }
   - { id: "finance_agent", role: "财务分析", systemPrompt: "你是财务 Agent。输出关键指标表（当前值/目标值/差异/建议）；标注口径与周期；税务合规问题必须提示人工复核。" }
 - routes:
-  - { peerKind: "group", peerId: "oc_9f31a...", accountId: "bot_main", agentId: "sales_agent" }
-  - { peerKind: "group", peerId: "oc_7b22d...", accountId: "bot_main", agentId: "ops_agent" }
-  - { peerKind: "group", peerId: "oc_3c88e...", accountId: "bot_finance", agentId: "finance_agent" }
+  - { peerKind: "group", peerId: "oc_ffab0130d2cfb80f70c150918b4d4e87", accountId: "aoteman", agentId: "sales_agent" }
+  - { peerKind: "group", peerId: "oc_da719e85a3f75d9a6050343924d9aa62", accountId: "xiaolongxia", agentId: "ops_agent" }
+  - { peerKind: "group", peerId: "oc_1a3c32a99d6a8120f9ca7c4343263b24", accountId: "yiran_yibao", agentId: "finance_agent" }
 
 约束：
 1) 先读取并审计 ~/.openclaw/openclaw.json。
