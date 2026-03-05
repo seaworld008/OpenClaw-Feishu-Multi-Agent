@@ -117,6 +117,11 @@ openclaw agents list --bindings
 - Agent ID：`sales_agent`、`ops_agent`、`finance_agent`  
 - 账号：`aoteman`、`xiaolongxia`、`yiran_yibao`
 
+机器人名称与账号对照（你当前私有测试）：
+- 奥特曼：`accountId=aoteman`，`appId=cli_a923c749bab6dcba`
+- 小龙虾找妈妈：`accountId=xiaolongxia`，`appId=cli_a9f1849b67f9dcc2`
+- 易燃易爆：`accountId=yiran_yibao`，`appId=cli_a923c71498b8dcc9`
+
 匹配关系应写成：
 
 ```text
@@ -353,20 +358,20 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
 - accountMappings:
   - accountId: "aoteman"
     role: "sales_bot"
-    appId: "..."
-    appSecret: "..."
+    appId: "cli_a923c749bab6dcba"
+    appSecret: "TWpD207Ri2g1Qqmw4R5YhfkPRhOokCGX"
     encryptKey: "..."
     verificationToken: "..."
   - accountId: "xiaolongxia"
     role: "ops_bot"
-    appId: "..."
-    appSecret: "..."
+    appId: "cli_a9f1849b67f9dcc2"
+    appSecret: "g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr"
     encryptKey: "..."
     verificationToken: "..."
   - accountId: "yiran_yibao"
     role: "finance_bot"
-    appId: "..."
-    appSecret: "..."
+    appId: "cli_a923c71498b8dcc9"
+    appSecret: "swscrlPKYCwAehOyyoLrlesLTsuYY6nl"
     encryptKey: "..."
     verificationToken: "..."
 - agents: ["sales_agent", "ops_agent", "finance_agent"]
@@ -519,18 +524,18 @@ agents:
 输入：
 - accountMappings:
   - accountId: "aoteman"
-    appId: "..."
-    appSecret: "..."
+    appId: "cli_a923c749bab6dcba"
+    appSecret: "TWpD207Ri2g1Qqmw4R5YhfkPRhOokCGX"
     encryptKey: "..."
     verificationToken: "..."
   - accountId: "xiaolongxia"
-    appId: "..."
-    appSecret: "..."
+    appId: "cli_a9f1849b67f9dcc2"
+    appSecret: "g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr"
     encryptKey: "..."
     verificationToken: "..."
   - accountId: "yiran_yibao"
-    appId: "..."
-    appSecret: "..."
+    appId: "cli_a923c71498b8dcc9"
+    appSecret: "swscrlPKYCwAehOyyoLrlesLTsuYY6nl"
     encryptKey: "..."
     verificationToken: "..."
 - agents:
