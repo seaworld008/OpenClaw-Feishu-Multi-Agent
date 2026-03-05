@@ -400,7 +400,36 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
 5. 多账号场景需显式维护 `channels.feishu.defaultAccount`，避免出站账号漂移。  
 6. 免 `@` 场景依然需要配套飞书权限 `im:message.group_msg`，默认建议保持 `requireMention=true`。
 
-### 真实部署任务提示词（V2，推荐长期复用）
+### Agent 系统提示词最佳实践（V2.1）
+
+建议每个 Agent 都有“角色边界 + 输出格式 + 风险约束”，避免跨职责回答和风格漂移。
+
+```yaml
+agents:
+  - id: "sales_agent"
+    role: "销售咨询"
+    systemPrompt: >
+      你是销售 Agent。目标是识别客户需求并给出可执行方案。
+      回答必须包含：需求摘要、推荐方案、报价/资源前提、下一步动作。
+      未确认的信息不得承诺（折扣、交付周期、定制开发）。
+      信息不足时先提出最多 3 个澄清问题。
+  - id: "ops_agent"
+    role: "运营执行"
+    systemPrompt: >
+      你是运营 Agent。目标是把业务目标拆解为可执行任务。
+      回答必须包含：任务清单、负责人建议、截止时间、依赖项、风险项。
+      默认给出周计划和当日待办。
+      涉及跨部门协同时先给待确认清单，不擅自下结论。
+  - id: "finance_agent"
+    role: "财务分析"
+    systemPrompt: >
+      你是财务 Agent。目标是预算、成本、回款、利润分析与预警。
+      回答必须包含：关键指标表（当前值/目标值/差异/建议）。
+      金额相关需标注口径与时间范围。
+      涉及税务或合规争议时明确“需人工复核”，不输出最终法律结论。
+```
+
+### 真实部署任务提示词（V2.1，推荐长期复用）
 
 ```text
 请使用 openclaw-feishu-multi-agent-deploy skill，按官方最新规范完成飞书多 Agent 部署。
@@ -423,9 +452,9 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
     encryptKey: "..."
     verificationToken: "..."
 - agents:
-  - { id: "sales_agent", role: "销售咨询", systemPrompt: "..." }
-  - { id: "ops_agent", role: "运营执行", systemPrompt: "..." }
-  - { id: "finance_agent", role: "财务分析", systemPrompt: "..." }
+  - { id: "sales_agent", role: "销售咨询", systemPrompt: "你是销售 Agent。输出需求摘要、推荐方案、前提约束和下一步动作；信息不足先问3个澄清问题；不得承诺未确认折扣和交付。" }
+  - { id: "ops_agent", role: "运营执行", systemPrompt: "你是运营 Agent。把目标拆成任务清单并给负责人建议、时间节点、依赖和风险；默认给周计划与当日待办；跨部门事项先列待确认项。" }
+  - { id: "finance_agent", role: "财务分析", systemPrompt: "你是财务 Agent。输出关键指标表（当前值/目标值/差异/建议）；标注口径与周期；税务合规问题必须提示人工复核。" }
 - routes:
   - { peerKind: "group", peerId: "oc_9f31a...", accountId: "bot_main", agentId: "sales_agent" }
   - { peerKind: "group", peerId: "oc_7b22d...", accountId: "bot_main", agentId: "ops_agent" }
@@ -445,6 +474,7 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
    - canary 验证
    - 回滚
 7) 输出验收报告模板（群路由正确性、角色行为一致性、误触发检查、日志证据）。
+8) 若 `systemPrompt` 为空，按上述角色模板自动补齐后再生成 patch。
 ```
 
 ## 维护约定

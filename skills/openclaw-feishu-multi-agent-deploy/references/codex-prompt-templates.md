@@ -102,9 +102,9 @@
   - { accountId: "bot_main", appId: "...", appSecret: "...", encryptKey: "...", verificationToken: "..." }
   - { accountId: "bot_finance", appId: "...", appSecret: "...", encryptKey: "...", verificationToken: "..." }
 - agents:
-  - { id: "sales_agent", role: "销售咨询", systemPrompt: "..." }
-  - { id: "ops_agent", role: "运营执行", systemPrompt: "..." }
-  - { id: "finance_agent", role: "财务分析", systemPrompt: "..." }
+  - { id: "sales_agent", role: "销售咨询", systemPrompt: "你是销售 Agent。输出需求摘要、推荐方案、前提约束和下一步动作；信息不足先问3个澄清问题；不得承诺未确认折扣和交付。" }
+  - { id: "ops_agent", role: "运营执行", systemPrompt: "你是运营 Agent。把目标拆成任务清单并给负责人建议、时间节点、依赖和风险；默认给周计划与当日待办；跨部门事项先列待确认项。" }
+  - { id: "finance_agent", role: "财务分析", systemPrompt: "你是财务 Agent。输出关键指标表（当前值/目标值/差异/建议）；标注口径与周期；税务合规问题必须提示人工复核。" }
 - routes:
   - { peerKind: "group", peerId: "oc_9f31a...", accountId: "bot_main", agentId: "sales_agent" }
   - { peerKind: "group", peerId: "oc_7b22d...", accountId: "bot_main", agentId: "ops_agent" }
@@ -117,4 +117,5 @@
 3) 最小 patch：仅 channels.feishu、bindings、agents.list、可选 tools.agentToAgent。
 4) 命令清单：备份、validate、重启、bindings 检查、canary、回滚。
 5) 验收模板：路由正确率、角色行为一致性、误触发率、日志证据。
+6) 若 systemPrompt 为空，先按角色最佳实践补齐再输出 patch。
 ```
