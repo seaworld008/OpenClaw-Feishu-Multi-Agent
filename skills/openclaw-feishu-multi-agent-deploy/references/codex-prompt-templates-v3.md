@@ -139,9 +139,9 @@ taskCard:
 
 # 2) 输入
 accountMappings:
-- { accountId: "aoteman", appId: "cli_a923c749bab6dcba", appSecret: "<真实值>", encryptKey: "<真实值或空>", verificationToken: "<真实值或空>" }
-- { accountId: "xiaolongxia", appId: "cli_a9f1849b67f9dcc2", appSecret: "<真实值>", encryptKey: "<真实值或空>", verificationToken: "<真实值或空>" }
-- { accountId: "yiran_yibao", appId: "cli_a923c71498b8dcc9", appSecret: "<真实值>", encryptKey: "<真实值或空>", verificationToken: "<真实值或空>" }
+- { accountId: "aoteman", appId: "cli_a923c749bab6dcba", appSecret: "<真实值>", encryptKey: "<websocket 可留空，webhook 建议填写>", verificationToken: "<websocket 可留空，webhook 建议填写>" }
+- { accountId: "xiaolongxia", appId: "cli_a9f1849b67f9dcc2", appSecret: "<真实值>", encryptKey: "<websocket 可留空，webhook 建议填写>", verificationToken: "<websocket 可留空，webhook 建议填写>" }
+- { accountId: "yiran_yibao", appId: "cli_a923c71498b8dcc9", appSecret: "<真实值>", encryptKey: "<websocket 可留空，webhook 建议填写>", verificationToken: "<websocket 可留空，webhook 建议填写>" }
 
 agents:
 - { id: "sales_agent", role: "销售咨询", systemPrompt: "你是销售 Agent。先给需求摘要，再给可执行方案与边界；不可承诺未审批折扣。" }
@@ -207,6 +207,7 @@ routes:
 ```bash
 LOG="/tmp/openclaw/openclaw-$(date +%F).log"
 START_LINE=$(wc -l < "$LOG")
+TASK_ID="demo-v3-001"
 
 # 现在去主管群发送 demo-v3-001 指令
 sleep 120
@@ -214,12 +215,14 @@ sleep 120
 bash skills/openclaw-feishu-multi-agent-deploy/scripts/check_v3_dispatch_canary.sh \
   --log "$LOG" \
   --start-line "$START_LINE" \
+  --task-id "$TASK_ID" \
   --agents "sales_agent,ops_agent,finance_agent"
 ```
 
 返回码说明：
 - `0`：`DISPATCH_OK`（三会话都有派发轨迹）
 - `2`：`DISPATCH_INCOMPLETE`（缺少一个或多个目标会话轨迹）
+- `3`：`DISPATCH_UNVERIFIED`（有会话轨迹，但缺少足够的派发证据）
 
 ## 最佳实践测试样板（V3 专用）
 

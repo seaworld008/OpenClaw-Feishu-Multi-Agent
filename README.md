@@ -662,8 +662,14 @@ sleep 120
 bash skills/openclaw-feishu-multi-agent-deploy/scripts/check_v3_dispatch_canary.sh \
   --log "$LOG" \
   --start-line "$START_LINE" \
+  --task-id "demo-v3-001" \
   --agents "sales_agent,ops_agent,finance_agent"
 ```
+
+返回码说明：
+- `0`：派单证据完整
+- `2`：缺少目标会话轨迹
+- `3`：有会话轨迹但证据不足，需继续查 `sessions_send` 原始日志
 
 ## 维护约定
 

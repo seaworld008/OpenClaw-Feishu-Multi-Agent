@@ -67,6 +67,7 @@ python3 scripts/build_openclaw_feishu_snippets.py \
   --input references/input-template.json \
   --out references/generated
 ```
+- 注意：输入里的 `agents` 若只是字符串列表，脚本不会生成 `agents.list`，以避免覆盖 brownfield 现网中的详细 agent 配置。
 
 5. 绑定排序（关键）
 - 先精确规则（`accountId + peer`）
@@ -94,6 +95,7 @@ python3 scripts/build_openclaw_feishu_snippets.py \
 - 输出回滚命令
 - 若启用了卡片交互，验证 `card.action.trigger` 事件链路
 - V3 主管派单场景必须执行 `scripts/check_v3_dispatch_canary.sh`，未通过不得判定验收成功
+- `check_v3_dispatch_canary.sh` 返回 `3` 表示证据不足，不能视为派单成功
 
 ## 输出要求（给客户/交付文档）
 必须包含：

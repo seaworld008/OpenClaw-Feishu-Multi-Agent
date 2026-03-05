@@ -25,6 +25,7 @@
 - [ ] （V3）日志出现目标会话派发轨迹（sales/ops/finance）
 - [ ] （V3）三方回传后主管可自动收口
 - [ ] （V3）执行 `scripts/check_v3_dispatch_canary.sh` 返回 `DISPATCH_OK`
+- [ ] （V3）若脚本返回 `DISPATCH_UNVERIFIED`，已补查原始日志中的 `sessions_send` / 派发证据
 
 ## D. 稳定性验证
 - [ ] 网关重启后路由仍正确

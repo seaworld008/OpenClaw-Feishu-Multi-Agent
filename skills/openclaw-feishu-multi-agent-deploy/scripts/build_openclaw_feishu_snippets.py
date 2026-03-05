@@ -47,7 +47,7 @@ def route_sort_key(route: Dict[str, Any]) -> Tuple[int, int, int]:
 def validate_accounts(accounts: Any) -> List[Dict[str, Any]]:
     if not isinstance(accounts, list) or not accounts:
         raise ValueError("accounts must be a non-empty array")
-    required = ["accountId", "appId", "appSecret", "encryptKey", "verificationToken"]
+    required = ["accountId", "appId", "appSecret"]
     out: List[Dict[str, Any]] = []
     seen: set[str] = set()
     for idx, account in enumerate(accounts):
@@ -62,6 +62,30 @@ def validate_accounts(accounts: Any) -> List[Dict[str, Any]]:
         seen.add(account_id)
         out.append(account)
     return out
+
+
+def build_account_cfg(account: Dict[str, Any]) -> Dict[str, Any]:
+    account_cfg = {
+        "appId": account["appId"],
+        "appSecret": account["appSecret"],
+    }
+    for key in ["encryptKey", "verificationToken"]:
+        value = account.get(key)
+        if value:
+            account_cfg[key] = value
+    if isinstance(account.get("overrides"), dict):
+        account_cfg.update(account["overrides"])
+    return account_cfg
+
+
+def build_agents_patch(agents: Any) -> Dict[str, Any] | None:
+    if not isinstance(agents, list) or not agents:
+        return None
+    if all(isinstance(agent, dict) and agent.get("id") for agent in agents):
+        return {"list": agents}
+    if all(isinstance(agent, str) and agent for agent in agents):
+        return None
+    raise ValueError("agents must be either a list of agent ids or a list of agent objects with id")
 
 
 def validate_routes(routes: Any) -> List[Dict[str, Any]]:
@@ -119,15 +143,7 @@ def build_plugin_patch(data: Dict[str, Any]) -> Dict[str, Any]:
 
     for account in accounts:
         account_id = account["accountId"]
-        account_cfg = {
-            "appId": account["appId"],
-            "appSecret": account["appSecret"],
-            "encryptKey": account["encryptKey"],
-            "verificationToken": account["verificationToken"],
-        }
-        if isinstance(account.get("overrides"), dict):
-            account_cfg.update(account["overrides"])
-        feishu["accounts"][account_id] = account_cfg
+        feishu["accounts"][account_id] = build_account_cfg(account)
 
     bindings: List[Dict[str, Any]] = []
     for route in routes:
@@ -150,10 +166,9 @@ def build_plugin_patch(data: Dict[str, Any]) -> Dict[str, Any]:
         "bindings": bindings,
     }
 
-    if isinstance(data.get("agents"), list) and data["agents"]:
-        patch["agents"] = {
-            "list": [{"id": agent_id} for agent_id in data["agents"]],
-        }
+    agents_patch = build_agents_patch(data.get("agents"))
+    if agents_patch:
+        patch["agents"] = agents_patch
 
     tools_patch: Dict[str, Any] = {}
     if isinstance(data.get("agentToAgent"), dict) and data["agentToAgent"]:
@@ -186,10 +201,7 @@ def build_legacy_patch(data: Dict[str, Any]) -> Dict[str, Any]:
         "accounts": [
             {
                 "accountId": a["accountId"],
-                "appId": a["appId"],
-                "appSecret": a["appSecret"],
-                "encryptKey": a["encryptKey"],
-                "verificationToken": a["verificationToken"],
+                **build_account_cfg(a),
             }
             for a in accounts
         ],
@@ -267,6 +279,17 @@ def write_summary(path: pathlib.Path, mode: str, patch_file: pathlib.Path, data:
         "- 若需主管跨会话派单：tools.allow 是否包含 group:sessions",
         "- 若需主管跨会话派单：tools.sessions.visibility / session.sendPolicy 是否放行",
     ]
+    agents = data.get("agents")
+    if isinstance(agents, list) and agents and all(isinstance(agent, str) for agent in agents):
+        lines.extend(
+            [
+                "",
+                "## 注意",
+                "",
+                "- 输入里的 `agents` 为字符串列表时，脚本不会输出 `agents.list`，以避免覆盖 brownfield 现网的详细 agent 配置。",
+                "- 若需要脚本生成 `agents.list`，请改为传入完整 agent 对象数组（至少包含 `id`）。",
+            ]
+        )
     with path.open("w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
 
