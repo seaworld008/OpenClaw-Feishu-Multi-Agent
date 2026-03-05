@@ -225,13 +225,13 @@ peer: oc_3c88e... -> agentId: finance_agent，accountId: bot_finance
 ### 七、一步一步配置流程（照着做可落地）
 
 1. 飞书后台准备  
-- 创建或确认两个应用（对应 `bot_main`、`bot_finance`）。  
+- 按路由架构创建应用（可 1 个，也可多个；生产常见是 2~4 个）。  
 - 开启机器人能力。  
 - 在权限管理里完成“基础权限 + 按需权限（文档/多维表格）”。  
 - 订阅事件至少包含：`im.message.receive_v1`。  
 
 2. OpenClaw 账号配置  
-- 在 `channels.feishu.accounts` 配置两个 `accountId` 及凭据。  
+- 在 `channels.feishu.accounts` 配置实际 `accountId` 及凭据（一个 bot 对应一个 accountId）。  
 - 显式设置 `defaultAccount`。  
 
 3. 收集路由 ID  
@@ -254,6 +254,72 @@ peer: oc_3c88e... -> agentId: finance_agent，accountId: bot_finance
 - 新增群：新增一条 route。  
 - 新增 agent：新增 `agentId` + route。  
 - 新增机器人：新增 `accountId` + 凭据 + routes。  
+
+### 八、路由架构选型（如何选“一群一Bot”或“一Bot多群”）
+
+#### 模式 A：一群一Bot（推荐）
+
+定义：每个业务群只放一个机器人，且该机器人只服务该群（或少量同类群）。
+
+优点：
+- 路由最清晰，排障简单。
+- 几乎没有抢答和误触发。
+- 权限隔离更直观，便于审计。
+
+缺点：
+- 机器人数量更多，维护成本略高。
+
+适用：
+- 销售、运营、财务等职责边界清晰的团队。
+- 对稳定性和可追责要求高的生产环境。
+
+#### 模式 B：一Bot多群
+
+定义：一个机器人进入多个群，通过不同 `peerId` 路由到不同 agent。
+
+优点：
+- 机器人数量少，初期部署快。
+- 适合 MVP/试点。
+
+缺点：
+- 规则复杂度更高，后期容易膨胀。
+- 若误配兜底规则，容易串线。
+
+适用：
+- 团队小、场景简单、先快速验证价值。
+
+#### 你的当前状态（真实）
+
+你从日志中抓到：
+- `oc_ffab0130d2cfb80f70c150918b4d4e87` -> `accountId=aoteman`
+- `oc_da719e85a3f75d9a6050343924d9aa62` -> `accountId=xiaolongxia`
+- `oc_1a3c32a99d6a8120f9ca7c4343263b24` -> `accountId=yiran_yibao`
+
+这已经是“模式 A：一群一Bot”的结构，建议继续沿用。
+
+#### 你当前场景的推荐路由（可直接套用）
+
+```yaml
+routes:
+  - { peerKind: "group", peerId: "oc_ffab0130d2cfb80f70c150918b4d4e87", accountId: "aoteman",      agentId: "sales_agent" }
+  - { peerKind: "group", peerId: "oc_da719e85a3f75d9a6050343924d9aa62", accountId: "xiaolongxia",  agentId: "ops_agent" }
+  - { peerKind: "group", peerId: "oc_1a3c32a99d6a8120f9ca7c4343263b24", accountId: "yiran_yibao",  agentId: "finance_agent" }
+```
+
+#### 常用配置示例（真实可落地）
+
+示例 1：标准企业（推荐）
+- 销售群 -> `bot_sales` -> `sales_agent`
+- 运营群 -> `bot_ops` -> `ops_agent`
+- 财务群 -> `bot_finance` -> `finance_agent`
+
+示例 2：轻量团队（低成本）
+- `bot_main` 同时服务销售群 + 运营群
+- `bot_finance` 独立服务财务群
+
+示例 3：扩展到主管调度
+- 在管理群增加 `bot_supervisor`
+- 主管 Agent 通过 `agentToAgent` 分派给销售/运营/财务子 Agent
 
 ## 使用 Codex 的实战案例（安装到上线）
 
