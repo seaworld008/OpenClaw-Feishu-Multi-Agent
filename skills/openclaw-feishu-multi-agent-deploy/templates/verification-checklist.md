@@ -24,6 +24,7 @@
 - [ ] （V3）主管能真实派发到目标会话（非仅文本派单）
 - [ ] （V3）日志出现目标会话派发轨迹（sales/ops/finance）
 - [ ] （V3）三方回传后主管可自动收口
+- [ ] （V3）执行 `scripts/check_v3_dispatch_canary.sh` 返回 `DISPATCH_OK`
 
 ## D. 稳定性验证
 - [ ] 网关重启后路由仍正确

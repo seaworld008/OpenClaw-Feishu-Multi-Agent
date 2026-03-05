@@ -147,7 +147,7 @@ agents:
 - { id: "sales_agent", role: "销售咨询", systemPrompt: "你是销售 Agent。先给需求摘要，再给可执行方案与边界；不可承诺未审批折扣。" }
 - { id: "ops_agent", role: "运营执行", systemPrompt: "你是运营 Agent。输出任务排期、负责人建议、依赖、风险、降级方案。" }
 - { id: "finance_agent", role: "财务分析", systemPrompt: "你是财务 Agent。输出指标表与口径，标注红线与人工复核点。" }
-- { id: "supervisor_agent", role: "主管派单与收口", systemPrompt: "你是主管 Agent。收到任务后必须：1) 拆分为销售/运营/财务子任务；2) 派发到对应会话；3) 拉取三方结果；4) 输出统一执行稿。信息不足时列待补数据，不得臆测。" }
+- { id: "supervisor_agent", role: "主管派单与收口", systemPrompt: "你是主管 Agent。硬约束：必须先调用 sessions_list 定位目标会话，再完成 3 次 sessions_send（sales/ops/finance 各一次），随后再收口。若未完成任一步，首行返回 DISPATCH_INCOMPLETE，并列出缺失步骤；禁止用文本模拟派单。成功时必须输出 dispatchEvidence（目标会话、发送时间、任务ID、发送结果）。" }
 
 routes:
 - { peerKind: "group", peerId: "oc_ffab0130d2cfb80f70c150918b4d4e87", accountId: "aoteman",      agentId: "sales_agent" }
@@ -166,6 +166,8 @@ routes:
 8. session.sendPolicy.default="allow"；如有 deny 规则，不得影响 feishu group 派单。
 9. requireMention 默认 true；allowMentionlessInMultiBotGroup 默认 false。
 10. 每个 peerId/accountId/agentId 必须真实存在，禁止猜测。
+11. supervisor_agent 必须带“硬门禁”：未完成 sessions_list + 3 次 sessions_send 时，一律返回 `DISPATCH_INCOMPLETE`。
+12. 验收输出必须包含 `dispatchEvidence`，至少 3 条（sales/ops/finance 各一条）。
 
 # 4) 输出
 1. 最小 patch（可直接应用）。
@@ -183,6 +185,7 @@ routes:
    - 三群执行是否回传
    - 主管收口质量
    - 日志证据
+5. 给出 canary 自动校验命令（2 分钟窗口）：未命中 3 个目标会话即判失败。
 ```
 
 ## 上线步骤（人工照着做）
@@ -196,8 +199,27 @@ routes:
 - `openclaw gateway restart`
 - `openclaw agents list --bindings`
 6. 在主管群做 canary 演示（见下节）。  
-7. 检查日志中的路由命中、会话发送、回传证据。  
+7. 执行 canary 自动校验（见下方命令），检查 2 分钟窗口内是否出现三条会话派发证据。  
 8. 验收通过后再全量使用。
+
+### V3 canary 自动校验命令（2 分钟窗口）
+
+```bash
+LOG="/tmp/openclaw/openclaw-$(date +%F).log"
+START_LINE=$(wc -l < "$LOG")
+
+# 现在去主管群发送 demo-v3-001 指令
+sleep 120
+
+bash skills/openclaw-feishu-multi-agent-deploy/scripts/check_v3_dispatch_canary.sh \
+  --log "$LOG" \
+  --start-line "$START_LINE" \
+  --agents "sales_agent,ops_agent,finance_agent"
+```
+
+返回码说明：
+- `0`：`DISPATCH_OK`（三会话都有派发轨迹）
+- `2`：`DISPATCH_INCOMPLETE`（缺少一个或多个目标会话轨迹）
 
 ## 最佳实践测试样板（V3 专用）
 
@@ -220,8 +242,9 @@ routes:
 
 预期：
 1. 主管先拆任务，不直接空总结。  
-2. 三群各自有执行输出（或能在日志证明会话派发成功）。  
+2. 三群各自有执行输出（且日志中可见三会话派发轨迹）。  
 3. 最终回到主管群形成统一决策稿。
+4. 主管回复中包含 `dispatchEvidence`（不少于 3 条）。
 
 ### 第 2 轮：突发冲突场景（展示“真协同”）
 

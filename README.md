@@ -653,6 +653,18 @@ agents:
 5. V3 缺少 `tools.allow=group:sessions`，主管只会“写派单卡”不会真实派发。  
 6. V3 未放行 `tools.sessions.visibility` 或 `session.sendPolicy`，会话派发被拦截。  
 
+V3 建议加一道自动门禁（2 分钟窗口）：
+```bash
+LOG="/tmp/openclaw/openclaw-$(date +%F).log"
+START_LINE=$(wc -l < "$LOG")
+# 在主管群发送 V3 测试指令
+sleep 120
+bash skills/openclaw-feishu-multi-agent-deploy/scripts/check_v3_dispatch_canary.sh \
+  --log "$LOG" \
+  --start-line "$START_LINE" \
+  --agents "sales_agent,ops_agent,finance_agent"
+```
+
 ## 维护约定
 
 - `references/generated/` 仅存放本地临时生成产物，不纳入版本控制

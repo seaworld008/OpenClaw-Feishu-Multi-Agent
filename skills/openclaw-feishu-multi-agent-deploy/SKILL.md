@@ -93,6 +93,7 @@ python3 scripts/build_openclaw_feishu_snippets.py \
 - 记录验证证据（命令输出、关键日志片段）
 - 输出回滚命令
 - 若启用了卡片交互，验证 `card.action.trigger` 事件链路
+- V3 主管派单场景必须执行 `scripts/check_v3_dispatch_canary.sh`，未通过不得判定验收成功
 
 ## 输出要求（给客户/交付文档）
 必须包含：
@@ -135,3 +136,5 @@ python3 scripts/build_openclaw_feishu_snippets.py \
   - `references/rollout-and-upgrade-playbook.md`
   - `references/codex-prompt-templates.md`
   - `references/codex-prompt-templates-v3.md`
+- 辅助脚本：
+  - `scripts/check_v3_dispatch_canary.sh`
