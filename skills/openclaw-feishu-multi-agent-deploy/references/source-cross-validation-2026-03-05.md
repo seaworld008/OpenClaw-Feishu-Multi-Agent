@@ -1,0 +1,31 @@
+# 交叉验证记录（2026-03-05）
+
+## OpenClaw 官方来源
+- 主仓库：
+  - https://github.com/openclaw/openclaw
+- Feishu 渠道文档（官方插件、权限、群组 ID 获取、defaultAccount、requireMention）：
+  - https://github.com/openclaw/openclaw/blob/main/docs/zh-CN/channels/feishu.md
+- 路由规则文档（匹配优先级、bindings）：
+  - https://github.com/openclaw/openclaw/blob/main/docs/zh-CN/channels/channel-routing.md
+- 多 Agent 概念文档（agentId、bindings、隔离模型）：
+  - https://github.com/openclaw/openclaw/blob/main/docs/zh-CN/concepts/multi-agent.md
+- Releases：
+  - https://github.com/openclaw/openclaw/releases
+
+## 飞书官方来源
+- 事件订阅总览：
+  - https://open.feishu.cn/document/server-docs/event-subscription-guide/introduction
+- 订阅事件配置：
+  - https://open.feishu.cn/document/server-docs/event-subscription-guide/subscribe-to-events
+- 接收消息事件：
+  - https://open.feishu.cn/document/server-docs/im-v1/message/events/message_receive
+- 鉴权（tenant_access_token）：
+  - https://open.feishu.cn/document/server-docs/authentication-management/access-token/tenant_access_token_internal
+
+## 本次结论
+1. `@openclaw/feishu` 仍是推荐默认路线，`match.channel = "feishu"`。
+2. 群 ID 采集优先使用 `openclaw logs --follow` 读取入站会话字段（`chat_id/peer.id`）。
+3. 多 Agent 路由应保持“精确优先 + 第一个命中生效”的 bindings 顺序。
+4. 多账号必须显式维护 `defaultAccount`，并在 routes 中显式写 `accountId`。
+5. 免 @ 触发要与飞书权限 `im:message.group_msg` 联动，默认建议保持 `requireMention=true`。
+6. 截至 2026-03-05，OpenClaw 主仓库有更新提交，最新 release 仍为 v2026.3.2（2026-03-03）。

@@ -61,11 +61,77 @@ openclaw gateway restart
 openclaw agents list --bindings
 ```
 
+## 飞书与 OpenClaw 信息采集（你现在最容易卡的点）
+
+先把这三类 ID 和凭据补齐，不然会出现“绑定找不到”“路由命中不到”的问题。  
+你给的群已经建好但找不到群 ID 时，按这个顺序执行。
+
+### 一、如何拿到飞书群 `chat_id`
+
+方法 1（建议）：用飞书事件日志拿 `chat_id`  
+1. 让任意一位群成员发一条测试消息（@机器人即可）到目标群。  
+2. 打开 OpenClaw 实时日志或事件日志：  
+   `openclaw logs --follow`  
+3. 找到飞书入站事件里 `peer.id` 字段（群聊会是 `peer.kind=group`），例如 `oc_9f31a...`。  
+4. 这里的 `peer.id` 就是你要用的群 ID。
+
+方法 2：通过事件订阅测试拉到真实回调  
+1. 飞书开放平台应用后台开启 `im.message.receive_v1`。  
+2. 发一次测试消息后，在回调内容里读取：  
+   `event.message.chat_id` 或 `event.message.chat_id`/`event.chat_id` 对应到的会话 ID。  
+3. 群聊通常与 `peer.id` 一致，可直接用于 `match.peer.id`。
+
+方法 3（兜底）：从历史日志回溯  
+1. 找到最近一条群消息在 openclaw 的日志。  
+2. 从原始入站 JSON 中提取 `peer.id`。  
+3. 优先用方法 1/2 采集到的 ID。
+
+### 二、如何拿到 Agent 和账号的真实标识
+
+1) Agent ID（`agentId`）  
+- 用命令：`openclaw agents list`  
+- 以 `agentId` 名称为准（`agents` 的内部 ID）。  
+- 不要用中文名字、头像、用途说明充当 id。  
+
+2) 飞书机器人账号（`accountId`）  
+- 在现网配置里读取：`channels.feishu.accounts` 的键名即是 `accountId`。  
+- 不要把 `appId` 当成 `accountId`。  
+- 绑定里 `match.accountId` 必须和这个键名完全一致。  
+
+3) 应用凭据（`appId` / `appSecret`）  
+- 统一来自飞书应用控制台（多 bot 分别独立记录）。  
+- 建议先把应用信息写入一个加密的 `credentials` 表（至少包含 `accountId`、`appId`、`appSecret`、`encryptKey`、`verificationToken`）。
+
+### 三、按你的示例写一版可直接落地的映射
+
+你给的示例值替换后，先用下表确认无误：
+
+- 销售群：`oc_9f31a...`  
+- 运营群：`oc_7b22d...`  
+- 财务群：`oc_3c88e...`  
+- Agent ID：`sales_agent`、`ops_agent`、`finance_agent`  
+- 账号：`bot_main`、`bot_finance`
+
+匹配关系应写成：
+
+```text
+peer: oc_9f31a... -> agentId: sales_agent，accountId: bot_main
+peer: oc_7b22d... -> agentId: ops_agent，accountId: bot_main
+peer: oc_3c88e... -> agentId: finance_agent，accountId: bot_finance
+```
+
+### 四、群角色与权限（业内最佳实践）
+- 开场默认用 `requireMention: true`，避免无意识触发。  
+- 如果某些群允许免 `@`，只对特定群级别开启 `requireMention: false` 并确认飞书已开通 `im:message.group_msg`。  
+- 多 bot 同群时默认 `allowMentionlessInMultiBotGroup: false`，再按业务谨慎逐群放开。  
+- 以 `agentId` 能映射为准，`peer.kind` 一般用 `group`。  
+- 尽量保持 `channels.feishu.defaultAccount` 为当前主 bot，避免回退路由不可控。  
+
 ## 使用 Codex 的实战案例（安装到上线）
 
-下面这套话术可直接复制给 Codex，适合你给客户做“飞书多机器人多角色”交付。
+下面这套话术可直接复制给 Codex，后续新增 agent 或新增机器人只需按“扩展表”增加行。
 
-1. 先让 Codex 安装本仓库 skill（安装完成后按提示重启 Codex）
+### 1) 先安装 skill
 
 ```text
 请使用 $skill-installer，
@@ -74,33 +140,61 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
 安装成功后提醒我重启 Codex。
 ```
 
-2. 重启 Codex 后，给它这个“真实部署任务”
+### 2) 重启后直接发这个标准任务（可扩展版）
 
 ```text
-请使用 openclaw-feishu-multi-agent-deploy skill，帮我完成一个客户的飞书多 Agent 部署。
+请使用 openclaw-feishu-multi-agent-deploy skill，完成本次飞书多 Agent 配置。
 
-场景：
-- OpenClaw 已在生产运行（brownfield）
-- 使用官方 feishu 插件路线（channel=feishu）
-- 两个飞书机器人：
-  - bot-main：服务销售和运营
-  - bot-finance：服务财务
-- 三个 Agent：
-  - sales-agent（销售咨询）
-  - ops-agent（运营执行）
-  - finance-agent（财务分析）
-- 路由目标：
-  - oc_sales_group -> sales-agent（accountId=bot-main）
-  - oc_ops_group -> ops-agent（accountId=bot-main）
-  - oc_fin_group -> finance-agent（accountId=bot-finance）
+交付边界：
+- 现网为 brownfield，必须 incremental（仅做必要最小改动）。
+- 配置目标 channel = feishu（官方插件）。
+- 不改 `bindings` 与 `channels.feishu` 无关字段。
+
+输入信息（请严格按下面结构读取/补齐，后续可扩展）：
+- accountMappings:
+  - accountId: "bot_main"
+    role: "sales_ops_bot"
+    appId: "..."
+    appSecret: "..."
+    encryptKey: "..."
+    verificationToken: "..."
+  - accountId: "bot_finance"
+    role: "finance_bot"
+    appId: "..."
+    appSecret: "..."
+    encryptKey: "..."
+    verificationToken: "..."
+- agents: ["sales_agent", "ops_agent", "finance_agent"]
+- routes:
+  - peerKind: "group"
+    peerId: "oc_9f31a..."
+    accountId: "bot_main"
+    agentId: "sales_agent"
+  - peerKind: "group"
+    peerId: "oc_7b22d..."
+    accountId: "bot_main"
+    agentId: "ops_agent"
+  - peerKind: "group"
+    peerId: "oc_3c88e..."
+    accountId: "bot_finance"
+    agentId: "finance_agent"
+
+可选扩展示例：
+- 如果新增一个业务群和机器人，只需再加一条 accountMappings 和对应 routes。
+- 如果新增一个 Agent，只需再加一条 routes 的 agentId；agents 列表里新增该 id。
 
 要求：
-1) 先读取并检查现有 ~/.openclaw/openclaw.json
-2) 按 incremental 输出 to_add / to_update / to_keep_unchanged
-3) 只改 channels.feishu、bindings、tools.agentToAgent 必要字段
-4) 绑定顺序必须“精确规则在前，兜底规则在后”
-5) 输出完整命令：备份、应用、openclaw config validate、重启、canary 验证、回滚
-6) 给出最终可粘贴 patch 和验收清单
+1) 先读取现有 ~/.openclaw/openclaw.json。
+2) 输出 to_add / to_update / to_keep_unchanged。
+3) 仅输出最小 patch，包含 channels.feishu、bindings、agents.list（必要新增）以及 tools.agentToAgent（按我明确开启才改）。
+4) bindings 排序必须“精确规则优先（peer+account）→ account 精确→兜底”。
+5) 输出完整命令：
+   - 备份命令
+   - openclaw config validate
+   - openclaw gateway restart
+   - openclaw agents list --bindings
+   - canary 验收步骤
+6) 输出回滚命令与验收证据模板。
 ```
 
 3. 你只需要把占位值换成真实值
@@ -164,8 +258,66 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
 
 ## 最佳实践来源
 
-- OpenClaw 官方文档与 Release（已在 `references/source-cross-validation-2026-03-04.md` 记录）
+- OpenClaw 官方文档与 Release（已在 `references/source-cross-validation-2026-03-05.md` 记录）
 - 飞书开放平台官方文档（事件订阅、消息事件、鉴权）
+
+## 交叉验证更新（2026-03-05）
+
+本仓库步骤和提示词已按官方来源再次核对，关键结论如下：
+
+1. OpenClaw 主仓库最新主分支提交时间为 `2026-03-05`，最新 release 仍为 `v2026.3.2`（`2026-03-03` 发布）。  
+2. 飞书推荐路线仍是官方插件 `@openclaw/feishu`，并使用 `match.channel = "feishu"`。  
+3. 群 ID 获取仍以 `openclaw logs --follow` 读取入站 `chat_id / peer.id` 为最稳妥方案。  
+4. 路由匹配继续遵循“更具体优先 + 第一个命中生效”原则，`bindings` 顺序必须严格控制。  
+5. 多账号场景需显式维护 `channels.feishu.defaultAccount`，避免出站账号漂移。  
+6. 免 `@` 场景依然需要配套飞书权限 `im:message.group_msg`，默认建议保持 `requireMention=true`。
+
+### 真实部署任务提示词（V2，推荐长期复用）
+
+```text
+请使用 openclaw-feishu-multi-agent-deploy skill，按官方最新规范完成飞书多 Agent 部署。
+
+目标：
+- 在现网（brownfield）中做 incremental 最小变更。
+- 使用官方 feishu 插件（match.channel=feishu）。
+- 支持后续新增机器人/新增 agent/新增群时可直接扩展。
+
+输入：
+- accountMappings:
+  - accountId: "bot_main"
+    appId: "..."
+    appSecret: "..."
+    encryptKey: "..."
+    verificationToken: "..."
+  - accountId: "bot_finance"
+    appId: "..."
+    appSecret: "..."
+    encryptKey: "..."
+    verificationToken: "..."
+- agents:
+  - { id: "sales_agent", role: "销售咨询", systemPrompt: "..." }
+  - { id: "ops_agent", role: "运营执行", systemPrompt: "..." }
+  - { id: "finance_agent", role: "财务分析", systemPrompt: "..." }
+- routes:
+  - { peerKind: "group", peerId: "oc_9f31a...", accountId: "bot_main", agentId: "sales_agent" }
+  - { peerKind: "group", peerId: "oc_7b22d...", accountId: "bot_main", agentId: "ops_agent" }
+  - { peerKind: "group", peerId: "oc_3c88e...", accountId: "bot_finance", agentId: "finance_agent" }
+
+约束：
+1) 先读取并审计 ~/.openclaw/openclaw.json。
+2) 输出 to_add / to_update / to_keep_unchanged。
+3) 只修改 channels.feishu、bindings、agents.list（必要新增）和 tools.agentToAgent（仅我要求时启用）。
+4) 按“peer+accountId 精确 > accountId > channel兜底”排序 bindings。
+5) 校验每个 peerId、accountId、agentId 必须真实存在，不得猜测。
+6) 输出完整操作命令：
+   - 备份
+   - openclaw config validate
+   - openclaw gateway restart
+   - openclaw agents list --bindings
+   - canary 验证
+   - 回滚
+7) 输出验收报告模板（群路由正确性、角色行为一致性、误触发检查、日志证据）。
+```
 
 ## 维护约定
 

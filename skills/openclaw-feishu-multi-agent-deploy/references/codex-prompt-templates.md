@@ -11,13 +11,53 @@
 ## 2) 新部署（多机器人多角色）
 ```text
 请使用 openclaw-feishu-multi-agent-deploy skill。
-目标：多个 accountId 对应多个业务角色 Agent。
-要求：
-- match.channel 使用 feishu
-- 每条绑定显式 accountId + peer
-- 先精确后兜底排序
-- 默认 requireMention=true，仅指定群例外
-输出最终可粘贴配置和验证清单。
+目标：多个 accountId 对应多个业务角色 Agent（支持后续直接扩展，按官方最新路由规则）。
+
+请按以下结构读取并执行，最后给出可直接粘贴 patch + 验证与回滚命令：
+
+- mode: "multi-bot"
+- channel: "feishu"
+- accountMappings:
+  - accountId: "bot_main"
+    role: "销售/运营"
+    appId: "..."
+    appSecret: "..."
+    encryptKey: "..."
+    verificationToken: "..."
+  - accountId: "bot_finance"
+    role: "财务"
+    appId: "..."
+    appSecret: "..."
+    encryptKey: "..."
+    verificationToken: "..."
+- agents: ["sales_agent", "ops_agent", "finance_agent"]
+- routes:
+  - peerKind: "group"
+    peerId: "oc_9f31a..."
+    accountId: "bot_main"
+    agentId: "sales_agent"
+  - peerKind: "group"
+    peerId: "oc_7b22d..."
+    accountId: "bot_main"
+    agentId: "ops_agent"
+  - peerKind: "group"
+    peerId: "oc_3c88e..."
+    accountId: "bot_finance"
+    agentId: "finance_agent"
+
+规则：
+1) 先读取现有 ~/.openclaw/openclaw.json。
+2) 输出 to_add / to_update / to_keep_unchanged。
+3) 只改 channels.feishu、bindings、agents.list（必要新增）以及 tools.agentToAgent（按业务开启）。
+4) binding 排序按精确规则优先：peer + accountId -> accountId -> 全局兜底（第一个匹配即生效）。
+5) 每个输入值都必须真实存在（agentId、accountId、peer.id），不得猜测。
+6) 输出：备份命令、validate、重启、`openclaw agents list --bindings`、canary 验证、回滚。
+7) 若需免 @，默认只对指定群开启并提示需要飞书权限 `im:message.group_msg`。
+
+可扩展指令：
+- 新增 bot：加一条 accountMappings，并补对应 routes。
+- 新增 agent：加一条 agents 和 routes。
+- 新增群：加一条 routes，默认保持 requireMention=true。
 ```
 
 ### 多角色路由占位替换速查
