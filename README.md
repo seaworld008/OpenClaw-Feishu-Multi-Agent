@@ -127,6 +127,87 @@ peer: oc_3c88e... -> agentId: finance_agent，accountId: bot_finance
 - 以 `agentId` 能映射为准，`peer.kind` 一般用 `group`。  
 - 尽量保持 `channels.feishu.defaultAccount` 为当前主 bot，避免回退路由不可控。  
 
+### 五、飞书权限清单（含多维表格）
+
+以下按“你能否稳定跑通”分层。建议在飞书开放平台 `权限管理 -> 批量导入/手动勾选` 统一处理。
+
+#### 1) 消息与路由基础（必需）
+- `im:message`
+- `im:message.p2p_msg:readonly`
+- `im:message.group_at_msg:readonly`
+- `im:message:send_as_bot`
+- `im:resource`
+
+#### 2) 群免 @（按需）
+- `im:message.group_msg`
+
+说明：未开启该权限时，请保持 `requireMention=true`。
+
+#### 3) 文档/知识（按需）
+- `docs:document.content:read`
+- `sheets:spreadsheet`
+- `wiki:wiki:readonly`
+
+#### 4) 多维表格（Bitable/Base，按需）
+
+飞书租户和 API 版本可能展示为不同命名体系（`bitable:*` 或 `base:*`）。  
+实操建议：先在你要调用的 API 文档页右侧查看“权限要求”，按该页面显示为准。
+
+推荐最小集合：
+- 只读场景：`bitable:app:readonly`（或同义 `base:*` 只读权限）
+- 读写场景：`bitable:app`（或同义 `base:*` 读写权限）
+
+如果你的 Agent 要做“查表 + 写记录 + 改字段/表结构”，通常需要覆盖：
+- 应用级权限（app/base）
+- 记录级权限（record）
+- 表级权限（table/field）
+
+上线前务必用真实 token 试一条最小 API（例如读 1 行、写 1 行）验证权限闭环。
+
+### 六、ID 对照表（避免把名字当 ID）
+
+| 名称 | 示例 | 在哪拿到 | 是否用于路由 |
+|---|---|---|---|
+| 群 ID（`chat_id` / `peer.id`） | `oc_9f31a...` | 群里发消息后看 `openclaw logs --follow` | 是（`match.peer.id`） |
+| 用户 Open ID（`open_id`） | `ou_xxx` | 私聊发消息后看 `openclaw logs --follow` 或 `openclaw pairing list feishu` | 否（常用于 allowFrom） |
+| 机器人账号 ID（`accountId`） | `bot_main` | 你在 `channels.feishu.accounts` 的键名（自己定义） | 是（`match.accountId`） |
+| 飞书应用 ID（`appId`） | `cli_xxx` | 飞书开放平台 `凭证与基础信息` | 否（用于账号凭据） |
+| 机器人 Open ID（bot open_id） | `ou_bot_xxx` | 飞书事件体 / 平台调试信息 | 否（通常不直接配路由） |
+| Agent ID（`agentId`） | `sales_agent` | `openclaw agents list` | 是（`binding.agentId`） |
+
+### 七、一步一步配置流程（照着做可落地）
+
+1. 飞书后台准备  
+- 创建或确认两个应用（对应 `bot_main`、`bot_finance`）。  
+- 开启机器人能力。  
+- 在权限管理里完成“基础权限 + 按需权限（文档/多维表格）”。  
+- 订阅事件至少包含：`im.message.receive_v1`。  
+
+2. OpenClaw 账号配置  
+- 在 `channels.feishu.accounts` 配置两个 `accountId` 及凭据。  
+- 显式设置 `defaultAccount`。  
+
+3. 收集路由 ID  
+- 在销售/运营/财务群分别发测试消息。  
+- 执行 `openclaw logs --follow`，记录三个 `oc_...`。  
+- 执行 `openclaw agents list`，确认 `sales_agent` / `ops_agent` / `finance_agent` 已存在。  
+
+4. 绑定与排序  
+- 为每个群配置一条精确 binding：`channel + accountId + peer.id -> agentId`。  
+- 保证顺序：精确规则在前，兜底在后。  
+
+5. 变更上线  
+- 先备份配置。  
+- 运行 `openclaw config validate`。  
+- 重启 `openclaw gateway`。  
+- 执行 `openclaw agents list --bindings` 检查结果。  
+- 先 canary 群验证，再全量。  
+
+6. 扩展策略  
+- 新增群：新增一条 route。  
+- 新增 agent：新增 `agentId` + route。  
+- 新增机器人：新增 `accountId` + 凭据 + routes。  
+
 ## 使用 Codex 的实战案例（安装到上线）
 
 下面这套话术可直接复制给 Codex，后续新增 agent 或新增机器人只需按“扩展表”增加行。

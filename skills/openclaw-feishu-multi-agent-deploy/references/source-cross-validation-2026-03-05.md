@@ -19,6 +19,8 @@
   - https://open.feishu.cn/document/server-docs/event-subscription-guide/subscribe-to-events
 - 接收消息事件：
   - https://open.feishu.cn/document/server-docs/im-v1/message/events/message_receive
+- 多维表格概述（Base/Bitable）：
+  - https://open.feishu.cn/document/server-docs/docs/bitable-v1/bitable-overview
 - 鉴权（tenant_access_token）：
   - https://open.feishu.cn/document/server-docs/authentication-management/access-token/tenant_access_token_internal
 
@@ -28,4 +30,5 @@
 3. 多 Agent 路由应保持“精确优先 + 第一个命中生效”的 bindings 顺序。
 4. 多账号必须显式维护 `defaultAccount`，并在 routes 中显式写 `accountId`。
 5. 免 @ 触发要与飞书权限 `im:message.group_msg` 联动，默认建议保持 `requireMention=true`。
-6. 截至 2026-03-05，OpenClaw 主仓库有更新提交，最新 release 仍为 v2026.3.2（2026-03-03）。
+6. 多维表格权限在飞书控制台可能以 `bitable:*` 或 `base:*` 命名展示，最终应以目标 API 页面“权限要求”为准。
+7. 截至 2026-03-05，OpenClaw 主仓库有更新提交，最新 release 仍为 v2026.3.2（2026-03-03）。

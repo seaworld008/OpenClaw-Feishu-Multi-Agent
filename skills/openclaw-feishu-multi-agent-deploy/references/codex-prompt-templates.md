@@ -47,12 +47,13 @@
 
 规则：
 1) 先读取现有 ~/.openclaw/openclaw.json。
-2) 输出 to_add / to_update / to_keep_unchanged。
-3) 只改 channels.feishu、bindings、agents.list（必要新增）以及 tools.agentToAgent（按业务开启）。
-4) binding 排序按精确规则优先：peer + accountId -> accountId -> 全局兜底（第一个匹配即生效）。
-5) 每个输入值都必须真实存在（agentId、accountId、peer.id），不得猜测。
-6) 输出：备份命令、validate、重启、`openclaw agents list --bindings`、canary 验证、回滚。
-7) 若需免 @，默认只对指定群开启并提示需要飞书权限 `im:message.group_msg`。
+2) 先做权限自检并输出缺口：消息基础权限、群免@权限、文档权限、多维表格权限（若本次需要读写 Bitable/Base）。
+3) 输出 to_add / to_update / to_keep_unchanged。
+4) 只改 channels.feishu、bindings、agents.list（必要新增）以及 tools.agentToAgent（按业务开启）。
+5) binding 排序按精确规则优先：peer + accountId -> accountId -> 全局兜底（第一个匹配即生效）。
+6) 每个输入值都必须真实存在（agentId、accountId、peer.id），不得猜测。
+7) 输出：备份命令、validate、重启、`openclaw agents list --bindings`、canary 验证、回滚。
+8) 若需免 @，默认只对指定群开启并提示需要飞书权限 `im:message.group_msg`。
 
 可扩展指令：
 - 新增 bot：加一条 accountMappings，并补对应 routes。
@@ -89,4 +90,31 @@
 我刚升级 OpenClaw/feishu 插件，请检查当前配置是否兼容最新版本，
 重点检查 defaultAccount、bindings 顺序、requireMention 与群覆盖、多账号出站路由。
 输出修复建议与最小补丁。
+```
+
+## 5) 你当前场景可直接用的“真实部署任务”模板
+```text
+请使用 openclaw-feishu-multi-agent-deploy skill。
+请按官方 feishu 插件路线在 brownfield 环境做增量改造，并先做权限与 ID 核验。
+
+输入：
+- accountMappings:
+  - { accountId: "bot_main", appId: "...", appSecret: "...", encryptKey: "...", verificationToken: "..." }
+  - { accountId: "bot_finance", appId: "...", appSecret: "...", encryptKey: "...", verificationToken: "..." }
+- agents:
+  - { id: "sales_agent", role: "销售咨询", systemPrompt: "..." }
+  - { id: "ops_agent", role: "运营执行", systemPrompt: "..." }
+  - { id: "finance_agent", role: "财务分析", systemPrompt: "..." }
+- routes:
+  - { peerKind: "group", peerId: "oc_9f31a...", accountId: "bot_main", agentId: "sales_agent" }
+  - { peerKind: "group", peerId: "oc_7b22d...", accountId: "bot_main", agentId: "ops_agent" }
+  - { peerKind: "group", peerId: "oc_3c88e...", accountId: "bot_finance", agentId: "finance_agent" }
+- needBitableAccess: true
+
+输出要求：
+1) 权限核验清单：必需权限、缺失权限、补齐路径。
+2) 变更计划：to_add / to_update / to_keep_unchanged。
+3) 最小 patch：仅 channels.feishu、bindings、agents.list、可选 tools.agentToAgent。
+4) 命令清单：备份、validate、重启、bindings 检查、canary、回滚。
+5) 验收模板：路由正确率、角色行为一致性、误触发率、日志证据。
 ```
