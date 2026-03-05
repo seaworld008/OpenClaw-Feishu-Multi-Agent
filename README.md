@@ -164,6 +164,53 @@ peer: oc_3c88e... -> agentId: finance_agent，accountId: bot_finance
 
 上线前务必用真实 token 试一条最小 API（例如读 1 行、写 1 行）验证权限闭环。
 
+#### 5) 权限汇总（推荐生产，一键复制）
+
+下面这份是“多 Agent + 多路由 + 文档 + 多维表格”可用的推荐汇总权限。  
+你可以直接在飞书开放平台权限管理里批量导入。
+
+```json
+{
+  "scopes": {
+    "tenant": [
+      "im:message",
+      "im:message.p2p_msg:readonly",
+      "im:message.group_at_msg:readonly",
+      "im:message.group_msg",
+      "im:message:readonly",
+      "im:message:send_as_bot",
+      "im:message:update",
+      "im:message:recall",
+      "im:message.reactions:read",
+      "im:resource",
+      "im:chat",
+      "im:chat.members:bot_access",
+      "im:chat.access_event.bot_p2p_chat:read",
+      "contact:user.base:readonly",
+      "contact:contact.base:readonly",
+      "docs:document.content:read",
+      "sheets:spreadsheet",
+      "docx:document:readonly",
+      "docx:document",
+      "docx:document.block:convert",
+      "drive:drive:readonly",
+      "drive:drive",
+      "wiki:wiki:readonly",
+      "wiki:wiki",
+      "bitable:app:readonly",
+      "bitable:app",
+      "task:task:read",
+      "task:task:write"
+    ],
+    "user": []
+  }
+}
+```
+
+说明：
+- 多维表格权限在部分租户控制台会显示为 `base:*` 命名；若你的控制台没有 `bitable:*`，按页面提示替换为对应的 `base:*` 等价权限即可。
+- 如果你不需要“免 @ 群触发”，可去掉 `im:message.group_msg` 并保持 `requireMention=true`。
+
 ### 六、ID 对照表（避免把名字当 ID）
 
 | 名称 | 示例 | 在哪拿到 | 是否用于路由 |
