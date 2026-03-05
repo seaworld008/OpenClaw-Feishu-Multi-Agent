@@ -64,8 +64,10 @@ agents:
 
 managerGroup:
   peerKind: "group"
-  peerId: "oc_manager_xxx"
+  peerId: "oc_84677faa225ba8a380d3721c654f17a1"
   accountId: "aoteman"
+  currentDetectedAgentId: "main"
+  targetAgentId: "supervisor_agent"
 ```
 
 ## 一次性交付主提示词（直接发给 Codex）
@@ -91,7 +93,7 @@ existingRoutes:
 - { peerKind: "group", peerId: "oc_1a3c32a99d6a8120f9ca7c4343263b24", accountId: "yiran_yibao", agentId: "finance_agent" }
 
 managerRoute:
-- { peerKind: "group", peerId: "oc_manager_xxx", accountId: "aoteman", agentId: "supervisor_agent" }
+  - { peerKind: "group", peerId: "oc_84677faa225ba8a380d3721c654f17a1", accountId: "aoteman", agentId: "supervisor_agent" }
 
 agents:
 - { id: "sales_agent", role: "销售咨询", systemPrompt: "你是销售 Agent。输出需求摘要、推荐方案、前提约束和下一步动作；信息不足先问3个澄清问题；不得承诺未确认折扣和交付。" }
@@ -145,8 +147,8 @@ agents:
 ## 从前到后实操步骤（人工执行顺序）
 
 1. 在飞书新建 manager 群，并拉入 `aoteman` 对应机器人。  
-2. 在 manager 群发一条测试消息，`openclaw logs --follow` 抓到 `oc_manager_xxx`。  
-3. 将 `oc_manager_xxx` 回填到上面的主提示词。  
+2. 你当前 manager 群已确认：`oc_84677faa225ba8a380d3721c654f17a1`（`accountId=aoteman`）。  
+3. 若当前路由仍是 `agentId=main`，先改为 `agentId=supervisor_agent` 再做收口演示。  
 4. 把“主提示词”原样发给 Codex 执行。  
 5. 应用 Codex 产出的最小 patch。  
 6. 执行 validate + restart + bindings 检查。  
