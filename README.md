@@ -465,6 +465,7 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
 - 上线前：`templates/brownfield-change-plan.example.md`
 - 上线后：`templates/verification-checklist.md`
 - 升级回归：`references/rollout-and-upgrade-playbook.md`
+- 自动跨群收口（主管模式）：`references/auto-cross-group-rollup-playbook.md`
 
 ## 最佳实践来源
 
