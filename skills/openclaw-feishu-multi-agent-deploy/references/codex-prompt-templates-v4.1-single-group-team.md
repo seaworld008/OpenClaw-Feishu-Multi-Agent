@@ -60,17 +60,51 @@
 ## V4.1 架构（推荐）
 
 ```mermaid
-flowchart TD
-  user["用户发任务"] --> supervisor["supervisor_agent<br/>主管总控"]
-  supervisor --> dispatch["拆任务 / 派单 / 指定互审规则"]
-  dispatch --> ops["ops_agent<br/>运营执行"]
-  dispatch --> finance["finance_agent<br/>财务执行"]
-  dispatch --> sales["sales_agent<br/>销售支持"]
-  ops --> review["受控互审 / 补证"]
-  finance --> review
-  sales --> review
-  review --> supervisor
-  supervisor --> result["统一执行稿 / 责任分工 / 风险预案"]
+flowchart LR
+  user["用户任务入口"]
+
+  subgraph team["飞书单群团队（Team Group）"]
+    supervisor["supervisor_agent\n主管总控"]
+    dispatch["任务拆解 / 派单 / 互审编排"]
+
+    subgraph workers["执行层"]
+      ops["ops_agent\n运营执行"]
+      finance["finance_agent\n财务执行"]
+      sales["sales_agent\n销售支持（可选）"]
+    end
+
+    review["有限互审 / 补证\n最多 1 轮"]
+    result["统一收口\n执行方案 / 责任分工 / 风险预案"]
+  end
+
+  user -->|@主管机器人| supervisor
+  supervisor --> dispatch
+  dispatch -->|派单| ops
+  dispatch -->|派单| finance
+  dispatch -->|可选派单| sales
+
+  ops -->|结果回传| supervisor
+  finance -->|结果回传| supervisor
+  sales -->|结果回传| supervisor
+
+  ops -.->|互审 / 补证| review
+  finance -.->|互审 / 补证| review
+  sales -.->|补证| review
+  review -.->|回主管| supervisor
+
+  supervisor -->|统一收口| result
+
+  classDef entry fill:#EAF3FF,stroke:#3B82F6,color:#0F172A,stroke-width:1.5px;
+  classDef orchestration fill:#FFF7ED,stroke:#F97316,color:#7C2D12,stroke-width:1.5px;
+  classDef worker fill:#F8FAFC,stroke:#64748B,color:#0F172A,stroke-width:1.2px;
+  classDef reviewNode fill:#FEF3C7,stroke:#D97706,color:#78350F,stroke-width:1.2px;
+  classDef output fill:#ECFDF5,stroke:#10B981,color:#064E3B,stroke-width:1.5px;
+
+  class user entry;
+  class supervisor,dispatch orchestration;
+  class ops,finance,sales worker;
+  class review reviewNode;
+  class result output;
 ```
 
 如果你的 Markdown 预览器不支持 Mermaid，可按下面的文本流程理解：
