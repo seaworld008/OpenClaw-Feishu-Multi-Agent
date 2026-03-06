@@ -237,8 +237,10 @@ agents:
 - 固定执行顺序：先 `sessions_list`，若 `ops_agent` / `finance_agent` 任一会话缺失则先 `sessions_spawn`，再 `sessions_send`
 - `ops_agent` 和 `finance_agent` 是必需目标；`sales_agent` 仅可选
 - 未拿到 `ops_agent` + `finance_agent` 的 `sendStatus=ok` 前，首行只能返回 `DISPATCH_INCOMPLETE`
+- `attemptedSteps` 只能记录本轮真实发生的工具调用，禁止臆造
+- 若本轮没有任何工具调用，必须返回 `nextAction=tool_call_required`，且 `attemptedSteps=["no_tool_call"]`
 - 未完成时必须同时输出：`missingTargets`、`attemptedSteps`、`nextAction`、`dispatchEvidence=[]`、`reviewEvidence=[]`
-- 若会话缺失且无法 `sessions_spawn`，`nextAction` 必须是 `warmup_required`
+- 只有在真实 `sessions_list` / `sessions_spawn` 后确认 worker 会话缺失时，`nextAction` 才能是 `warmup_required`
 - 完成时首行返回 `DISPATCH_OK`，且 `dispatchEvidence` 每条至少包含 `agentId`、`sessionKey`、`runId`、`sendStatus`、`sentAt`、`evidenceSource`
 - 若发起互审，`reviewEvidence` 每条至少包含 `fromAgent`、`toAgent`、`reviewRound`、`summary`、`evidenceSource`
 - 若本轮没有真实互审，`reviewEvidence` 必须是空数组
@@ -296,6 +298,7 @@ agents:
 - 当任务需要交叉校验时，允许执行角色之间做最多 1 轮有限互审。
 - 任何互审结论都必须回到主管，再由主管统一对用户输出。
 - 首次上线若 worker 会话不存在，必须先做 warm-up 或 `sessions_spawn` 兜底。
+- 如果主管本轮连 `sessions_list` 都没有调用，必须返回 `tool_call_required`，不得把这类情况伪装成 `warmup_required`。
 
 输入：
 - teamGroup:
@@ -305,7 +308,7 @@ agents:
   - { accountId: "xiaolongxia", appId: "cli_a9f1849b67f9dcc2", appSecret: "g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr", encryptKey: "", verificationToken: "" }
   - { accountId: "yiran_yibao", appId: "cli_a923c71498b8dcc9", appSecret: "swscrlPKYCwAehOyyoLrlesLTsuYY6nl", encryptKey: "", verificationToken: "" }
 - agents:
-  - { id: "supervisor_agent", role: "主管总控", systemPrompt: "你是主管 Agent。固定状态机：1) sessions_list；2) 若 ops_agent/finance_agent 会话缺失，先 sessions_spawn，仍缺失则 nextAction=warmup_required；3) 仅对必需目标 ops_agent、finance_agent 完成真实 sessions_send；sales_agent 仅可选；4) 必要时编排 1 轮互审；5) 最终统一收口。硬门控：未拿到 ops_agent+finance_agent 的 sendStatus=ok 前，禁止写已派单/已安排/已分配。未完成时首行必须是 DISPATCH_INCOMPLETE，并输出 missingTargets、attemptedSteps、nextAction、dispatchEvidence=[]、reviewEvidence=[]。完成时首行返回 DISPATCH_OK，并输出 dispatchEvidence（agentId/sessionKey/runId/sendStatus/sentAt/evidenceSource）。发生互审时才允许输出 reviewEvidence（fromAgent/toAgent/reviewRound/summary/evidenceSource）。" }
+  - { id: "supervisor_agent", role: "主管总控", systemPrompt: "你是主管 Agent。固定状态机：1) sessions_list；2) 若 ops_agent/finance_agent 会话缺失，先 sessions_spawn，仍缺失才允许 nextAction=warmup_required；3) 仅对必需目标 ops_agent、finance_agent 完成真实 sessions_send；sales_agent 仅可选；4) 必要时编排 1 轮互审；5) 最终统一收口。硬门控：未拿到 ops_agent+finance_agent 的 sendStatus=ok 前，禁止写已派单/已安排/已分配。attemptedSteps 只能记录本轮真实发生的工具调用，禁止臆造。若本轮没有任何工具调用，首行必须是 DISPATCH_INCOMPLETE，且 nextAction=tool_call_required、attemptedSteps=[\"no_tool_call\"]、dispatchEvidence=[]、reviewEvidence=[]。未完成但已做真实工具调用时，才允许输出 missingTargets、attemptedSteps、nextAction。完成时首行返回 DISPATCH_OK，并输出 dispatchEvidence（agentId/sessionKey/runId/sendStatus/sentAt/evidenceSource）。发生互审时才允许输出 reviewEvidence（fromAgent/toAgent/reviewRound/summary/evidenceSource）。" }
   - { id: "ops_agent", role: "运营执行", systemPrompt: "你是运营执行 Agent。只处理主管派发的运营任务；若被授权互审，可向财务或销售支持发 1 轮补问；最终必须回主管。未经主管授权，不得向其他执行角色发起补问。若 reviewRound > 1，直接返回 REVIEW_LIMIT_REACHED 给主管。输出必须包含 toSupervisorSummary。" }
   - { id: "finance_agent", role: "财务执行", systemPrompt: "你是财务执行 Agent。只处理主管派发的财务任务；若被授权互审，可向运营发 1 轮补问；最终必须回主管。未经主管授权，不得向其他执行角色发起补问。若 reviewRound > 1，直接返回 REVIEW_LIMIT_REACHED 给主管。输出必须包含 toSupervisorSummary。" }
   - { id: "sales_agent", role: "销售支持", systemPrompt: "你是销售支持 Agent。负责销售策略、话术、商机分析；默认不作为主入口；若被授权互审，可对运营提出承接确认。未经主管授权，不得主动补问。若 reviewRound > 1，直接返回 REVIEW_LIMIT_REACHED 给主管。输出必须包含 toSupervisorSummary。" }
@@ -336,6 +339,7 @@ agents:
 17. 若没有真实互审，不得伪造 `reviewEvidence`。
 18. 若 `ops_agent` / `finance_agent` 会话缺失，必须先 `sessions_spawn`；若仍失败，明确输出 `warmup_required`，不得继续伪派单。
 19. 验收证据优先级必须说明：`session jsonl > gateway log`。
+20. 若本轮没有任何工具调用，必须输出 `nextAction=tool_call_required` 与 `attemptedSteps=["no_tool_call"]`，不得误报 `warmup_required`。
 
 输出要求：
 1. 最小 patch。
@@ -363,9 +367,9 @@ agents:
 1. 新建一个团队群。  
 2. 把 3 个机器人都拉入同一个群。  
 3. 在群里依次做 warm-up：  
+- `@小龙虾找妈妈 WARMUP team-v4-1-001-ops`
+- `@易燃易爆 WARMUP team-v4-1-001-fin`
 - `@奥特曼 /status`
-- `@小龙虾找妈妈 /status`
-- `@易燃易爆 /status`
 4. 用上面的 V4.1 主提示词让 Codex 生成 patch。  
 5. 执行：
 - `openclaw config validate`
@@ -381,8 +385,8 @@ agents:
 
 首次部署或新群首次启用时，建议按这个顺序：
 
-1. `@小龙虾找妈妈 /status`
-2. `@易燃易爆 /status`
+1. `@小龙虾找妈妈 WARMUP team-v4-1-001-ops`
+2. `@易燃易爆 WARMUP team-v4-1-001-fin`
 3. 确认两个 worker 会话已落到 `~/.openclaw/agents/*/sessions/*.jsonl` 或网关日志
 4. 再 `@奥特曼` 发 `team-v4-1-001`
 
@@ -392,6 +396,13 @@ agents:
 - `nextAction=warmup_required`
 
 则先补 worker warm-up，不要直接判路由失败。
+
+如果主管返回：
+- `DISPATCH_INCOMPLETE`
+- `nextAction=tool_call_required`
+- `attemptedSteps=["no_tool_call"]`
+
+则说明本轮连 `sessions_list` 都没真正执行，应先检查 supervisor prompt 是否已更新、生效配置是否已重启，再用新 `taskId` 重测。
 
 ## V4.1 推荐演示话术
 
@@ -437,6 +448,7 @@ bash skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_1_team_canary.sh
 - 这个脚本优先看 `~/.openclaw/agents/*/sessions/*.jsonl`，再看网关日志窗口。
 - 如果你后续把 `sales_agent` 也做成可见且可派发角色，可把 `--required-agents` 改成 `"ops_agent,finance_agent,sales_agent"`。
 - 若本轮明确要求必须发生互审，再追加 `--expect-review`。
+- 若主管返回 `nextAction=tool_call_required`，不要先 warm-up，先检查 supervisor prompt 和 gateway restart 是否已生效。
 
 ## 常见失败点（V4.1）
 
@@ -460,6 +472,9 @@ bash skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_1_team_canary.sh
 
 7. 只看 gateway log 不看 session jsonl
 - 容易误判“没有派单”或“互审已发生”。
+
+8. 主管没有任何工具调用
+- 应返回 `tool_call_required`，这不是 worker 问题，而是 supervisor prompt / 生效配置问题。
 
 ## 给客户的最终定位
 

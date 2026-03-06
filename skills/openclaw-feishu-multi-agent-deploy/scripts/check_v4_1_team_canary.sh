@@ -10,6 +10,7 @@ usage() {
   - 优先从 ~/.openclaw/agents/*/sessions/*.jsonl 查证据，再回退到网关日志窗口
   - 默认必需执行角色: ops_agent,finance_agent
   - 默认可选执行角色: sales_agent
+  - 若 supervisor 返回 nextAction=tool_call_required，表示本轮没有任何真实工具调用
   - 成功返回 0 (TEAM_CANARY_OK)
   - 缺少真实派单链返回 2 (DISPATCH_INCOMPLETE)
   - 证据不足或互审证据不足返回 3 (DISPATCH_UNVERIFIED)
@@ -210,6 +211,10 @@ for pattern in "${dispatch_patterns[@]}"; do
 done
 
 if [[ $dispatch_found -eq 0 ]]; then
+  if supervisor_task_pattern "tool_call_required|no_tool_call"; then
+    echo "DISPATCH_INCOMPLETE: supervisor 本轮没有任何真实工具调用（tool_call_required）"
+    exit 2
+  fi
   if supervisor_task_pattern "DISPATCH_INCOMPLETE"; then
     echo "DISPATCH_INCOMPLETE: supervisor 仍处于未完成态，未找到真实派单证据"
     exit 2

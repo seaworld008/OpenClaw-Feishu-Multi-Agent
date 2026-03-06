@@ -126,6 +126,7 @@ python3 scripts/build_openclaw_feishu_snippets.py \
 - 主管派发被策略拦截：查 `session.sendPolicy` 是否默认放行
 - V4/V4.1 主管返回 `DISPATCH_INCOMPLETE` 但正文声称“已安排”：查 supervisor prompt 是否缺少状态机式硬门控
 - V4/V4.1 新群首轮无 worker 会话：先对 worker 执行 warm-up，再复测
+- V4/V4.1 返回 `tool_call_required`：说明 supervisor 本轮没有任何真实工具调用，先查 prompt 是否已更新并确认重启已生效
 
 ## 可直接复用的文件
 - 模板：
