@@ -137,6 +137,8 @@ python3 scripts/build_openclaw_feishu_snippets.py \
 - 运行手册：
   - `references/rollout-and-upgrade-playbook.md`
   - `references/codex-prompt-templates.md`
+  - `references/codex-prompt-templates-v3.1.md`
   - `references/codex-prompt-templates-v3.md`
+  - `references/codex-prompt-templates-v4-single-group-team.md`
 - 辅助脚本：
   - `scripts/check_v3_dispatch_canary.sh`

@@ -466,7 +466,9 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
 - 上线后：`templates/verification-checklist.md`
 - 升级回归：`references/rollout-and-upgrade-playbook.md`
 - 自动跨群收口（主管模式）：[飞书多 Agent 自动跨群收口交付蓝图（V2.1 Pro）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates.md)
-- 主管派单 + 三群执行 + 自动收口（V3）：[飞书多 Agent 主管派单与自动跨群收口交付蓝图（V3）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v3.md)
+- 主管派单 + 三群执行 + 自动收口（V3.1，推荐）：[飞书多 Agent 主管派单与自动跨群收口交付蓝图（V3.1）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v3.1.md)
+- 主管派单 + 三群执行 + 自动收口（V3，历史版）：[飞书多 Agent 主管派单与自动跨群收口交付蓝图（V3）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v3.md)
+- 单群高级 Agent 团队模式（V4，主管主入口）：[飞书单群高级 Agent 团队交付蓝图（V4）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4-single-group-team.md)
 
 ### 跨群收口文档入口
 
@@ -474,7 +476,10 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
 [飞书多 Agent 自动跨群收口交付蓝图（V2.1 Pro）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates.md)
 
 如果你要做“主管派单 -> 三群执行 -> 主管自动收口”的完整执行闭环，请直接看：  
-[飞书多 Agent 主管派单与自动跨群收口交付蓝图（V3）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v3.md)
+[飞书多 Agent 主管派单与自动跨群收口交付蓝图（V3.1）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v3.1.md)
+
+如果你要做“3 个机器人都在同一个群里，用户只对主管机器人发任务，主管再调度执行角色”的单群团队模式，请直接看：  
+[飞书单群高级 Agent 团队交付蓝图（V4）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4-single-group-team.md)
 
 ## 最佳实践来源
 
