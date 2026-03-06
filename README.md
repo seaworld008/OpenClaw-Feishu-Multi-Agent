@@ -469,6 +469,7 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
 - 主管派单 + 三群执行 + 自动收口（V3.1，推荐）：[飞书多 Agent 主管派单与自动跨群收口交付蓝图（V3.1）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v3.1.md)
 - 主管派单 + 三群执行 + 自动收口（V3，历史版）：[飞书多 Agent 主管派单与自动跨群收口交付蓝图（V3）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v3.md)
 - 单群高级 Agent 团队模式（V4，主管主入口）：[飞书单群高级 Agent 团队交付蓝图（V4）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4-single-group-team.md)
+- 单群高级 Agent 团队模式（V4.1，主管主导协商）：[飞书单群高级 Agent 团队交付蓝图（V4.1）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.1-single-group-team.md)
 
 ### 跨群收口文档入口
 
@@ -480,6 +481,9 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
 
 如果你要做“3 个机器人都在同一个群里，用户只对主管机器人发任务，主管再调度执行角色”的单群团队模式，请直接看：  
 [飞书单群高级 Agent 团队交付蓝图（V4）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4-single-group-team.md)
+
+如果你要做“单群团队模式 + 主管主导协商 + 执行角色有限互审”的增强版，请直接看：
+[飞书单群高级 Agent 团队交付蓝图（V4.1）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.1-single-group-team.md)
 
 ## 最佳实践来源
 

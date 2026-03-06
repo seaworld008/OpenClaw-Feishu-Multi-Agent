@@ -140,5 +140,6 @@ python3 scripts/build_openclaw_feishu_snippets.py \
   - `references/codex-prompt-templates-v3.1.md`
   - `references/codex-prompt-templates-v3.md`
   - `references/codex-prompt-templates-v4-single-group-team.md`
+  - `references/codex-prompt-templates-v4.1-single-group-team.md`
 - 辅助脚本：
   - `scripts/check_v3_dispatch_canary.sh`
