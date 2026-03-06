@@ -8,6 +8,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BUILD_SCRIPT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/build_openclaw_feishu_snippets.py"
 CANARY_SCRIPT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/check_v3_dispatch_canary.sh"
+V4_2_CANARY_SCRIPT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_2_team_canary.sh"
 
 
 def load_build_module():
@@ -129,6 +130,79 @@ class CanaryScriptTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0)
         self.assertIn("DISPATCH_OK", result.stdout)
+
+
+class V42CanaryScriptTests(unittest.TestCase):
+    def run_script(self, session_files, *extra_args):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            agents_root = root / "agents"
+            log_path = root / "openclaw.log"
+            log_path.write_text("", encoding="utf-8")
+
+            for rel_path, content in session_files.items():
+                target = agents_root / rel_path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(content, encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    str(V4_2_CANARY_SCRIPT),
+                    "--session-root",
+                    str(agents_root),
+                    "--log",
+                    str(log_path),
+                    "--start-line",
+                    "0",
+                    *extra_args,
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            return result
+
+    def test_v42_canary_reports_list_miss_when_send_path_exists(self):
+        result = self.run_script(
+            {
+                "supervisor_agent/sessions/s1.jsonl": "\n".join(
+                    [
+                        "task team-v4-2-001",
+                        "sessions_list observed workers",
+                        "sessions_send target=agent:ops_agent:feishu:group:oc_demo sendStatus=ok runId=run-ops",
+                        "sessions_send target=agent:finance_agent:feishu:group:oc_demo sendStatus=ok runId=run-fin",
+                        "dispatchEvidence missing on purpose",
+                    ]
+                ),
+            },
+            "--task-id",
+            "team-v4-2-001",
+        )
+
+        self.assertEqual(result.returncode, 3)
+        self.assertIn("SEND_PATH_AVAILABLE_BUT_LIST_MISS", result.stdout)
+
+    def test_v42_canary_succeeds_with_worker_session_evidence(self):
+        result = self.run_script(
+            {
+                "supervisor_agent/sessions/s1.jsonl": "\n".join(
+                    [
+                        "task team-v4-2-001",
+                        "dispatchEvidence",
+                        "sessions_send target=agent:ops_agent:feishu:group:oc_demo sendStatus=ok runId=run-ops sentAt=2026-03-06T12:00:00Z evidenceSource=session-jsonl",
+                        "sessions_send target=agent:finance_agent:feishu:group:oc_demo sendStatus=ok runId=run-fin sentAt=2026-03-06T12:00:01Z evidenceSource=session-jsonl",
+                    ]
+                ),
+                "ops_agent/sessions/o1.jsonl": "team-v4-2-001 ops task received",
+                "finance_agent/sessions/f1.jsonl": "team-v4-2-001 finance task received",
+            },
+            "--task-id",
+            "team-v4-2-001",
+        )
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("TEAM_CANARY_OK", result.stdout)
 
 
 if __name__ == "__main__":

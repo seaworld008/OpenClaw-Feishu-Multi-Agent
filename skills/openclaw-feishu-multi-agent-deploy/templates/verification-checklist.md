@@ -26,12 +26,19 @@
 - [ ] （V3）三方回传后主管可自动收口
 - [ ] （V3）执行 `scripts/check_v3_dispatch_canary.sh` 返回 `DISPATCH_OK`
 - [ ] （V3）若脚本返回 `DISPATCH_UNVERIFIED`，已补查原始日志中的 `sessions_send` / 派发证据
+- [ ] （V4/V4.1/V4.2）主管未出现“未完成态却口头声称已安排/已派单”
+- [ ] （V4/V4.1/V4.2）worker warm-up 后，主管可对必需执行角色形成真实派单链路
+- [ ] （V4/V4.1/V4.2）`dispatchEvidence` 与 worker session jsonl 一致
+- [ ] （V4.1/V4.2）若发生互审，`reviewEvidence` 存在且轮次不超过 1
+- [ ] （V4.2）若返回 `SEND_PATH_AVAILABLE_BUT_LIST_MISS`，已改以 `dispatchEvidence` 与 worker session jsonl 复核，而不是继续把 `sessions_list` 当成唯一依据
+- [ ] （V4.2）执行 `scripts/check_v4_2_team_canary.sh` 后，结果已记录到验收报告
 
 ## D. 稳定性验证
 - [ ] 网关重启后路由仍正确
 - [ ] 5 分钟连续对话无异常报错
 - [ ] 日志无权限拒绝与 schema 报错
 - [ ] （V3）日志无 sessions 权限拒绝与 sendPolicy 拦截
+- [ ] （V4/V4.1/V4.2）日志无持续 `thread=true` / `subagent_spawning hooks` 重试风暴
 
 ## E. 回滚可用性
 - [ ] 回滚命令可执行

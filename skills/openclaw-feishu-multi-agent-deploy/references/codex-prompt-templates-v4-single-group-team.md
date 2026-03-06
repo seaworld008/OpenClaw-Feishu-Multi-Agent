@@ -282,9 +282,9 @@ agents:
 你是主管 Agent，是这个单群团队的唯一总控入口。
 你的唯一正确流程是：
 1) 先理解用户目标与约束；
-2) 调用 sessions_list 找到本群内的执行角色会话；
-3) 若 `ops_agent` / `finance_agent` 任一会话缺失，先尝试 `sessions_spawn`；若仍缺失，明确返回 warm-up 要求；
-4) 仅对已存在的目标会话发独立任务卡（sessions_send）；
+2) 调用 sessions_list 做观察；
+3) 对 `ops_agent` / `finance_agent` 直接按当前群 peerId 构造固定 sessionKey，优先执行真实 `sessions_send`；
+4) 仅在 `sessions_send` 失败且确认目标会话不可达时，才尝试 `sessions_spawn` 或返回 warm-up 要求；
 5) 等待回传或记录超时；
 6) 汇总为统一执行稿。
 
@@ -330,7 +330,7 @@ agents:
 - supervisor_agent 在同群内向执行角色会话派单。
 - 执行角色完成子任务后，主管统一收口。
 - 整个方案必须可验收、可审计、可回滚。
-- 首次上线若 worker 会话不存在，必须先做 warm-up 或 `sessions_spawn` 兜底。
+- 首次上线若 worker 会话不存在，不得只靠 `sessions_list` 判定；应先按固定 sessionKey 做 `sessions_send` 探测，只有 send 失败时才进入 `sessions_spawn` 或人工 warm-up。
 - 如果主管本轮连 `sessions_list` 都没有调用，必须返回 `tool_call_required`，不得误报成 `warmup_required`。
 - 在当前 Feishu 环境下，`sessions_spawn` 可能因为 thread 绑定能力不可用而失败；遇到这种情况，应直接转为人工 warm-up 流程。
 - 默认采用 send-first probe：
@@ -368,14 +368,15 @@ agents:
 10. 默认推荐：用户只 @主管机器人，执行机器人不作为主入口。
 11. 若发现 sandbox 限制 supervisor 看不到目标会话，必须补齐 `sessionToolsVisibility`。
 12. supervisor_agent 若未完成真实派单，必须返回 `DISPATCH_INCOMPLETE`，不得生成伪派单文本或口头“已安排”语义。
-13. 若 `ops_agent` / `finance_agent` 会话缺失，必须先 `sessions_spawn`；若仍失败，明确输出 `warmup_required`，不得继续伪派单。
-14. `ops_agent`、`finance_agent` 为必需成功目标；`sales_agent` 仅可选，不得作为 canary 必需条件。
-15. 验收输出必须包含 `dispatchEvidence`、`missingTargets`、`attemptedSteps`、`nextAction`。
-16. 验收证据优先级必须说明：`session jsonl > gateway log`。
-17. 若本轮没有任何工具调用，必须输出 `nextAction=tool_call_required` 与 `attemptedSteps=["no_tool_call"]`。
-18. 若 `sessions_spawn` 报 `thread=true` / `subagent_spawning hooks` 不可用，必须解释这是当前 Feishu 渠道限制，并给出两条明确 warm-up 消息模板。
-19. Feishu 单群团队默认采用 send-first probe，不得把 `sessions_list` 当成唯一存在性判定。
-20. 公开群里的 @其他机器人只能作为展示层，不作为派单正确性的唯一证据。
+13. 若 `ops_agent` / `finance_agent` 在 `sessions_list` 中缺失，不得直接判定不可用；必须先对固定 sessionKey 做真实 `sessions_send` 探测，仅在 send 失败时才进入 `sessions_spawn` 或 `warmup_required`。
+14. 若 `sessions_send` 已对固定 worker sessionKey 成功，但 `sessions_list` 仍未列出该会话，不得再把该 worker 记入 `missingTargets`；应优先以 `dispatchEvidence` 与 worker session jsonl 作为验收依据。
+15. `ops_agent`、`finance_agent` 为必需成功目标；`sales_agent` 仅可选，不得作为 canary 必需条件。
+16. 验收输出必须包含 `dispatchEvidence`、`missingTargets`、`attemptedSteps`、`nextAction`。
+17. 验收证据优先级必须说明：`session jsonl > gateway log`。
+18. 若本轮没有任何工具调用，必须输出 `nextAction=tool_call_required` 与 `attemptedSteps=["no_tool_call"]`。
+19. 若 `sessions_spawn` 报 `thread=true` / `subagent_spawning hooks` 不可用，必须解释这是当前 Feishu 渠道限制，并给出两条明确 warm-up 消息模板。
+20. Feishu 单群团队默认采用 send-first probe，不得把 `sessions_list` 当成唯一存在性判定。
+21. 公开群里的 @其他机器人只能作为展示层，不作为派单正确性的唯一证据。
 
 输出要求：
 1. 最小 patch。

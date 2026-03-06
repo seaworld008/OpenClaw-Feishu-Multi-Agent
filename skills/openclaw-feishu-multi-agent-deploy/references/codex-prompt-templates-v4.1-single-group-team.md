@@ -321,7 +321,7 @@ agents:
 - 执行角色（运营 / 财务 / 销售支持）按边界执行。
 - 当任务需要交叉校验时，允许执行角色之间做最多 1 轮有限互审。
 - 任何互审结论都必须回到主管，再由主管统一对用户输出。
-- 首次上线若 worker 会话不存在，必须先做 warm-up 或 `sessions_spawn` 兜底。
+- 首次上线若 worker 会话不存在，不得只靠 `sessions_list` 判定；应先按固定 sessionKey 做 `sessions_send` 探测，只有 send 失败时才进入 `sessions_spawn` 或人工 warm-up。
 - 如果主管本轮连 `sessions_list` 都没有调用，必须返回 `tool_call_required`，不得把这类情况伪装成 `warmup_required`。
 - 在当前 Feishu 环境下，`sessions_spawn` 可能因为 thread 绑定能力不可用而失败；这不是配置没生效，而是当前渠道能力边界，必须转为明确 warm-up 指引。
 - 默认采用 send-first probe：
@@ -366,12 +366,13 @@ agents:
    - dispatchEvidence
    - reviewEvidence（若发生互审）
 17. 若没有真实互审，不得伪造 `reviewEvidence`。
-18. 若 `ops_agent` / `finance_agent` 会话缺失，必须先 `sessions_spawn`；若仍失败，明确输出 `warmup_required`，不得继续伪派单。
-19. 验收证据优先级必须说明：`session jsonl > gateway log`。
-20. 若本轮没有任何工具调用，必须输出 `nextAction=tool_call_required` 与 `attemptedSteps=["no_tool_call"]`，不得误报 `warmup_required`。
-21. 若 `sessions_spawn` 报 `thread=true` / `subagent_spawning hooks` 不可用，必须解释这是当前 Feishu 渠道限制，并给出两条明确 warm-up 消息模板。
-22. Feishu 单群团队默认采用 send-first probe，不得把 `sessions_list` 当成唯一存在性判定。
-23. 公开群里的 @其他机器人只能作为展示层，不作为派单正确性的唯一证据。
+18. 若 `ops_agent` / `finance_agent` 在 `sessions_list` 中缺失，不得直接判定不可用；必须先对固定 sessionKey 做真实 `sessions_send` 探测，仅在 send 失败时才进入 `sessions_spawn` 或 `warmup_required`。
+19. 若 `sessions_send` 已对固定 worker sessionKey 成功，但 `sessions_list` 仍未列出该会话，不得再把该 worker 记入 `missingTargets`；应优先以 `dispatchEvidence` 与 worker session jsonl 作为验收依据。
+20. 验收证据优先级必须说明：`session jsonl > gateway log`。
+21. 若本轮没有任何工具调用，必须输出 `nextAction=tool_call_required` 与 `attemptedSteps=["no_tool_call"]`，不得误报 `warmup_required`。
+22. 若 `sessions_spawn` 报 `thread=true` / `subagent_spawning hooks` 不可用，必须解释这是当前 Feishu 渠道限制，并给出两条明确 warm-up 消息模板。
+23. Feishu 单群团队默认采用 send-first probe，不得把 `sessions_list` 当成唯一存在性判定。
+24. 公开群里的 @其他机器人只能作为展示层，不作为派单正确性的唯一证据。
 
 输出要求：
 1. 最小 patch。
