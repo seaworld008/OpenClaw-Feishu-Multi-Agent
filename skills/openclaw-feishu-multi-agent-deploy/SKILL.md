@@ -96,6 +96,8 @@ python3 scripts/build_openclaw_feishu_snippets.py \
 - 若启用了卡片交互，验证 `card.action.trigger` 事件链路
 - V3 主管派单场景必须执行 `scripts/check_v3_dispatch_canary.sh`，未通过不得判定验收成功
 - `check_v3_dispatch_canary.sh` 返回 `3` 表示证据不足，不能视为派单成功
+- V4/V4.1 单群团队场景必须优先执行 worker warm-up，再跑 `scripts/check_v4_1_team_canary.sh`
+- V4/V4.1 验收证据优先级：`~/.openclaw/agents/*/sessions/*.jsonl` 高于 gateway log
 
 ## 输出要求（给客户/交付文档）
 必须包含：
@@ -122,6 +124,8 @@ python3 scripts/build_openclaw_feishu_snippets.py \
 - 主管只“写派单文本”不真实派发：查 `tools.allow` 是否缺少 `group:sessions`
 - 主管看不到目标群会话：查 `tools.sessions.visibility` 和目标群是否 warm-up 过
 - 主管派发被策略拦截：查 `session.sendPolicy` 是否默认放行
+- V4/V4.1 主管返回 `DISPATCH_INCOMPLETE` 但正文声称“已安排”：查 supervisor prompt 是否缺少状态机式硬门控
+- V4/V4.1 新群首轮无 worker 会话：先对 worker 执行 warm-up，再复测
 
 ## 可直接复用的文件
 - 模板：
@@ -143,3 +147,4 @@ python3 scripts/build_openclaw_feishu_snippets.py \
   - `references/codex-prompt-templates-v4.1-single-group-team.md`
 - 辅助脚本：
   - `scripts/check_v3_dispatch_canary.sh`
+  - `scripts/check_v4_1_team_canary.sh`

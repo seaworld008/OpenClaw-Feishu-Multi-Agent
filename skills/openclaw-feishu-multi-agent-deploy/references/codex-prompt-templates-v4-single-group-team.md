@@ -225,15 +225,18 @@ agents:
 你的唯一正确流程是：
 1) 先理解用户目标与约束；
 2) 调用 sessions_list 找到本群内的执行角色会话；
-3) 给每个执行角色发独立任务卡（sessions_send）；
-4) 等待回传或记录超时；
-5) 汇总为统一执行稿。
+3) 若 `ops_agent` / `finance_agent` 任一会话缺失，先尝试 `sessions_spawn`；若仍缺失，明确返回 warm-up 要求；
+4) 仅对已存在的目标会话发独立任务卡（sessions_send）；
+5) 等待回传或记录超时；
+6) 汇总为统一执行稿。
 
 硬约束：
 - 禁止文本模拟派单；
-- 禁止在没有 sessions_send 证据时声称“已分配”；
-- 若未完成 sessions_list + 至少 2 次有效 sessions_send，首行返回 DISPATCH_INCOMPLETE；
-- 成功时必须输出 dispatchEvidence 数组。
+- `ops_agent` 和 `finance_agent` 是必需目标，`sales_agent` 仅可选；
+- 未拿到 `ops_agent` + `finance_agent` 的 `sessions_send.status=ok` 前，不得写“已派单 / 已安排 / 已分配”；
+- 若未完成，首行必须返回 `DISPATCH_INCOMPLETE`，并输出 `missingTargets`、`attemptedSteps`、`nextAction`、`dispatchEvidence=[]`；
+- 若会话缺失且无法 `sessions_spawn`，`nextAction` 必须是 `warmup_required`；
+- 成功时首行返回 `DISPATCH_OK`，且 `dispatchEvidence` 每条至少包含 `agentId`、`sessionKey`、`runId`、`sendStatus`、`sentAt`、`evidenceSource`。
 ```
 
 ### 执行 Agent（运营 / 财务 / 销售）
@@ -247,8 +250,10 @@ agents:
 
 硬约束：
 - 如果用户直接要求你统筹全部任务，先提示“请由主管机器人统一分派”；
+- 未经主管授权，不得向其他执行角色发起派单或补问；
 - 不越权代替主管做全局收口；
-- 不擅自承诺跨部门结果。
+- 不擅自承诺跨部门结果；
+- 输出必须包含 `toSupervisorSummary` 字段，便于主管收口。
 ```
 
 ## 一次性交付主提示词（V4，可直接发 Codex）
@@ -264,6 +269,7 @@ agents:
 - supervisor_agent 在同群内向执行角色会话派单。
 - 执行角色完成子任务后，主管统一收口。
 - 整个方案必须可验收、可审计、可回滚。
+- 首次上线若 worker 会话不存在，必须先做 warm-up 或 `sessions_spawn` 兜底。
 
 输入：
 - teamGroup:
@@ -273,9 +279,9 @@ agents:
   - { accountId: "xiaolongxia", appId: "cli_a9f1849b67f9dcc2", appSecret: "g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr", encryptKey: "", verificationToken: "" }
   - { accountId: "yiran_yibao", appId: "cli_a923c71498b8dcc9", appSecret: "swscrlPKYCwAehOyyoLrlesLTsuYY6nl", encryptKey: "", verificationToken: "" }
 - agents:
-  - { id: "supervisor_agent", role: "主管总控", systemPrompt: "你是主管 Agent。必须先 sessions_list，再至少 2-3 次 sessions_send，未完成则返回 DISPATCH_INCOMPLETE。禁止文本模拟派单。" }
-  - { id: "ops_agent", role: "运营执行", systemPrompt: "你是运营执行 Agent。只处理主管派发的运营任务；若用户直接要求统筹全局，请提示由主管机器人统一分派。" }
-  - { id: "finance_agent", role: "财务执行", systemPrompt: "你是财务执行 Agent。只处理主管派发的财务任务；若用户直接要求统筹全局，请提示由主管机器人统一分派。" }
+  - { id: "supervisor_agent", role: "主管总控", systemPrompt: "你是主管 Agent。固定流程：1) 先 sessions_list；2) 若 ops_agent/finance_agent 会话缺失，先 sessions_spawn，仍缺失则返回 warmup_required；3) 仅对必需目标 ops_agent、finance_agent 完成真实 sessions_send；sales_agent 仅可选；4) 再统一收口。硬门控：未拿到 ops_agent+finance_agent 的 sendStatus=ok 前，禁止写已派单/已安排/已分配。未完成时首行必须是 DISPATCH_INCOMPLETE，并输出 missingTargets、attemptedSteps、nextAction、dispatchEvidence=[]。完成时首行返回 DISPATCH_OK，并输出 dispatchEvidence（agentId/sessionKey/runId/sendStatus/sentAt/evidenceSource）。" }
+  - { id: "ops_agent", role: "运营执行", systemPrompt: "你是运营执行 Agent。只处理主管派发的运营任务；若用户直接要求统筹全局，请提示由主管机器人统一分派。未经主管授权，不得向其他执行角色发起派单或补问。输出必须包含 toSupervisorSummary。" }
+  - { id: "finance_agent", role: "财务执行", systemPrompt: "你是财务执行 Agent。只处理主管派发的财务任务；若用户直接要求统筹全局，请提示由主管机器人统一分派。未经主管授权，不得向其他执行角色发起派单或补问。输出必须包含 toSupervisorSummary。" }
   - { id: "sales_agent", role: "销售支持", systemPrompt: "你是销售支持 Agent。可作为静默或未来扩展角色，由主管或其他执行角色调用；不直接接管全局任务。" }
 - routes:
   - { peerKind: "group", peerId: "oc_f785e73d3c00954d4ccd5d49b63ef919", accountId: "aoteman",     agentId: "supervisor_agent" }
@@ -294,8 +300,11 @@ agents:
 9. 同群多 bot 默认 requireMention=true，allowMentionlessInMultiBotGroup=false。
 10. 默认推荐：用户只 @主管机器人，执行机器人不作为主入口。
 11. 若发现 sandbox 限制 supervisor 看不到目标会话，必须补齐 `sessionToolsVisibility`。
-12. supervisor_agent 若未完成真实派单，必须返回 `DISPATCH_INCOMPLETE`，不得生成伪派单文本。
-13. 验收输出必须包含 `dispatchEvidence`。
+12. supervisor_agent 若未完成真实派单，必须返回 `DISPATCH_INCOMPLETE`，不得生成伪派单文本或口头“已安排”语义。
+13. 若 `ops_agent` / `finance_agent` 会话缺失，必须先 `sessions_spawn`；若仍失败，明确输出 `warmup_required`，不得继续伪派单。
+14. `ops_agent`、`finance_agent` 为必需成功目标；`sales_agent` 仅可选，不得作为 canary 必需条件。
+15. 验收输出必须包含 `dispatchEvidence`、`missingTargets`、`attemptedSteps`、`nextAction`。
+16. 验收证据优先级必须说明：`session jsonl > gateway log`。
 
 输出要求：
 1. 最小 patch。
@@ -333,7 +342,21 @@ agents:
 - `openclaw agents list --bindings`
 6. 在团队群里只 `@主管机器人` 做 canary。  
 7. 检查 supervisor 是否真实派单给同群执行角色。  
-8. 看日志与 `dispatchEvidence` 是否一致。  
+8. 看 `dispatchEvidence`、`missingTargets`、`attemptedSteps` 是否一致。
+9. 若首轮提示缺少 worker 会话，先执行一次 worker warm-up，再复测。
+
+## V4 首次上线 warm-up 与兜底
+
+首次部署或新群首次启用时，先做这组顺序：
+
+1. `@小龙虾找妈妈 /status`
+2. `@易燃易爆 /status`
+3. 确认这两个 worker 会话已落到 session 文件或日志。
+4. 再 `@奥特曼` 发 `team-v4-001`。
+
+如果主管返回 `DISPATCH_INCOMPLETE` 且 `nextAction=warmup_required`：
+- 不要判定为路由失败。
+- 先补 worker warm-up，再重跑同一个 `taskId` 或新 `taskId`。
 
 ## V4 推荐演示话术（客户场景）
 
@@ -363,15 +386,18 @@ TASK_ID="team-v4-001"
 # 现在去团队群发送 V4 演示指令
 sleep 120
 
-bash skills/openclaw-feishu-multi-agent-deploy/scripts/check_v3_dispatch_canary.sh \
+bash skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_1_team_canary.sh \
+  --task-id "$TASK_ID" \
+  --session-root "${HOME}/.openclaw/agents" \
   --log "$LOG" \
   --start-line "$START_LINE" \
-  --task-id "$TASK_ID" \
-  --agents "ops_agent,finance_agent,sales_agent"
+  --required-agents "ops_agent,finance_agent" \
+  --optional-agents "sales_agent"
 ```
 
 说明：
-- 若 `sales_agent` 当前还是静默 agent，没有独立会话，就把 `--agents` 改成 `"ops_agent,finance_agent"`。
+- 这个脚本优先看 `~/.openclaw/agents/*/sessions/*.jsonl`，再看网关日志窗口。
+- 若 `sales_agent` 当前还是静默 agent，不影响通过；它本来就不是 V4 默认必需目标。
 
 ## 常见失败点（V4）
 
@@ -385,9 +411,13 @@ bash skills/openclaw-feishu-multi-agent-deploy/scripts/check_v3_dispatch_canary.
 - 这是伪派单，必须按 `DISPATCH_INCOMPLETE` 判失败。
 
 4. 同群看不到执行角色会话
-- 检查 `tools.sessions.visibility` 和 `sessionToolsVisibility`。
+- 先做 worker warm-up，再检查 `tools.sessions.visibility` 和 `sessionToolsVisibility`。
 
 5. 同群太热闹，所有 bot 都被人乱 @
+- 会干扰主管主入口与会话稳定性。
+
+6. 只看 gateway log 不看 session jsonl
+- 容易误判“派单没发生”或“已经成功”。
 - 正式交付时应明确使用规范：默认只 @主管机器人。
 
 ## 给客户的最终定位

@@ -187,11 +187,15 @@ agents:
 
 硬约束：
 - 禁止文本模拟派单
-- 禁止在无证据时声称“已安排”
-- 必须先 sessions_list，再 sessions_send
-- 若未完成真实派单，首行返回 DISPATCH_INCOMPLETE
-- 最终必须输出 dispatchEvidence
-- 若发起互审，必须输出 reviewEvidence
+- 禁止在无证据时声称“已安排 / 已派单 / 已分配”
+- 固定执行顺序：先 `sessions_list`，若 `ops_agent` / `finance_agent` 任一会话缺失则先 `sessions_spawn`，再 `sessions_send`
+- `ops_agent` 和 `finance_agent` 是必需目标；`sales_agent` 仅可选
+- 未拿到 `ops_agent` + `finance_agent` 的 `sendStatus=ok` 前，首行只能返回 `DISPATCH_INCOMPLETE`
+- 未完成时必须同时输出：`missingTargets`、`attemptedSteps`、`nextAction`、`dispatchEvidence=[]`、`reviewEvidence=[]`
+- 若会话缺失且无法 `sessions_spawn`，`nextAction` 必须是 `warmup_required`
+- 完成时首行返回 `DISPATCH_OK`，且 `dispatchEvidence` 每条至少包含 `agentId`、`sessionKey`、`runId`、`sendStatus`、`sentAt`、`evidenceSource`
+- 若发起互审，`reviewEvidence` 每条至少包含 `fromAgent`、`toAgent`、`reviewRound`、`summary`、`evidenceSource`
+- 若本轮没有真实互审，`reviewEvidence` 必须是空数组
 ```
 
 ### 执行 Agent
@@ -205,9 +209,12 @@ agents:
 
 硬约束：
 - 未经主管授权，不主动扩散式派单
+- 未经主管授权，不得向其他执行角色发起补问
 - 互审最多 1 轮，避免无限协商
+- 若互审轮次超过 1，直接返回 `REVIEW_LIMIT_REACHED` 给主管
 - 互审结论必须回主管
 - 如果用户直接要求你统筹全局，提示由主管机器人统一分派
+- 输出必须包含 `toSupervisorSummary`
 ```
 
 ## V4.1 的协商边界（非常关键）
@@ -242,6 +249,7 @@ agents:
 - 执行角色（运营 / 财务 / 销售支持）按边界执行。
 - 当任务需要交叉校验时，允许执行角色之间做最多 1 轮有限互审。
 - 任何互审结论都必须回到主管，再由主管统一对用户输出。
+- 首次上线若 worker 会话不存在，必须先做 warm-up 或 `sessions_spawn` 兜底。
 
 输入：
 - teamGroup:
@@ -251,10 +259,10 @@ agents:
   - { accountId: "xiaolongxia", appId: "cli_a9f1849b67f9dcc2", appSecret: "g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr", encryptKey: "", verificationToken: "" }
   - { accountId: "yiran_yibao", appId: "cli_a923c71498b8dcc9", appSecret: "swscrlPKYCwAehOyyoLrlesLTsuYY6nl", encryptKey: "", verificationToken: "" }
 - agents:
-  - { id: "supervisor_agent", role: "主管总控", systemPrompt: "你是主管 Agent。必须先 sessions_list，再完成真实派单；必要时只允许 1 轮互审；最终统一收口。无证据不得声称已分配。" }
-  - { id: "ops_agent", role: "运营执行", systemPrompt: "你是运营执行 Agent。只处理主管派发的运营任务；若被授权互审，可向财务或销售支持发 1 轮补问；最终必须回主管。" }
-  - { id: "finance_agent", role: "财务执行", systemPrompt: "你是财务执行 Agent。只处理主管派发的财务任务；若被授权互审，可向运营发 1 轮补问；最终必须回主管。" }
-  - { id: "sales_agent", role: "销售支持", systemPrompt: "你是销售支持 Agent。负责销售策略、话术、商机分析；默认不作为主入口；若被授权互审，可对运营提出承接确认。" }
+  - { id: "supervisor_agent", role: "主管总控", systemPrompt: "你是主管 Agent。固定状态机：1) sessions_list；2) 若 ops_agent/finance_agent 会话缺失，先 sessions_spawn，仍缺失则 nextAction=warmup_required；3) 仅对必需目标 ops_agent、finance_agent 完成真实 sessions_send；sales_agent 仅可选；4) 必要时编排 1 轮互审；5) 最终统一收口。硬门控：未拿到 ops_agent+finance_agent 的 sendStatus=ok 前，禁止写已派单/已安排/已分配。未完成时首行必须是 DISPATCH_INCOMPLETE，并输出 missingTargets、attemptedSteps、nextAction、dispatchEvidence=[]、reviewEvidence=[]。完成时首行返回 DISPATCH_OK，并输出 dispatchEvidence（agentId/sessionKey/runId/sendStatus/sentAt/evidenceSource）。发生互审时才允许输出 reviewEvidence（fromAgent/toAgent/reviewRound/summary/evidenceSource）。" }
+  - { id: "ops_agent", role: "运营执行", systemPrompt: "你是运营执行 Agent。只处理主管派发的运营任务；若被授权互审，可向财务或销售支持发 1 轮补问；最终必须回主管。未经主管授权，不得向其他执行角色发起补问。若 reviewRound > 1，直接返回 REVIEW_LIMIT_REACHED 给主管。输出必须包含 toSupervisorSummary。" }
+  - { id: "finance_agent", role: "财务执行", systemPrompt: "你是财务执行 Agent。只处理主管派发的财务任务；若被授权互审，可向运营发 1 轮补问；最终必须回主管。未经主管授权，不得向其他执行角色发起补问。若 reviewRound > 1，直接返回 REVIEW_LIMIT_REACHED 给主管。输出必须包含 toSupervisorSummary。" }
+  - { id: "sales_agent", role: "销售支持", systemPrompt: "你是销售支持 Agent。负责销售策略、话术、商机分析；默认不作为主入口；若被授权互审，可对运营提出承接确认。未经主管授权，不得主动补问。若 reviewRound > 1，直接返回 REVIEW_LIMIT_REACHED 给主管。输出必须包含 toSupervisorSummary。" }
 - routes:
   - { peerKind: "group", peerId: "oc_f785e73d3c00954d4ccd5d49b63ef919", accountId: "aoteman",     agentId: "supervisor_agent" }
   - { peerKind: "group", peerId: "oc_f785e73d3c00954d4ccd5d49b63ef919", accountId: "xiaolongxia", agentId: "ops_agent" }
@@ -272,7 +280,7 @@ agents:
 9. 同群多 bot 默认 requireMention=true，allowMentionlessInMultiBotGroup=false。
 10. 默认用户只 @主管机器人，执行机器人不是主入口。
 11. 若 supervisor 或 worker 因 sandbox 看不到目标会话，必须补齐 `sessionToolsVisibility`。
-12. supervisor 未完成真实派单时，必须返回 `DISPATCH_INCOMPLETE`。
+12. supervisor 未完成真实派单时，必须返回 `DISPATCH_INCOMPLETE`，且禁止口头“已安排/已派单/已分配”语义。
 13. 执行角色互审最多 1 轮；不得无限循环协商。
 14. 执行角色互审结论必须回主管。
 15. 如果当前只有 `supervisor_agent`、`ops_agent`、`finance_agent` 三个已落地可见角色，则 `sales_agent` 仅作为可选隐藏角色，不得在 canary 中强制要求必须出现会话轨迹。
@@ -280,6 +288,8 @@ agents:
    - dispatchEvidence
    - reviewEvidence（若发生互审）
 17. 若没有真实互审，不得伪造 `reviewEvidence`。
+18. 若 `ops_agent` / `finance_agent` 会话缺失，必须先 `sessions_spawn`；若仍失败，明确输出 `warmup_required`，不得继续伪派单。
+19. 验收证据优先级必须说明：`session jsonl > gateway log`。
 
 输出要求：
 1. 最小 patch。
@@ -319,6 +329,23 @@ agents:
 7. 验证 supervisor 是否完成真实派单。  
 8. 验证若发生互审，是否控制在 1 轮内并最终回主管。  
 9. 互审是否真实发生，需结合主管输出中的 `reviewEvidence` 和原始日志复核，不要只看 canary 脚本返回值。  
+10. 若首轮返回 `nextAction=warmup_required`，先分别补 worker warm-up，再重跑 canary。
+
+## V4.1 首次上线 warm-up 与兜底
+
+首次部署或新群首次启用时，建议按这个顺序：
+
+1. `@小龙虾找妈妈 /status`
+2. `@易燃易爆 /status`
+3. 确认两个 worker 会话已落到 `~/.openclaw/agents/*/sessions/*.jsonl` 或网关日志
+4. 再 `@奥特曼` 发 `team-v4-1-001`
+
+如果主管返回：
+- `DISPATCH_INCOMPLETE`
+- `missingTargets` 包含 `ops_agent` 或 `finance_agent`
+- `nextAction=warmup_required`
+
+则先补 worker warm-up，不要直接判路由失败。
 
 ## V4.1 推荐演示话术
 
@@ -350,16 +377,20 @@ TASK_ID="team-v4-1-001"
 # 现在去团队群发送 V4.1 演示指令
 sleep 120
 
-bash skills/openclaw-feishu-multi-agent-deploy/scripts/check_v3_dispatch_canary.sh \
+bash skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_1_team_canary.sh \
+  --task-id "$TASK_ID" \
+  --session-root "${HOME}/.openclaw/agents" \
   --log "$LOG" \
   --start-line "$START_LINE" \
-  --task-id "$TASK_ID" \
-  --agents "ops_agent,finance_agent"
+  --required-agents "ops_agent,finance_agent" \
+  --optional-agents "sales_agent"
 ```
 
 说明：
 - 这是按你当前“3 个可见机器人里只有运营 / 财务作为默认执行角色”写的默认值。
-- 如果你后续把 `sales_agent` 也做成可见且可派发角色，再把 `--agents` 改成 `"ops_agent,finance_agent,sales_agent"`。
+- 这个脚本优先看 `~/.openclaw/agents/*/sessions/*.jsonl`，再看网关日志窗口。
+- 如果你后续把 `sales_agent` 也做成可见且可派发角色，可把 `--required-agents` 改成 `"ops_agent,finance_agent,sales_agent"`。
+- 若本轮明确要求必须发生互审，再追加 `--expect-review`。
 
 ## 常见失败点（V4.1）
 
@@ -377,6 +408,12 @@ bash skills/openclaw-feishu-multi-agent-deploy/scripts/check_v3_dispatch_canary.
 
 5. 同群过于热闹导致多 bot 争抢触发
 - 保持 `requireMention=true`，并明确使用规范。
+
+6. 首轮新群没有 worker 会话
+- 主管会返回 `warmup_required`，这不是权限失败，先补 worker warm-up。
+
+7. 只看 gateway log 不看 session jsonl
+- 容易误判“没有派单”或“互审已发生”。
 
 ## 给客户的最终定位
 

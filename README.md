@@ -661,6 +661,8 @@ agents:
 4. 未限制免 @ 触发，导致群内噪音干扰演示。  
 5. V3 缺少 `tools.allow=group:sessions`，主管只会“写派单卡”不会真实派发。  
 6. V3 未放行 `tools.sessions.visibility` 或 `session.sendPolicy`，会话派发被拦截。  
+7. V4/V4.1 首轮未先 warm-up worker，会出现 `DISPATCH_INCOMPLETE + warmup_required`。
+8. 只看网关日志不看 `session jsonl`，容易误判单群派单是否真的发生。
 
 V3 建议加一道自动门禁（2 分钟窗口）：
 ```bash
@@ -679,6 +681,26 @@ bash skills/openclaw-feishu-multi-agent-deploy/scripts/check_v3_dispatch_canary.
 - `0`：派单证据完整
 - `2`：缺少目标会话轨迹
 - `3`：有会话轨迹但证据不足，需继续查 `sessions_send` 原始日志
+
+V4/V4.1 单群团队建议改用专用门禁：
+```bash
+LOG="/tmp/openclaw/openclaw-$(date +%F).log"
+START_LINE=$(wc -l < "$LOG")
+# 先在团队群 warm-up worker，再发送 V4 / V4.1 测试指令
+sleep 120
+bash skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_1_team_canary.sh \
+  --task-id "team-v4-1-001" \
+  --session-root "${HOME}/.openclaw/agents" \
+  --log "$LOG" \
+  --start-line "$START_LINE" \
+  --required-agents "ops_agent,finance_agent" \
+  --optional-agents "sales_agent"
+```
+
+V4/V4.1 验收补充：
+- 先看 `~/.openclaw/agents/*/sessions/*.jsonl`
+- 再看 gateway log
+- 若主管返回 `warmup_required`，先补 worker warm-up 再复测
 
 ## 维护约定
 
