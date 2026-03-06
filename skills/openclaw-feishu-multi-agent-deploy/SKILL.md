@@ -128,6 +128,8 @@ python3 scripts/build_openclaw_feishu_snippets.py \
 - V4/V4.1 新群首轮无 worker 会话：先对 worker 执行 warm-up，再复测
 - V4/V4.1 返回 `tool_call_required`：说明 supervisor 本轮没有任何真实工具调用，先查 prompt 是否已更新并确认重启已生效
 - V4/V4.1 若日志出现 `thread=true` / `subagent_spawning hooks`：说明当前 Feishu 渠道不支持这条 `sessions_spawn` 自动补会话路径，应改为人工 warm-up
+- V4/V4.1 单群团队推荐采用 send-first probe：优先验证真实 `sessions_send`，不要只依赖 `sessions_list`
+- 公开群里的 `@其他机器人` 只能作为展示层，不应作为控制面正确性的唯一证据
 
 ## 可直接复用的文件
 - 模板：

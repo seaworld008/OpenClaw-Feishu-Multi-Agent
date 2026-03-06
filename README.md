@@ -822,6 +822,7 @@ agents:
 8. 只看网关日志不看 `session jsonl`，容易误判单群派单是否真的发生。
 9. V4/V4.1 若返回 `tool_call_required`，说明本轮没有任何真实工具调用，应先查 supervisor prompt 和配置是否已生效。
 10. V4/V4.1 若日志出现 `thread=true` / `subagent_spawning hooks`，说明当前 Feishu 不支持这条 `sessions_spawn` 自动补会话路径，应改为人工 warm-up。
+11. V4/V4.1 不应把公开群里的 `@其他机器人` 作为控制面正确性依赖，最佳实践是 `sessions_send` 做控制面、公开 @ 做展示层。
 
 V3 建议加一道自动门禁（2 分钟窗口）：
 ```bash
@@ -862,6 +863,7 @@ V4/V4.1 验收补充：
 - 若主管返回 `warmup_required`，先补 worker warm-up 再复测
 - 若主管返回 `tool_call_required`，先检查 supervisor prompt、gateway restart、工具调用轨迹
 - 若日志出现 `thread=true` / `subagent_spawning hooks`，不要继续重试 `sessions_spawn`
+- V4/V4.1 默认应采用 send-first probe，不要只依赖 `sessions_list`
 
 ## 维护约定
 

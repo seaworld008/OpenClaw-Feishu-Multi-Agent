@@ -200,6 +200,26 @@ flowchart LR
   - `agents.defaults.sandbox.sessionToolsVisibility`
   - 或 `supervisor_agent.sandbox.sessionToolsVisibility`
 
+6. 公开群里的 `@其他机器人` 更适合做展示层，不适合作为控制面的唯一依赖
+- 更稳的控制面应当是主管通过 `sessions_send` 直接向目标 sessionKey 派单
+- 群内 @ 可以保留，但不应成为正确性依赖
+
+## V4 推荐控制面路线（关键）
+
+单群模式下，建议采用这条控制面顺序：
+
+1. `sessions_list` 只做观察，不作为唯一存在性判断。
+2. 对必需目标 `ops_agent`、`finance_agent` 优先做 send-first probe：
+- 直接按当前群 `peerId` 构造目标 `sessionKey`
+- 优先尝试真实 `sessions_send`
+- `sendStatus=ok` 直接计入 `dispatchEvidence`
+3. 只有在 `sessions_send` 失败时，才进入 fallback：
+- 若是目标会话不可达，再尝试 `sessions_spawn`
+- 若 `sessions_spawn` 受 Feishu thread/hook 限制，则返回 `warmup_required`
+4. 公开群中的 @ 机器人：
+- 可以作为演示层、提示层
+- 不应作为正确性依赖
+
 ## 你的 V4 真实配置目标（按 3 机器人单群）
 
 ```yaml
@@ -275,7 +295,7 @@ agents:
 - `attemptedSteps` 只能记录本轮真实发生的工具调用，禁止臆造；
 - 若本轮没有任何工具调用，必须返回 `nextAction=tool_call_required`，且 `attemptedSteps=["no_tool_call"]`；
 - 若未完成，首行必须返回 `DISPATCH_INCOMPLETE`，并输出 `missingTargets`、`attemptedSteps`、`nextAction`、`dispatchEvidence=[]`；
-- 只有在真实 `sessions_list` / `sessions_spawn` 后确认 worker 会话缺失时，`nextAction` 才能是 `warmup_required`；
+- 只有在真实 `sessions_send` 失败，且确认 worker 会话不可达时，`nextAction` 才能是 `warmup_required`；
 - 若 `sessions_spawn` 返回 `mode="session" requires thread=true` 或 `no channel plugin registered subagent_spawning hooks`，必须立刻改为 `warmup_required`，并给出缺失 worker 的明确 warm-up 指令；
 - 成功时首行返回 `DISPATCH_OK`，且 `dispatchEvidence` 每条至少包含 `agentId`、`sessionKey`、`runId`、`sendStatus`、`sentAt`、`evidenceSource`。
 ```
@@ -313,6 +333,10 @@ agents:
 - 首次上线若 worker 会话不存在，必须先做 warm-up 或 `sessions_spawn` 兜底。
 - 如果主管本轮连 `sessions_list` 都没有调用，必须返回 `tool_call_required`，不得误报成 `warmup_required`。
 - 在当前 Feishu 环境下，`sessions_spawn` 可能因为 thread 绑定能力不可用而失败；遇到这种情况，应直接转为人工 warm-up 流程。
+- 默认采用 send-first probe：
+  - 先对固定 worker sessionKey 做 `sessions_send`
+  - `sendStatus=ok` 直接计入 `dispatchEvidence`
+  - 不再把 `sessions_list` 当成唯一存在性判定
 
 输入：
 - teamGroup:
@@ -322,7 +346,7 @@ agents:
   - { accountId: "xiaolongxia", appId: "cli_a9f1849b67f9dcc2", appSecret: "g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr", encryptKey: "", verificationToken: "" }
   - { accountId: "yiran_yibao", appId: "cli_a923c71498b8dcc9", appSecret: "swscrlPKYCwAehOyyoLrlesLTsuYY6nl", encryptKey: "", verificationToken: "" }
 - agents:
-  - { id: "supervisor_agent", role: "主管总控", systemPrompt: "你是主管 Agent。固定流程：1) 先 sessions_list；2) 若 ops_agent/finance_agent 会话缺失，先 sessions_spawn；若 sessions_spawn 因 thread=true / subagent_spawning hooks 不可用而失败，必须立刻返回 nextAction=warmup_required，并给出缺失 worker 的明确 warm-up 指令；3) 仅对必需目标 ops_agent、finance_agent 完成真实 sessions_send；sales_agent 仅可选；4) 再统一收口。硬门控：未拿到 ops_agent+finance_agent 的 sendStatus=ok 前，禁止写已派单/已安排/已分配。attemptedSteps 只能记录本轮真实工具调用，禁止臆造。若本轮没有任何工具调用，首行必须是 DISPATCH_INCOMPLETE，且 nextAction=tool_call_required、attemptedSteps=[\"no_tool_call\"]、dispatchEvidence=[]。未完成但已做真实工具调用时，才允许输出 missingTargets、attemptedSteps、nextAction。完成时首行返回 DISPATCH_OK，并输出 dispatchEvidence（agentId/sessionKey/runId/sendStatus/sentAt/evidenceSource）。" }
+  - { id: "supervisor_agent", role: "主管总控", systemPrompt: "你是主管 Agent。固定流程：1) sessions_list 只做观察；2) 对必需目标 ops_agent、finance_agent 直接按当前群 peerId 构造固定 sessionKey，优先做真实 sessions_send 探测与派单；3) 只有在 sessions_send 失败时，才尝试 sessions_spawn；若 sessions_spawn 因 thread=true / subagent_spawning hooks 不可用而失败，必须立刻返回 nextAction=warmup_required，并给出缺失 worker 的明确 warm-up 指令；4) sales_agent 仅可选；5) 再统一收口。硬门控：未拿到 ops_agent+finance_agent 的 sendStatus=ok 前，禁止写已派单/已安排/已分配。attemptedSteps 只能记录本轮真实工具调用，禁止臆造。若本轮没有任何工具调用，首行必须是 DISPATCH_INCOMPLETE，且 nextAction=tool_call_required、attemptedSteps=[\"no_tool_call\"]、dispatchEvidence=[]。未完成但已做真实工具调用时，才允许输出 missingTargets、attemptedSteps、nextAction。完成时首行返回 DISPATCH_OK，并输出 dispatchEvidence（agentId/sessionKey/runId/sendStatus/sentAt/evidenceSource）。公开群里 @其他机器人 只作为展示层，不作为正确性依赖。" }
   - { id: "ops_agent", role: "运营执行", systemPrompt: "你是运营执行 Agent。只处理主管派发的运营任务；若用户直接要求统筹全局，请提示由主管机器人统一分派。未经主管授权，不得向其他执行角色发起派单或补问。输出必须包含 toSupervisorSummary。" }
   - { id: "finance_agent", role: "财务执行", systemPrompt: "你是财务执行 Agent。只处理主管派发的财务任务；若用户直接要求统筹全局，请提示由主管机器人统一分派。未经主管授权，不得向其他执行角色发起派单或补问。输出必须包含 toSupervisorSummary。" }
   - { id: "sales_agent", role: "销售支持", systemPrompt: "你是销售支持 Agent。可作为静默或未来扩展角色，由主管或其他执行角色调用；不直接接管全局任务。" }
@@ -350,6 +374,8 @@ agents:
 16. 验收证据优先级必须说明：`session jsonl > gateway log`。
 17. 若本轮没有任何工具调用，必须输出 `nextAction=tool_call_required` 与 `attemptedSteps=["no_tool_call"]`。
 18. 若 `sessions_spawn` 报 `thread=true` / `subagent_spawning hooks` 不可用，必须解释这是当前 Feishu 渠道限制，并给出两条明确 warm-up 消息模板。
+19. Feishu 单群团队默认采用 send-first probe，不得把 `sessions_list` 当成唯一存在性判定。
+20. 公开群里的 @其他机器人只能作为展示层，不作为派单正确性的唯一证据。
 
 输出要求：
 1. 最小 patch。

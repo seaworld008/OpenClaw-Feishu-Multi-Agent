@@ -189,7 +189,7 @@ for raw in "${REQUIRED_LIST[@]}"; do
 done
 
 if [[ ${#missing_required[@]} -gt 0 ]]; then
-  echo "DISPATCH_INCOMPLETE: missingTargets => ${missing_required[*]}"
+  echo "DISPATCH_INCOMPLETE: WARMUP_REQUIRED_REAL missingTargets => ${missing_required[*]}"
   exit 2
 fi
 
@@ -219,10 +219,14 @@ done
 if [[ $dispatch_found -eq 0 ]]; then
   for pattern in "${spawn_unavailable_patterns[@]}"; do
     if supervisor_task_pattern "$pattern"; then
-      echo "DISPATCH_INCOMPLETE: 当前渠道不支持 thread-bound sessions_spawn，需先对缺失 worker 手工 warm-up"
+      echo "DISPATCH_INCOMPLETE: SPAWN_UNSUPPORTED_ON_CHANNEL 当前渠道不支持 thread-bound sessions_spawn，需先对缺失 worker 手工 warm-up"
       exit 2
     fi
   done
+  if supervisor_task_pattern "sessions_list" && supervisor_task_pattern "sessions_send" && ! supervisor_task_pattern "dispatchEvidence"; then
+    echo "DISPATCH_UNVERIFIED: SEND_PATH_AVAILABLE_BUT_LIST_MISS 已出现 send 路径轨迹，但尚未形成可验收 dispatchEvidence"
+    exit 3
+  fi
   if supervisor_task_pattern "tool_call_required|no_tool_call"; then
     echo "DISPATCH_INCOMPLETE: supervisor 本轮没有任何真实工具调用（tool_call_required）"
     exit 2
