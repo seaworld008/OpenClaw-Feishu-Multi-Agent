@@ -108,7 +108,7 @@ flowchart LR
     result["统一收口\n执行方案 / 风险预案 / 明日三件事"]
   end
 
-  user -->|@主管机器人| supervisor
+  user -->|任务进入主管入口| supervisor
   supervisor --> dispatch
   dispatch -->|派单| ops
   dispatch -->|派单| finance
