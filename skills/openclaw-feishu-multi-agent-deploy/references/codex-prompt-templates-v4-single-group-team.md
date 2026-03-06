@@ -93,15 +93,53 @@ visibleBots:
 
 ```mermaid
 flowchart LR
-  U["用户 @主管机器人"] --> S["supervisor_agent"]
-  S --> T["任务拆解 / 生成任务卡"]
-  T --> W1["ops_agent 同群执行"]
-  T --> W2["finance_agent 同群执行"]
-  T --> W3["sales_agent 同群执行或静默协作"]
-  W1 --> C["supervisor_agent 汇总"]
-  W2 --> C
-  W3 --> C
-  C --> O["统一执行稿 / 风险预案 / 明日三件事"]
+  user["用户任务入口"]
+
+  subgraph team["飞书单群团队（Team Group）"]
+    supervisor["supervisor_agent\n主管总控"]
+    dispatch["任务拆解 / 生成任务卡 / 派单"]
+
+    subgraph workers["执行层"]
+      ops["ops_agent\n运营执行"]
+      finance["finance_agent\n财务执行"]
+      sales["sales_agent\n销售支持（可选 / 静默）"]
+    end
+
+    result["统一收口\n执行方案 / 风险预案 / 明日三件事"]
+  end
+
+  user -->|@主管机器人| supervisor
+  supervisor --> dispatch
+  dispatch -->|派单| ops
+  dispatch -->|派单| finance
+  dispatch -->|可选派单| sales
+
+  ops -->|结果回传| supervisor
+  finance -->|结果回传| supervisor
+  sales -->|结果回传| supervisor
+
+  supervisor -->|统一收口| result
+
+  classDef entry fill:#EAF3FF,stroke:#3B82F6,color:#0F172A,stroke-width:1.5px;
+  classDef orchestration fill:#FFF7ED,stroke:#F97316,color:#7C2D12,stroke-width:1.5px;
+  classDef worker fill:#F8FAFC,stroke:#64748B,color:#0F172A,stroke-width:1.2px;
+  classDef output fill:#ECFDF5,stroke:#10B981,color:#064E3B,stroke-width:1.5px;
+
+  class user entry;
+  class supervisor,dispatch orchestration;
+  class ops,finance,sales worker;
+  class result output;
+```
+
+如果你的 Markdown 预览器不支持 Mermaid，可按下面的文本流程理解：
+
+```text
+用户发任务
+  -> supervisor_agent（主管总控）
+  -> 拆任务 / 生成任务卡 / 派单
+  -> ops_agent / finance_agent / sales_agent
+  -> supervisor_agent 汇总
+  -> 统一收口（执行方案 / 风险预案 / 明日三件事）
 ```
 
 ## 官方能力边界与交叉验证结论
