@@ -201,6 +201,12 @@ dispatch_patterns=(
   "evidenceSource"
 )
 
+spawn_unavailable_patterns=(
+  "mode=\"session\" requires thread=true"
+  "thread=true is unavailable because no channel plugin registered subagent_spawning hooks"
+  "Thread bindings are unavailable"
+)
+
 dispatch_found=0
 for pattern in "${dispatch_patterns[@]}"; do
   if supervisor_task_pattern "$pattern"; then
@@ -211,6 +217,12 @@ for pattern in "${dispatch_patterns[@]}"; do
 done
 
 if [[ $dispatch_found -eq 0 ]]; then
+  for pattern in "${spawn_unavailable_patterns[@]}"; do
+    if supervisor_task_pattern "$pattern"; then
+      echo "DISPATCH_INCOMPLETE: 当前渠道不支持 thread-bound sessions_spawn，需先对缺失 worker 手工 warm-up"
+      exit 2
+    fi
+  done
   if supervisor_task_pattern "tool_call_required|no_tool_call"; then
     echo "DISPATCH_INCOMPLETE: supervisor 本轮没有任何真实工具调用（tool_call_required）"
     exit 2

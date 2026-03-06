@@ -276,6 +276,7 @@ agents:
 - 若本轮没有任何工具调用，必须返回 `nextAction=tool_call_required`，且 `attemptedSteps=["no_tool_call"]`；
 - 若未完成，首行必须返回 `DISPATCH_INCOMPLETE`，并输出 `missingTargets`、`attemptedSteps`、`nextAction`、`dispatchEvidence=[]`；
 - 只有在真实 `sessions_list` / `sessions_spawn` 后确认 worker 会话缺失时，`nextAction` 才能是 `warmup_required`；
+- 若 `sessions_spawn` 返回 `mode="session" requires thread=true` 或 `no channel plugin registered subagent_spawning hooks`，必须立刻改为 `warmup_required`，并给出缺失 worker 的明确 warm-up 指令；
 - 成功时首行返回 `DISPATCH_OK`，且 `dispatchEvidence` 每条至少包含 `agentId`、`sessionKey`、`runId`、`sendStatus`、`sentAt`、`evidenceSource`。
 ```
 
@@ -311,6 +312,7 @@ agents:
 - 整个方案必须可验收、可审计、可回滚。
 - 首次上线若 worker 会话不存在，必须先做 warm-up 或 `sessions_spawn` 兜底。
 - 如果主管本轮连 `sessions_list` 都没有调用，必须返回 `tool_call_required`，不得误报成 `warmup_required`。
+- 在当前 Feishu 环境下，`sessions_spawn` 可能因为 thread 绑定能力不可用而失败；遇到这种情况，应直接转为人工 warm-up 流程。
 
 输入：
 - teamGroup:
@@ -320,7 +322,7 @@ agents:
   - { accountId: "xiaolongxia", appId: "cli_a9f1849b67f9dcc2", appSecret: "g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr", encryptKey: "", verificationToken: "" }
   - { accountId: "yiran_yibao", appId: "cli_a923c71498b8dcc9", appSecret: "swscrlPKYCwAehOyyoLrlesLTsuYY6nl", encryptKey: "", verificationToken: "" }
 - agents:
-  - { id: "supervisor_agent", role: "主管总控", systemPrompt: "你是主管 Agent。固定流程：1) 先 sessions_list；2) 若 ops_agent/finance_agent 会话缺失，先 sessions_spawn，仍缺失才允许返回 warmup_required；3) 仅对必需目标 ops_agent、finance_agent 完成真实 sessions_send；sales_agent 仅可选；4) 再统一收口。硬门控：未拿到 ops_agent+finance_agent 的 sendStatus=ok 前，禁止写已派单/已安排/已分配。attemptedSteps 只能记录本轮真实工具调用，禁止臆造。若本轮没有任何工具调用，首行必须是 DISPATCH_INCOMPLETE，且 nextAction=tool_call_required、attemptedSteps=[\"no_tool_call\"]、dispatchEvidence=[]。未完成但已做真实工具调用时，才允许输出 missingTargets、attemptedSteps、nextAction。完成时首行返回 DISPATCH_OK，并输出 dispatchEvidence（agentId/sessionKey/runId/sendStatus/sentAt/evidenceSource）。" }
+  - { id: "supervisor_agent", role: "主管总控", systemPrompt: "你是主管 Agent。固定流程：1) 先 sessions_list；2) 若 ops_agent/finance_agent 会话缺失，先 sessions_spawn；若 sessions_spawn 因 thread=true / subagent_spawning hooks 不可用而失败，必须立刻返回 nextAction=warmup_required，并给出缺失 worker 的明确 warm-up 指令；3) 仅对必需目标 ops_agent、finance_agent 完成真实 sessions_send；sales_agent 仅可选；4) 再统一收口。硬门控：未拿到 ops_agent+finance_agent 的 sendStatus=ok 前，禁止写已派单/已安排/已分配。attemptedSteps 只能记录本轮真实工具调用，禁止臆造。若本轮没有任何工具调用，首行必须是 DISPATCH_INCOMPLETE，且 nextAction=tool_call_required、attemptedSteps=[\"no_tool_call\"]、dispatchEvidence=[]。未完成但已做真实工具调用时，才允许输出 missingTargets、attemptedSteps、nextAction。完成时首行返回 DISPATCH_OK，并输出 dispatchEvidence（agentId/sessionKey/runId/sendStatus/sentAt/evidenceSource）。" }
   - { id: "ops_agent", role: "运营执行", systemPrompt: "你是运营执行 Agent。只处理主管派发的运营任务；若用户直接要求统筹全局，请提示由主管机器人统一分派。未经主管授权，不得向其他执行角色发起派单或补问。输出必须包含 toSupervisorSummary。" }
   - { id: "finance_agent", role: "财务执行", systemPrompt: "你是财务执行 Agent。只处理主管派发的财务任务；若用户直接要求统筹全局，请提示由主管机器人统一分派。未经主管授权，不得向其他执行角色发起派单或补问。输出必须包含 toSupervisorSummary。" }
   - { id: "sales_agent", role: "销售支持", systemPrompt: "你是销售支持 Agent。可作为静默或未来扩展角色，由主管或其他执行角色调用；不直接接管全局任务。" }
@@ -347,6 +349,7 @@ agents:
 15. 验收输出必须包含 `dispatchEvidence`、`missingTargets`、`attemptedSteps`、`nextAction`。
 16. 验收证据优先级必须说明：`session jsonl > gateway log`。
 17. 若本轮没有任何工具调用，必须输出 `nextAction=tool_call_required` 与 `attemptedSteps=["no_tool_call"]`。
+18. 若 `sessions_spawn` 报 `thread=true` / `subagent_spawning hooks` 不可用，必须解释这是当前 Feishu 渠道限制，并给出两条明确 warm-up 消息模板。
 
 输出要求：
 1. 最小 patch。
@@ -400,9 +403,22 @@ agents:
 - 不要判定为路由失败。
 - 先补 worker warm-up，再重跑同一个 `taskId` 或新 `taskId`。
 
+推荐直接发：
+
+```text
+@小龙虾找妈妈 WARMUP team-v4-002-ops
+@易燃易爆 WARMUP team-v4-002-fin
+```
+
 如果主管返回 `DISPATCH_INCOMPLETE` 且 `nextAction=tool_call_required`：
 - 不要先去 warm-up worker。
 - 先检查 supervisor prompt 是否已经更新、生效配置是否已重启，再用新 `taskId` 重测。
+
+如果日志出现：
+- `mode="session" requires thread=true`
+- `no channel plugin registered subagent_spawning hooks`
+
+则说明当前 Feishu 渠道不支持这条自动补会话路径，应直接人工 warm-up 缺失 worker。
 
 ## V4 推荐演示话术（客户场景）
 
