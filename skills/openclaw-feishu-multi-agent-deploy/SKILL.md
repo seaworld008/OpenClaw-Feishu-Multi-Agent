@@ -131,6 +131,8 @@ python3 scripts/build_openclaw_feishu_snippets.py \
 - V4/V4.1/V4.2 若日志出现 `thread=true` / `subagent_spawning hooks`：说明当前 Feishu 渠道不支持这条 `sessions_spawn` 自动补会话路径，应改为人工 warm-up
 - V4/V4.1/V4.2 单群团队推荐采用 send-first probe：优先验证真实 `sessions_send`，不要只依赖 `sessions_list`
 - V4.2 若出现 `SEND_PATH_AVAILABLE_BUT_LIST_MISS`：说明固定 sessionKey 的 send 路径已可用，但 `sessions_list` 不能再作为唯一存在性判断
+- V4.2 若出现 `TIMEOUT_BUT_WORKER_DELIVERED`：说明 worker 已执行但 supervisor 仍以 timeout 未收口，应优先补 timeout 二次判定或 ACK 双阶段派单
+- V4.2 若出现 `TRIGGER_MISS_ON_MENTION_OR_FORMAT_WRAP`：说明被提及后仍没进入工具链，应优先补 `mentionPatterns` 与 `PLAIN_TEXT` / 代码块包裹兼容
 - 公开群里的 `@其他机器人` 只能作为展示层，不应作为控制面正确性的唯一证据
 
 ## 可直接复用的文件
@@ -146,6 +148,7 @@ python3 scripts/build_openclaw_feishu_snippets.py \
   - `references/input-template-legacy-chat-feishu.json`
 - 运行手册：
   - `references/rollout-and-upgrade-playbook.md`
+  - `references/source-cross-validation-2026-03-06.md`
   - `references/codex-prompt-templates.md`
   - `references/codex-prompt-templates-v3.1.md`
   - `references/codex-prompt-templates-v3.md`

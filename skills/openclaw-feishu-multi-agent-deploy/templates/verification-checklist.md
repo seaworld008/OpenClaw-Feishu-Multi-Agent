@@ -31,6 +31,8 @@
 - [ ] （V4/V4.1/V4.2）`dispatchEvidence` 与 worker session jsonl 一致
 - [ ] （V4.1/V4.2）若发生互审，`reviewEvidence` 存在且轮次不超过 1
 - [ ] （V4.2）若返回 `SEND_PATH_AVAILABLE_BUT_LIST_MISS`，已改以 `dispatchEvidence` 与 worker session jsonl 复核，而不是继续把 `sessions_list` 当成唯一依据
+- [ ] （V4.2）若返回 `TIMEOUT_BUT_WORKER_DELIVERED`，已检查 worker 回包证据，并确认 supervisor 具备二次收口策略
+- [ ] （V4.2）若出现被 `@` 后 `NO_REPLY`，已检查 supervisor `mentionPatterns` 与 `PLAIN_TEXT` / 代码块包裹兼容
 - [ ] （V4.2）执行 `scripts/check_v4_2_team_canary.sh` 后，结果已记录到验收报告
 
 ## D. 稳定性验证

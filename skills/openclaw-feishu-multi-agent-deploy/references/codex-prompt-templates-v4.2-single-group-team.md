@@ -229,6 +229,19 @@ agents:
       sessionToolsVisibility: "all"
 ```
 
+推荐再为主管补一层 mention 兜底，避免格式包裹文本落入 `NO_REPLY`：
+
+```yaml
+agents:
+  list:
+    - id: "supervisor_agent"
+      groupChat:
+        mentionPatterns:
+          - "@奥特曼"
+          - "奥特曼"
+          - "主管机器人"
+```
+
 ## V4.2 的角色规则
 
 ### 主管 Agent
@@ -253,6 +266,11 @@ agents:
 - 未完成时必须同时输出：`missingTargets`、`attemptedSteps`、`nextAction`、`dispatchEvidence=[]`、`reviewEvidence=[]`
 - 只有在真实 `sessions_send` 失败，且确认 worker 会话不可达时，`nextAction` 才能是 `warmup_required`
 - 若 `sessions_spawn` 返回 `mode="session" requires thread=true` 或 `no channel plugin registered subagent_spawning hooks`，必须立刻判定为 `warmup_required`，并输出针对缺失 worker 的明确 warm-up 指令
+- 若 `was_mentioned=true`，或正文命中主管 `mentionPatterns` + `任务ID/启动/团队模式/拆分/收口` 关键词，不得返回 `NO_REPLY`
+- 必须兼容普通文本、代码块、`PLAIN_TEXT` 包裹文本；进入意图识别前先去掉外层包裹
+- 若 `sessions_send` 返回 `timeout`，不得立刻等价为“未送达”；必须在短窗口内复查 worker 会话是否出现相同 `taskId`
+- 若 worker 已出现同 `taskId` 回包，必须把该次结果记为 `sendStatus=timeout_observed_worker_delivered`，并继续主管收口；不得伪造为 `ok`
+- 推荐采用“双阶段派单”：先发短 ACK 任务，再发详细执行任务，减少大文本派单超时
 - 完成时首行返回 `DISPATCH_OK`，且 `dispatchEvidence` 每条至少包含 `agentId`、`sessionKey`、`runId`、`sendStatus`、`sentAt`、`evidenceSource`
 - 若发起互审，`reviewEvidence` 每条至少包含 `fromAgent`、`toAgent`、`reviewRound`、`summary`、`evidenceSource`
 - 若本轮没有真实互审，`reviewEvidence` 必须是空数组
@@ -308,13 +326,21 @@ agents:
 3. 只有在 `sessions_send` 失败时，才进入 fallback：
 - 若是目标会话不可达，再尝试 `sessions_spawn`
 - 若 `sessions_spawn` 受 Feishu thread/hook 限制，则返回 `warmup_required`
-4. 公开群中的 @ 机器人：
+4. 若 `sessions_send` 返回 `timeout`：
+- 不要直接判定派单失败
+- 先用短窗口复查 worker session jsonl 是否出现同 `taskId`
+- 若已出现，按 `timeout_observed_worker_delivered` 继续收口
+5. 公开群中的 @ 机器人：
 - 可以作为演示层、提示层
 - 不应作为正确性依赖
-5. 若要增强群内观感：
+6. 若要增强群内观感：
 - 主管在 `sessions_send` 成功后，可额外发一条“展示消息”主动 @ 对应执行机器人
 - 执行机器人回传后，也可在群里发简短摘要
 - 这些公开消息不替代 `dispatchEvidence` 与 `reviewEvidence`
+7. 若要降低 timeout 假阴性：
+- 第一步先发短 ACK 任务，要求 worker 仅回复 `ACK + toSupervisorSummary`
+- 第二步再发详细执行任务
+- 先收 ACK、再收正文，比一次性发长任务更稳
 
 一句话：
 - 正确性依赖 `sessions_send`
@@ -338,14 +364,20 @@ agents:
 - 首次上线若 worker 会话不存在，不得只靠 `sessions_list` 判定；应先按固定 sessionKey 做 `sessions_send` 探测，只有 send 失败时才进入 `sessions_spawn` 或人工 warm-up。
 - 如果主管本轮连 `sessions_list` 都没有调用，必须返回 `tool_call_required`，不得把这类情况伪装成 `warmup_required`。
 - 在当前 Feishu 环境下，`sessions_spawn` 可能因为 thread 绑定能力不可用而失败；这不是配置没生效，而是当前渠道能力边界，必须转为明确 warm-up 指引。
+- 若 `sessions_send` 返回 `timeout`，不得直接视为派单失败；必须在短窗口内复查 worker 会话是否已出现相同 `taskId` 回包。
+- 若 worker 已回包，必须把该次结果结构化记为 `sendStatus=timeout_observed_worker_delivered`，并继续主管收口，不得伪造 `ok`。
 - 默认采用 send-first probe：
   - 先对固定 worker sessionKey 做 `sessions_send`
   - `sendStatus=ok` 直接计入 `dispatchEvidence`
   - 不再把 `sessions_list` 当成唯一存在性判定
+- 推荐采用双阶段派单：
+  - 第一步：发送 ACK 任务，要求 worker 仅回 `ACK + toSupervisorSummary`
+  - 第二步：ACK 成功后再发送详细执行任务
 - 公开群展示层允许：
   - 主管在成功派单后主动 @ 对应执行机器人
   - 执行机器人公开回传 1 段摘要
   - 这些展示消息必须建立在真实 `sessions_send` 成功之后
+- 若正文被 `PLAIN_TEXT` 或代码块包裹，只要仍命中主管 mention/mentionPatterns 与任务关键词，不得进入 `NO_REPLY`
 
 输入：
 - teamGroup:
@@ -355,7 +387,7 @@ agents:
   - { accountId: "xiaolongxia", appId: "cli_a9f1849b67f9dcc2", appSecret: "g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr", encryptKey: "", verificationToken: "" }
   - { accountId: "yiran_yibao", appId: "cli_a923c71498b8dcc9", appSecret: "swscrlPKYCwAehOyyoLrlesLTsuYY6nl", encryptKey: "", verificationToken: "" }
 - agents:
-  - { id: "supervisor_agent", role: "主管总控", systemPrompt: "你是主管 Agent。固定状态机：1) sessions_list 只做观察；2) 对必需目标 ops_agent、finance_agent 直接按当前群 peerId 构造固定 sessionKey，优先做真实 sessions_send 探测与派单；3) 只有在 sessions_send 失败时，才尝试 sessions_spawn；若 sessions_spawn 因 thread=true / subagent_spawning hooks 不可用而失败，必须立刻返回 nextAction=warmup_required，并给出缺失 worker 的明确 warm-up 指令；4) sales_agent 仅可选；5) 必要时编排 1 轮互审；6) 最终统一收口。硬门控：未拿到 ops_agent+finance_agent 的 sendStatus=ok 前，禁止写已派单/已安排/已分配。attemptedSteps 只能记录本轮真实工具调用，禁止臆造。若本轮没有任何工具调用，首行必须是 DISPATCH_INCOMPLETE，且 nextAction=tool_call_required、attemptedSteps=[\"no_tool_call\"]、dispatchEvidence=[]、reviewEvidence=[]。未完成但已做真实工具调用时，才允许输出 missingTargets、attemptedSteps、nextAction。完成时首行返回 DISPATCH_OK，并输出 dispatchEvidence（agentId/sessionKey/runId/sendStatus/sentAt/evidenceSource）。发生互审时才允许输出 reviewEvidence（fromAgent/toAgent/reviewRound/summary/evidenceSource）。若真实 sessions_send 已成功，可额外在公开群发一条展示消息主动 @ 对应执行机器人，但公开 @ 只作为展示层，不作为正确性依赖。" }
+  - { id: "supervisor_agent", role: "主管总控", systemPrompt: "你是主管 Agent。固定状态机：0) 若 was_mentioned=true，或正文命中主管 mentionPatterns 与任务关键词（任务ID/启动/团队模式/拆分/收口），不得 NO_REPLY；进入意图识别前先去掉代码块与 PLAIN_TEXT 外层包裹；1) sessions_list 只做观察；2) 对必需目标 ops_agent、finance_agent 直接按当前群 peerId 构造固定 sessionKey，优先做真实 sessions_send 探测与派单；推荐先发短 ACK 任务，再发详细执行任务；3) 若 sessions_send 返回 timeout，不得直接判失败，必须在短窗口内复查 worker 会话是否出现同 taskId 回包；若已回包，记为 sendStatus=timeout_observed_worker_delivered 并继续收口；4) 只有在 sessions_send 失败且确认目标会话不可达时，才尝试 sessions_spawn；若 sessions_spawn 因 thread=true / subagent_spawning hooks 不可用而失败，必须立刻返回 nextAction=warmup_required，并给出缺失 worker 的明确 warm-up 指令；5) sales_agent 仅可选；6) 必要时编排 1 轮互审；7) 最终统一收口。硬门控：未拿到 ops_agent+finance_agent 的 sendStatus=ok 或 timeout_observed_worker_delivered 前，禁止写已派单/已安排/已分配。attemptedSteps 只能记录本轮真实工具调用，禁止臆造。若本轮没有任何工具调用，首行必须是 DISPATCH_INCOMPLETE，且 nextAction=tool_call_required、attemptedSteps=[\"no_tool_call\"]、dispatchEvidence=[]、reviewEvidence=[]。未完成但已做真实工具调用时，才允许输出 missingTargets、attemptedSteps、nextAction。完成时首行返回 DISPATCH_OK，并输出 dispatchEvidence（agentId/sessionKey/runId/sendStatus/sentAt/evidenceSource）。发生互审时才允许输出 reviewEvidence（fromAgent/toAgent/reviewRound/summary/evidenceSource）。若真实 sessions_send 已成功，可额外在公开群发一条展示消息主动 @ 对应执行机器人，但公开 @ 只作为展示层，不作为正确性依赖。" }
   - { id: "ops_agent", role: "运营执行", systemPrompt: "你是运营执行 Agent。只处理主管派发的运营任务；若被授权互审，可向财务或销售支持发 1 轮补问；最终必须回主管。未经主管授权，不得向其他执行角色发起补问。若 reviewRound > 1，直接返回 REVIEW_LIMIT_REACHED 给主管。输出必须包含 toSupervisorSummary。" }
   - { id: "finance_agent", role: "财务执行", systemPrompt: "你是财务执行 Agent。只处理主管派发的财务任务；若被授权互审，可向运营发 1 轮补问；最终必须回主管。未经主管授权，不得向其他执行角色发起补问。若 reviewRound > 1，直接返回 REVIEW_LIMIT_REACHED 给主管。输出必须包含 toSupervisorSummary。" }
   - { id: "sales_agent", role: "销售支持", systemPrompt: "你是销售支持 Agent。负责销售策略、话术、商机分析；默认不作为主入口；若被授权互审，可对运营提出承接确认。未经主管授权，不得主动补问。若 reviewRound > 1，直接返回 REVIEW_LIMIT_REACHED 给主管。输出必须包含 toSupervisorSummary。" }
@@ -391,6 +423,9 @@ agents:
 22. Feishu 单群团队默认采用 send-first probe，不得把 `sessions_list` 当成唯一存在性判定。
 23. 公开群里的 @其他机器人只能作为展示层，不作为派单正确性的唯一证据。
 24. 若 `sessions_send` 已对固定 worker sessionKey 成功，但 `sessions_list` 仍未列出该会话，不得再把该 worker 记入 `missingTargets`；应把这种情况记为 `SEND_PATH_AVAILABLE_BUT_LIST_MISS` 并继续收口或输出可验收证据。
+25. 若 `sessions_send` 返回 `timeout`，但 worker 会话已出现相同 `taskId` 的回包，必须把该次结果记为 `timeout_observed_worker_delivered`，并允许继续收口；不得继续误判为纯 `warmup_required`。
+26. 对被 `@` 的主管任务，若正文命中 `任务ID` 与任务关键词，不得返回 `NO_REPLY`；需兼容 `PLAIN_TEXT` 与代码块包裹文本。
+27. 如需降低超时概率，优先实现双阶段派单：先 ACK，再发详细执行任务。
 
 输出要求：
 1. 最小 patch。
@@ -431,6 +466,7 @@ agents:
 8. 验证若发生互审，是否控制在 1 轮内并最终回主管。  
 9. 互审是否真实发生，需结合主管输出中的 `reviewEvidence` 和原始日志复核，不要只看 canary 脚本返回值。  
 10. 若首轮返回 `nextAction=warmup_required`，先分别补 worker warm-up，再重跑 canary。
+11. 若返回 `TIMEOUT_BUT_WORKER_DELIVERED`，不要立刻回退；先检查 worker session jsonl 与 `dispatchEvidence` 是否可形成二次收口。
 
 ## V4.2 首次上线 warm-up 与兜底
 
@@ -461,6 +497,14 @@ agents:
 - `attemptedSteps=["no_tool_call"]`
 
 则说明本轮连 `sessions_list` 都没真正执行，应先检查 supervisor prompt 是否已更新、生效配置是否已重启，再用新 `taskId` 重测。
+
+如果主管出现：
+- `NO_REPLY`
+- 但消息里包含 `@主管`、`任务ID`、`启动/团队模式/拆分/收口`
+
+则应优先检查：
+- supervisor 的 `groupChat.mentionPatterns`
+- 是否需要先剥离 `PLAIN_TEXT` / 代码块包裹再做意图识别
 
 ## V4.2 推荐演示话术
 
@@ -508,6 +552,8 @@ bash skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_2_team_canary.sh
 - 若本轮明确要求必须发生互审，再追加 `--expect-review`。
 - 若主管返回 `nextAction=tool_call_required`，不要先 warm-up，先检查 supervisor prompt 和 gateway restart 是否已生效。
 - 若脚本返回 `SEND_PATH_AVAILABLE_BUT_LIST_MISS`，说明真实 send 路径已可用，但 `sessions_list` 不能再作为唯一存在性判断，应优先看 `dispatchEvidence` 与 worker session jsonl。
+- 若脚本返回 `TIMEOUT_BUT_WORKER_DELIVERED`，说明 worker 已执行但 supervisor 还没完成二次收口，应优先优化 timeout 二次判定与 ACK 派单。
+- 若脚本返回 `TRIGGER_MISS_ON_MENTION_OR_FORMAT_WRAP`，说明主管被提及后仍未进入工具链，应优先补 `mentionPatterns` 与文本包裹兼容。
 
 ## 常见失败点（V4.2）
 
@@ -542,6 +588,14 @@ bash skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_2_team_canary.sh
 10. `sessions_list` 没列出 worker，但固定 sessionKey 的 `sessions_send` 成功
 - 这是当前单群 Feishu 场景下可能出现的真实情况。
 - 正确处理不是把该 worker 继续记成 `missingTargets`，而是以 `sendStatus=ok` 和 worker session jsonl 作为优先证据。
+
+11. `sessions_send timeout`，但 worker 实际已执行
+- 这是当前单群团队模式下最值得优先优化的情况之一。
+- 正确处理不是直接判纯失败，而是增加短窗口二次判定，并用 `timeout_observed_worker_delivered` 保留可审计语义。
+
+12. 被 `@` 后仍进入 `NO_REPLY`
+- 常见原因是正文被 `PLAIN_TEXT` 或代码块包裹，导致上层意图识别没有把它当成可执行任务。
+- 正确处理是给 supervisor 配 `mentionPatterns`，并在提示词中显式要求先剥离包裹文本，再判断任务意图。
 
 ## 给客户的最终定位
 

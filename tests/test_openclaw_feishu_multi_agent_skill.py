@@ -204,6 +204,41 @@ class V42CanaryScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertIn("TEAM_CANARY_OK", result.stdout)
 
+    def test_v42_canary_reports_timeout_but_worker_delivered(self):
+        result = self.run_script(
+            {
+                "supervisor_agent/sessions/s1.jsonl": "\n".join(
+                    [
+                        "task team-v4-2-001",
+                        "sessions_list observed workers",
+                        "sessions_send target=agent:ops_agent:feishu:group:oc_demo sendStatus=timeout",
+                        "sessions_send target=agent:finance_agent:feishu:group:oc_demo sendStatus=timeout",
+                        "DISPATCH_INCOMPLETE",
+                        "nextAction=warmup_required",
+                    ]
+                ),
+                "ops_agent/sessions/o1.jsonl": "team-v4-2-001 ops task received toSupervisorSummary=ok",
+                "finance_agent/sessions/f1.jsonl": "team-v4-2-001 finance task received toSupervisorSummary=ok",
+            },
+            "--task-id",
+            "team-v4-2-001",
+        )
+
+        self.assertEqual(result.returncode, 3)
+        self.assertIn("TIMEOUT_BUT_WORKER_DELIVERED", result.stdout)
+
+    def test_v42_canary_reports_no_reply_trigger_miss(self):
+        result = self.run_script(
+            {
+                "supervisor_agent/sessions/s1.jsonl": "task team-v4-2-001 NO_REPLY",
+            },
+            "--task-id",
+            "team-v4-2-001",
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("TRIGGER_MISS_ON_MENTION_OR_FORMAT_WRAP", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.1.1] - 2026-03-06
+
+### Added
+- 新增 `references/source-cross-validation-2026-03-06.md`，记录 `V4.2` 单群团队模式的最新交叉验证结论。
+- `V4.2` canary 新增两类状态识别：
+  - `TIMEOUT_BUT_WORKER_DELIVERED`
+  - `TRIGGER_MISS_ON_MENTION_OR_FORMAT_WRAP`
+
+### Changed
+- `V4.2` 主管提示词与交付模板新增：
+  - `mentionPatterns` 兜底
+  - `PLAIN_TEXT` / 代码块包裹兼容
+  - `timeout` 二次判定
+  - ACK -> 正文 的双阶段派单建议
+- README、SKILL、验收清单同步补齐 `V4.2` 的 timeout / NO_REPLY / mention 处理口径。
+
+### Fixed
+- 修复 `V4.2` canary 无法正确识别“被提及后落入 NO_REPLY”的问题。
+- 修复 `V4.2` canary 未单独分类“timeout 但 worker 实际已执行”这一现场高频状态的问题。
+
 ## [1.1.0] - 2026-03-06
 
 ### Added

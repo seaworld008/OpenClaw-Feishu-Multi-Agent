@@ -12,6 +12,8 @@ usage() {
   - 默认可选执行角色: sales_agent
   - 若 supervisor 返回 nextAction=tool_call_required，表示本轮没有任何真实工具调用
   - 若 sessions_send 已成功但 sessions_list 未列出 worker，会返回 3 (SEND_PATH_AVAILABLE_BUT_LIST_MISS)
+  - 若 supervisor 返回 timeout，但 worker 实际已收到任务，会返回 3 (TIMEOUT_BUT_WORKER_DELIVERED)
+  - 若被 @ 后仍落入 NO_REPLY 且无工具调用，会返回 2 (TRIGGER_MISS_ON_MENTION_OR_FORMAT_WRAP)
   - 成功返回 0 (TEAM_CANARY_OK)
   - 缺少真实派单链返回 2 (DISPATCH_INCOMPLETE)
   - 证据不足或互审证据不足返回 3 (DISPATCH_UNVERIFIED)
@@ -196,6 +198,11 @@ if ! agent_has_session_task "$SUPERVISOR_AGENT" && ! agent_has_log_trace "$SUPER
   exit 2
 fi
 
+if supervisor_task_pattern "NO_REPLY" && ! supervisor_task_pattern "sessions_list|sessions_send|dispatchEvidence"; then
+  echo "DISPATCH_INCOMPLETE: TRIGGER_MISS_ON_MENTION_OR_FORMAT_WRAP 被提及后落入 NO_REPLY，需检查 mentionPatterns/输入包裹兼容"
+  exit 2
+fi
+
 IFS=',' read -r -a REQUIRED_LIST <<< "$REQUIRED_AGENTS"
 missing_required=()
 send_path_only=()
@@ -223,6 +230,13 @@ fi
 
 if [[ ${#send_path_only[@]} -gt 0 ]]; then
   echo "DISPATCH_UNVERIFIED: SEND_PATH_AVAILABLE_BUT_LIST_MISS agents => ${send_path_only[*]}"
+  exit 3
+fi
+
+if supervisor_task_pattern "sendStatus[^\\n]*timeout|status[^\\n]*timeout|\"status\"[^\n]*timeout" \
+  && supervisor_task_pattern "DISPATCH_INCOMPLETE|warmup_required" \
+  && ! supervisor_task_pattern "dispatchEvidence"; then
+  echo "DISPATCH_UNVERIFIED: TIMEOUT_BUT_WORKER_DELIVERED worker 已产出任务证据，但 supervisor 仍以 timeout 未收口"
   exit 3
 fi
 

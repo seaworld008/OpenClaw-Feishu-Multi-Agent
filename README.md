@@ -669,6 +669,7 @@ routes:
 ## 最佳实践来源
 
 - OpenClaw 官方文档与 Release（已在 `references/source-cross-validation-2026-03-05.md` 记录）
+- V4.2 单群团队补充交叉验证（见 `references/source-cross-validation-2026-03-06.md`）
 - 飞书开放平台官方文档（事件订阅、消息事件、鉴权）
 
 ## 交叉验证更新（2026-03-05）
@@ -848,6 +849,8 @@ agents:
 10. V4/V4.1/V4.2 若日志出现 `thread=true` / `subagent_spawning hooks`，说明当前 Feishu 不支持这条 `sessions_spawn` 自动补会话路径，应改为人工 warm-up。
 11. V4/V4.1/V4.2 不应把公开群里的 `@其他机器人` 作为控制面正确性依赖，最佳实践是 `sessions_send` 做控制面、公开 @ 做展示层。
 12. V4.2 若出现 `SEND_PATH_AVAILABLE_BUT_LIST_MISS`，说明真实 send 路径已可用，但 `sessions_list` 不能再作为唯一会话存在性判断。
+13. V4.2 若出现 `TIMEOUT_BUT_WORKER_DELIVERED`，说明 worker 已执行但 supervisor 还没完成二次收口，应优先做 timeout 二次判定或 ACK 派单。
+14. V4.2 若出现 `TRIGGER_MISS_ON_MENTION_OR_FORMAT_WRAP`，说明被 `@` 后仍没进工具链，应补 `mentionPatterns` 并兼容 `PLAIN_TEXT` / 代码块包裹文本。
 
 V3 建议加一道自动门禁（2 分钟窗口）：
 ```bash
@@ -905,6 +908,8 @@ V4/V4.1/V4.2 验收补充：
 - 若日志出现 `thread=true` / `subagent_spawning hooks`，不要继续重试 `sessions_spawn`
 - V4/V4.1/V4.2 默认应采用 send-first probe，不要只依赖 `sessions_list`
 - 若返回 `SEND_PATH_AVAILABLE_BUT_LIST_MISS`，优先检查 `dispatchEvidence`、固定 sessionKey 的 `sendStatus=ok`、worker session jsonl
+- 若返回 `TIMEOUT_BUT_WORKER_DELIVERED`，优先检查 worker session jsonl、二次收口逻辑，以及是否应采用 ACK -> 正文 的双阶段派单
+- 若返回 `TRIGGER_MISS_ON_MENTION_OR_FORMAT_WRAP`，优先检查 supervisor `mentionPatterns` 与输入包裹兼容
 
 ## 维护约定
 
