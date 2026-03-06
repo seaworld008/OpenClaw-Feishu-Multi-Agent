@@ -60,17 +60,29 @@
 ## V4.1 架构（推荐）
 
 ```mermaid
-flowchart LR
-  U["用户 @主管机器人"] --> S["supervisor_agent"]
-  S --> P["任务拆解 / 派单 / 指定互审规则"]
-  P --> O["ops_agent"]
-  P --> F["finance_agent"]
-  P --> SA["sales_agent"]
-  O --> X["受控互审 / 补证"]
-  F --> X
-  SA --> X
-  X --> S
-  S --> R["统一执行稿 / 责任分工 / 风险预案"]
+flowchart TD
+  user["用户发任务"] --> supervisor["supervisor_agent<br/>主管总控"]
+  supervisor --> dispatch["拆任务 / 派单 / 指定互审规则"]
+  dispatch --> ops["ops_agent<br/>运营执行"]
+  dispatch --> finance["finance_agent<br/>财务执行"]
+  dispatch --> sales["sales_agent<br/>销售支持"]
+  ops --> review["受控互审 / 补证"]
+  finance --> review
+  sales --> review
+  review --> supervisor
+  supervisor --> result["统一执行稿 / 责任分工 / 风险预案"]
+```
+
+如果你的 Markdown 预览器不支持 Mermaid，可按下面的文本流程理解：
+
+```text
+用户发任务
+  -> supervisor_agent（主管总控）
+  -> 拆任务 / 派单 / 指定互审规则
+  -> ops_agent / finance_agent / sales_agent
+  -> 受控互审 / 补证
+  -> supervisor_agent 收口
+  -> 统一执行稿 / 责任分工 / 风险预案
 ```
 
 ## 官方能力边界与交叉验证结论
