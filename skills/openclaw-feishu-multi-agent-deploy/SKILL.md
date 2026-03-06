@@ -97,7 +97,8 @@ python3 scripts/build_openclaw_feishu_snippets.py \
 - V3 主管派单场景必须执行 `scripts/check_v3_dispatch_canary.sh`，未通过不得判定验收成功
 - `check_v3_dispatch_canary.sh` 返回 `3` 表示证据不足，不能视为派单成功
 - V4/V4.1 单群团队场景必须优先执行 worker warm-up，再跑 `scripts/check_v4_1_team_canary.sh`
-- V4/V4.1 验收证据优先级：`~/.openclaw/agents/*/sessions/*.jsonl` 高于 gateway log
+- V4/V4.2 单群最佳实践场景优先使用 `scripts/check_v4_2_team_canary.sh`
+- V4/V4.1/V4.2 验收证据优先级：`~/.openclaw/agents/*/sessions/*.jsonl` 高于 gateway log
 
 ## 输出要求（给客户/交付文档）
 必须包含：
@@ -124,11 +125,12 @@ python3 scripts/build_openclaw_feishu_snippets.py \
 - 主管只“写派单文本”不真实派发：查 `tools.allow` 是否缺少 `group:sessions`
 - 主管看不到目标群会话：查 `tools.sessions.visibility` 和目标群是否 warm-up 过
 - 主管派发被策略拦截：查 `session.sendPolicy` 是否默认放行
-- V4/V4.1 主管返回 `DISPATCH_INCOMPLETE` 但正文声称“已安排”：查 supervisor prompt 是否缺少状态机式硬门控
-- V4/V4.1 新群首轮无 worker 会话：先对 worker 执行 warm-up，再复测
-- V4/V4.1 返回 `tool_call_required`：说明 supervisor 本轮没有任何真实工具调用，先查 prompt 是否已更新并确认重启已生效
-- V4/V4.1 若日志出现 `thread=true` / `subagent_spawning hooks`：说明当前 Feishu 渠道不支持这条 `sessions_spawn` 自动补会话路径，应改为人工 warm-up
-- V4/V4.1 单群团队推荐采用 send-first probe：优先验证真实 `sessions_send`，不要只依赖 `sessions_list`
+- V4/V4.1/V4.2 主管返回 `DISPATCH_INCOMPLETE` 但正文声称“已安排”：查 supervisor prompt 是否缺少状态机式硬门控
+- V4/V4.1/V4.2 新群首轮无 worker 会话：先对 worker 执行 warm-up，再复测
+- V4/V4.1/V4.2 返回 `tool_call_required`：说明 supervisor 本轮没有任何真实工具调用，先查 prompt 是否已更新并确认重启已生效
+- V4/V4.1/V4.2 若日志出现 `thread=true` / `subagent_spawning hooks`：说明当前 Feishu 渠道不支持这条 `sessions_spawn` 自动补会话路径，应改为人工 warm-up
+- V4/V4.1/V4.2 单群团队推荐采用 send-first probe：优先验证真实 `sessions_send`，不要只依赖 `sessions_list`
+- V4.2 若出现 `SEND_PATH_AVAILABLE_BUT_LIST_MISS`：说明固定 sessionKey 的 send 路径已可用，但 `sessions_list` 不能再作为唯一存在性判断
 - 公开群里的 `@其他机器人` 只能作为展示层，不应作为控制面正确性的唯一证据
 
 ## 可直接复用的文件
@@ -149,6 +151,8 @@ python3 scripts/build_openclaw_feishu_snippets.py \
   - `references/codex-prompt-templates-v3.md`
   - `references/codex-prompt-templates-v4-single-group-team.md`
   - `references/codex-prompt-templates-v4.1-single-group-team.md`
+  - `references/codex-prompt-templates-v4.2-single-group-team.md`
 - 辅助脚本：
   - `scripts/check_v3_dispatch_canary.sh`
   - `scripts/check_v4_1_team_canary.sh`
+  - `scripts/check_v4_2_team_canary.sh`

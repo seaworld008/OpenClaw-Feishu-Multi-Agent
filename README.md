@@ -470,7 +470,8 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
 | `V2` | 自动跨群收口 | 新增主管群，只做跨群汇总与收口 | 管理层汇总、经营复盘、低风险升级 | 低到中 | 推荐用于 brownfield 第一阶段升级 |
 | `V3.1` | 主管派单 + 三群执行 + 自动收口 | 真派单、真执行、真收口，可审计验收 | 正式生产交付、客户 PoC、经营执行闭环 | 中到高 | 跨群生产最推荐 |
 | `V4` | 单群团队模式 | 3 个机器人在同一群，主管主入口，执行角色协作 | 老板群、作战室、客户演示 | 中 | 单群演示推荐 |
-| `V4.1` | 单群团队模式增强版 | 主管主导协商 + 执行角色有限互审 | 高级演示、单群指挥中心、未来团队模式 | 高 | 单群高级版推荐 |
+| `V4.1` | 单群团队模式增强版 | 主管主导协商 + 执行角色有限互审 | 高级演示、单群指挥中心、未来团队模式 | 高 | 仍可用 |
+| `V4.2` | 单群团队模式最佳实践版 | send-first probe + 展示层/控制面分离 + 主动 @ 展示协作 | 真实单群交付、高级演示、未来团队模式 | 高 | 单群当前最推荐 |
 
 ### 最推荐的配置怎么选
 
@@ -479,10 +480,11 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
 3. 如果你要做真正能执行的跨群团队，直接上 `V3.1`。这是当前跨群生产最推荐版本。
 4. 如果你要做“一个群里像一人公司一样协作”的效果，选 `V4`。
 5. 如果你要做单群里的主管编排、执行角色有限互审、看起来更像未来团队 Agent 形态，选 `V4.1`。
+6. 如果你还要兼顾“真实可交付”与“群里看起来像团队在协作”，直接选 `V4.2`。
 
 一句话结论：
 - 跨群正式交付：`V3.1` 最推荐
-- 单群高级演示：`V4.1` 最推荐
+- 单群高级演示：`V4.2` 最推荐
 - 最低风险起步：`V1`
 
 ## 各版本详细说明
@@ -605,7 +607,7 @@ routes:
 
 ### V4.1：单群团队模式增强版
 
-`V4.1` 是 `V4` 的增强版，也是你现在在单群方向上最先进的一版：
+`V4.1` 是 `V4` 的增强版，适合你需要“主管主导协商 + 执行角色有限互审”的单群模式：
 
 - 主管仍是唯一主入口
 - 执行角色仍按边界执行
@@ -630,6 +632,28 @@ routes:
 文档入口：
 - [飞书单群高级 Agent 团队交付蓝图（V4.1）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.1-single-group-team.md)
 
+### V4.2：单群团队最佳实践版
+
+`V4.2` 是在 `V4.1` 基础上继续收敛后的单群最佳实践版本：
+
+- 控制面默认采用 send-first probe
+- `sessions_list` 不再作为唯一存在性判断
+- `sessions_spawn` 只做兜底，并显式承认 Feishu 下可能不可用
+- 公开群里的主动 @ 与机器人讨论只作为展示层
+- 正确性仍然只依赖 `dispatchEvidence` / `reviewEvidence`
+
+作用：
+- 既保留“群里像团队在讨论”的观感
+- 又不牺牲真实派单、真实执行、真实验收
+
+最适合：
+- 真实单群交付
+- 高级客户演示
+- 想兼顾“能跑”和“好看”的最佳案例
+
+文档入口：
+- [飞书单群高级 Agent 团队交付蓝图（V4.2）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.2-single-group-team.md)
+
 ## 推荐阅读顺序
 
 1. 先读：`references/prerequisites-checklist.md`
@@ -637,7 +661,7 @@ routes:
 3. 如果要最低风险上线，先按 `V1`
 4. 如果要管理层自动汇总，读 `V2`
 5. 如果要正式跨群交付，直接读 `V3.1`
-6. 如果要单群高级演示，读 `V4` 或 `V4.1`
+6. 如果要单群高级演示，读 `V4`、`V4.1` 或直接 `V4.2`
 7. 上线前看：`templates/brownfield-change-plan.example.md`
 8. 上线后看：`templates/verification-checklist.md`
 9. 升级回归看：`references/rollout-and-upgrade-playbook.md`
@@ -818,11 +842,12 @@ agents:
 4. 未限制免 @ 触发，导致群内噪音干扰演示。  
 5. V3 缺少 `tools.allow=group:sessions`，主管只会“写派单卡”不会真实派发。  
 6. V3 未放行 `tools.sessions.visibility` 或 `session.sendPolicy`，会话派发被拦截。  
-7. V4/V4.1 首轮未先 warm-up worker，会出现 `DISPATCH_INCOMPLETE + warmup_required`。
+7. V4/V4.1/V4.2 首轮未先 warm-up worker，会出现 `DISPATCH_INCOMPLETE + warmup_required`。
 8. 只看网关日志不看 `session jsonl`，容易误判单群派单是否真的发生。
-9. V4/V4.1 若返回 `tool_call_required`，说明本轮没有任何真实工具调用，应先查 supervisor prompt 和配置是否已生效。
-10. V4/V4.1 若日志出现 `thread=true` / `subagent_spawning hooks`，说明当前 Feishu 不支持这条 `sessions_spawn` 自动补会话路径，应改为人工 warm-up。
-11. V4/V4.1 不应把公开群里的 `@其他机器人` 作为控制面正确性依赖，最佳实践是 `sessions_send` 做控制面、公开 @ 做展示层。
+9. V4/V4.1/V4.2 若返回 `tool_call_required`，说明本轮没有任何真实工具调用，应先查 supervisor prompt 和配置是否已生效。
+10. V4/V4.1/V4.2 若日志出现 `thread=true` / `subagent_spawning hooks`，说明当前 Feishu 不支持这条 `sessions_spawn` 自动补会话路径，应改为人工 warm-up。
+11. V4/V4.1/V4.2 不应把公开群里的 `@其他机器人` 作为控制面正确性依赖，最佳实践是 `sessions_send` 做控制面、公开 @ 做展示层。
+12. V4.2 若出现 `SEND_PATH_AVAILABLE_BUT_LIST_MISS`，说明真实 send 路径已可用，但 `sessions_list` 不能再作为唯一会话存在性判断。
 
 V3 建议加一道自动门禁（2 分钟窗口）：
 ```bash
@@ -857,13 +882,29 @@ bash skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_1_team_canary.sh
   --optional-agents "sales_agent"
 ```
 
-V4/V4.1 验收补充：
+V4.2 单群最佳实践建议改用新门禁：
+```bash
+LOG="/tmp/openclaw/openclaw-$(date +%F).log"
+START_LINE=$(wc -l < "$LOG")
+# 先在团队群 warm-up worker，再发送 V4.2 测试指令
+sleep 120
+bash skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_2_team_canary.sh \
+  --task-id "team-v4-2-001" \
+  --session-root "${HOME}/.openclaw/agents" \
+  --log "$LOG" \
+  --start-line "$START_LINE" \
+  --required-agents "ops_agent,finance_agent" \
+  --optional-agents "sales_agent"
+```
+
+V4/V4.1/V4.2 验收补充：
 - 先看 `~/.openclaw/agents/*/sessions/*.jsonl`
 - 再看 gateway log
 - 若主管返回 `warmup_required`，先补 worker warm-up 再复测
 - 若主管返回 `tool_call_required`，先检查 supervisor prompt、gateway restart、工具调用轨迹
 - 若日志出现 `thread=true` / `subagent_spawning hooks`，不要继续重试 `sessions_spawn`
-- V4/V4.1 默认应采用 send-first probe，不要只依赖 `sessions_list`
+- V4/V4.1/V4.2 默认应采用 send-first probe，不要只依赖 `sessions_list`
+- 若返回 `SEND_PATH_AVAILABLE_BUT_LIST_MISS`，优先检查 `dispatchEvidence`、固定 sessionKey 的 `sendStatus=ok`、worker session jsonl
 
 ## 维护约定
 
