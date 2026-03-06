@@ -331,7 +331,7 @@ routes:
 - 在管理群增加 `bot_supervisor`
 - 主管 Agent 通过 `agentToAgent` 分派给销售/运营/财务子 Agent
 
-## 使用 Codex 的实战案例（安装到上线）
+## V1 使用 Codex 的实战案例（安装到上线）
 
 下面这套话术可直接复制给 Codex，后续新增 agent 或新增机器人只需按“扩展表”增加行。
 
@@ -458,32 +458,189 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
 - 每条 binding 至少做一次实测（群+私聊）
 - 留存回滚命令和验证证据（日志/截图/命令输出）
 
-## 交付建议流程
+## 版本地图与推荐选型
 
-- 先读：`references/prerequisites-checklist.md`
-- 再做：`templates/deployment-inputs.example.yaml`
-- 上线前：`templates/brownfield-change-plan.example.md`
-- 上线后：`templates/verification-checklist.md`
-- 升级回归：`references/rollout-and-upgrade-playbook.md`
-- 自动跨群收口（主管模式）：[飞书多 Agent 自动跨群收口交付蓝图（V2.1 Pro）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates.md)
-- 主管派单 + 三群执行 + 自动收口（V3.1，推荐）：[飞书多 Agent 主管派单与自动跨群收口交付蓝图（V3.1）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v3.1.md)
-- 主管派单 + 三群执行 + 自动收口（V3，历史版）：[飞书多 Agent 主管派单与自动跨群收口交付蓝图（V3）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v3.md)
-- 单群高级 Agent 团队模式（V4，主管主入口）：[飞书单群高级 Agent 团队交付蓝图（V4）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4-single-group-team.md)
-- 单群高级 Agent 团队模式（V4.1，主管主导协商）：[飞书单群高级 Agent 团队交付蓝图（V4.1）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.1-single-group-team.md)
+这一套仓库现在建议按 5 个版本理解，不要再把所有配置混在一起看。
 
-### 跨群收口文档入口
+### 版本总览
 
-如果你要做“manager 群 + supervisor_agent + agentToAgent”自动汇总，请直接看：  
-[飞书多 Agent 自动跨群收口交付蓝图（V2.1 Pro）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates.md)
+| 版本 | 模式 | 核心能力 | 适合场景 | 成本/复杂度 | 当前建议 |
+|---|---|---|---|---|---|
+| `V1` | 基础多群路由 | 一群一 Bot / 一群一 Agent，按群稳定分工 | 第一次上线、多群分工、先求稳 | 低 | 推荐作为起步版 |
+| `V2` | 自动跨群收口 | 新增主管群，只做跨群汇总与收口 | 管理层汇总、经营复盘、低风险升级 | 低到中 | 推荐用于 brownfield 第一阶段升级 |
+| `V3.1` | 主管派单 + 三群执行 + 自动收口 | 真派单、真执行、真收口，可审计验收 | 正式生产交付、客户 PoC、经营执行闭环 | 中到高 | 跨群生产最推荐 |
+| `V4` | 单群团队模式 | 3 个机器人在同一群，主管主入口，执行角色协作 | 老板群、作战室、客户演示 | 中 | 单群演示推荐 |
+| `V4.1` | 单群团队模式增强版 | 主管主导协商 + 执行角色有限互审 | 高级演示、单群指挥中心、未来团队模式 | 高 | 单群高级版推荐 |
 
-如果你要做“主管派单 -> 三群执行 -> 主管自动收口”的完整执行闭环，请直接看：  
-[飞书多 Agent 主管派单与自动跨群收口交付蓝图（V3.1）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v3.1.md)
+### 最推荐的配置怎么选
 
-如果你要做“3 个机器人都在同一个群里，用户只对主管机器人发任务，主管再调度执行角色”的单群团队模式，请直接看：  
-[飞书单群高级 Agent 团队交付蓝图（V4）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4-single-group-team.md)
+1. 如果你现在刚开始做客户交付，先上 `V1`。
+2. 如果你已经有 3 个业务群，想先给老板一个“自动收口”的效果，上 `V2`。
+3. 如果你要做真正能执行的跨群团队，直接上 `V3.1`。这是当前跨群生产最推荐版本。
+4. 如果你要做“一个群里像一人公司一样协作”的效果，选 `V4`。
+5. 如果你要做单群里的主管编排、执行角色有限互审、看起来更像未来团队 Agent 形态，选 `V4.1`。
 
-如果你要做“单群团队模式 + 主管主导协商 + 执行角色有限互审”的增强版，请直接看：
-[飞书单群高级 Agent 团队交付蓝图（V4.1）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.1-single-group-team.md)
+一句话结论：
+- 跨群正式交付：`V3.1` 最推荐
+- 单群高级演示：`V4.1` 最推荐
+- 最低风险起步：`V1`
+
+## 各版本详细说明
+
+### V1：基础多群多角色路由
+
+`V1` 就是 README 里你前面已经在用的这套基础配置，正式定义为：
+
+- 销售群 -> 销售 Bot -> `sales_agent`
+- 运营群 -> 运营 Bot -> `ops_agent`
+- 财务群 -> 财务 Bot -> `finance_agent`
+
+作用：
+- 让每个群只处理自己职责范围内的问题
+- 每个 Agent 角色边界清晰
+- 路由简单、稳定、最好排障
+
+能力边界：
+- 能分工
+- 能稳定响应
+- 不能自动跨群汇总
+- 不能主管派单
+
+最适合：
+- 第一次上线
+- 客户先验证“多角色分工”
+- 对稳定性要求最高，不着急做复杂协同
+
+你的当前真实 `V1` 路由就是：
+
+```yaml
+routes:
+  - { peerKind: "group", peerId: "oc_ffab0130d2cfb80f70c150918b4d4e87", accountId: "aoteman",     agentId: "sales_agent" }
+  - { peerKind: "group", peerId: "oc_da719e85a3f75d9a6050343924d9aa62", accountId: "xiaolongxia", agentId: "ops_agent" }
+  - { peerKind: "group", peerId: "oc_1a3c32a99d6a8120f9ca7c4343263b24", accountId: "yiran_yibao", agentId: "finance_agent" }
+```
+
+### V2：主管群自动跨群收口
+
+`V2` 是在 `V1` 基础上最自然的一次升级：
+
+- 保留 3 个业务群不动
+- 新增一个主管群
+- 新增 `supervisor_agent`
+- 主管群只做“跨群自动收口”
+
+作用：
+- 让管理层直接在主管群看到销售/运营/财务的统一结论
+- 不打断业务群原有工作方式
+- 非常适合 brownfield 最小增量升级
+
+能力边界：
+- 能自动汇总
+- 能输出统一执行稿
+- 还不是完整的“主管派单 -> 执行 -> 回收”闭环
+
+最适合：
+- 管理层看板
+- 周报/日报汇总
+- 客户先看“AI 团队收口能力”
+
+文档入口：
+- [飞书多 Agent 自动跨群收口交付蓝图（V2.1 Pro）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates.md)
+
+### V3.1：主管派单 + 三群执行 + 自动收口
+
+`V3.1` 是当前跨群版本里最完整、最可交付的一版：
+
+- 主管群接任务
+- 主管 Agent 拆任务
+- 派给销售 / 运营 / 财务三个业务群执行
+- 再自动拉回结果统一收口
+
+作用：
+- 从“自动汇总”升级为“真实执行闭环”
+- 更像一个真正能干活的跨群 Agent 团队
+
+能力：
+- 真派单
+- 真执行
+- 真收口
+- 有 `dispatchEvidence`
+- 有 canary 门禁
+- 有回滚与验收流程
+
+最适合：
+- 正式客户交付
+- 经营任务闭环
+- 需要可审计、可回滚、可复盘
+
+文档入口：
+- [飞书多 Agent 主管派单与自动跨群收口交付蓝图（V3.1）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v3.1.md)
+
+### V4：单群高级 Agent 团队模式
+
+`V4` 把协作方式从“跨群”切换成“单群”：
+
+- 3 个机器人都在同一个群
+- 用户默认只 `@主管机器人`
+- 主管拆任务并派给同群执行角色
+- 最终统一收口
+
+作用：
+- 对外看起来像一个群里的 AI 小团队
+- 更适合演示、作战室、老板群
+
+能力边界：
+- 有主管
+- 有执行角色
+- 有派单和收口
+- 不强调执行角色之间的互审协商
+
+最适合：
+- 客户演示
+- 内部老板群
+- 单群作战室
+
+文档入口：
+- [飞书单群高级 Agent 团队交付蓝图（V4）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4-single-group-team.md)
+
+### V4.1：单群团队模式增强版
+
+`V4.1` 是 `V4` 的增强版，也是你现在在单群方向上最先进的一版：
+
+- 主管仍是唯一主入口
+- 执行角色仍按边界执行
+- 在必要时允许有限互审
+- 互审最多 1 轮，最终必须回主管
+
+作用：
+- 让单群模式更接近真实管理团队的决策流
+- 更像未来团队 Agent 的编排模式
+
+能力：
+- 主管主导协商
+- 执行角色有限互审
+- 单群统一收口
+- 更强的状态机门控和验收证据
+
+最适合：
+- 高级客户演示
+- 单群指挥中心
+- 想突出“未来团队 Agent”卖点
+
+文档入口：
+- [飞书单群高级 Agent 团队交付蓝图（V4.1）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.1-single-group-team.md)
+
+## 推荐阅读顺序
+
+1. 先读：`references/prerequisites-checklist.md`
+2. 再做：`templates/deployment-inputs.example.yaml`
+3. 如果要最低风险上线，先按 `V1`
+4. 如果要管理层自动汇总，读 `V2`
+5. 如果要正式跨群交付，直接读 `V3.1`
+6. 如果要单群高级演示，读 `V4` 或 `V4.1`
+7. 上线前看：`templates/brownfield-change-plan.example.md`
+8. 上线后看：`templates/verification-checklist.md`
+9. 升级回归看：`references/rollout-and-upgrade-playbook.md`
 
 ## 最佳实践来源
 
@@ -501,7 +658,7 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
 5. 多账号场景需显式维护 `channels.feishu.defaultAccount`，避免出站账号漂移。  
 6. 免 `@` 场景依然需要配套飞书权限 `im:message.group_msg`，默认建议保持 `requireMention=true`。
 
-### Agent 系统提示词最佳实践（V2.1）
+### V2 Agent 系统提示词最佳实践（自动跨群收口起步版）
 
 建议每个 Agent 都有“角色边界 + 输出格式 + 风险约束”，避免跨职责回答和风格漂移。
 
@@ -530,7 +687,7 @@ agents:
       涉及税务或合规争议时明确“需人工复核”，不输出最终法律结论。
 ```
 
-### 真实部署任务提示词（V2.1，推荐长期复用）
+### V1 真实部署任务提示词（基础多群路由，推荐长期复用）
 
 ```text
 请使用 openclaw-feishu-multi-agent-deploy skill，按官方最新规范完成飞书多 Agent 部署。
