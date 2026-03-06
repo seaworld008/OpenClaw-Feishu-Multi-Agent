@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.1.0] - 2026-03-06
+
+### Added
+- 新增 `V4.2` 单群团队最佳实践方案，明确采用 `send-first probe`、展示层/控制面分离，并补齐完整交付提示词。
+- 新增 `scripts/check_v4_2_team_canary.sh`，用于单群团队模式的真实派单链路校验，并支持 `SEND_PATH_AVAILABLE_BUT_LIST_MISS` 分类。
+- 新增 `V4.2` 相关自动化测试，覆盖真实派单成功与 `list-miss / send-path` 分支。
+
+### Changed
+- README 升级为 `V1 / V2 / V3.1 / V4 / V4.1 / V4.2` 版本化说明，明确跨群与单群的推荐路线。
+- 单群版本文档统一为 `send-first probe` 口径，修复 `sessions_list` 与 `sessions_spawn` 先后顺序的自相矛盾表述。
+- `V4 / V4.1 / V4.2` 的验收与故障排查说明统一强调：
+  - `session jsonl > gateway log`
+  - 公开群里的 `@其他机器人` 仅作为展示层
+  - `tool_call_required`、`warmup_required`、`SEND_PATH_AVAILABLE_BUT_LIST_MISS` 需分类处理
+- 验收清单补齐 `V4 / V4.1 / V4.2` 的单群验证项，包括真实派单证据、互审约束、Feishu `sessions_spawn` 限制处理。
+
+### Fixed
+- 修复单群版本中“已经声明采用 send-first，但仍要求先 `sessions_spawn`”的错误引导。
+- 修复 `V4.1` / `V4.2` 在首次上线和失败分流场景中的提示词不一致问题。
+- 修复单群 canary 与文档之间的版本入口不一致问题。
+
 ## [1.0.0] - 2026-03-04
 
 ### Added
