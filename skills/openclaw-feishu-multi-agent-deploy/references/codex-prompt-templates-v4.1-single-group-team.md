@@ -123,12 +123,12 @@ flowchart LR
 ```yaml
 singleTeamGroup:
   peerKind: "group"
-  peerId: "oc_replace_with_new_team_group_id"
+  peerId: "oc_f785e73d3c00954d4ccd5d49b63ef919"
 
 routes:
-  - { peerKind: "group", peerId: "oc_replace_with_new_team_group_id", accountId: "aoteman",     agentId: "supervisor_agent" }
-  - { peerKind: "group", peerId: "oc_replace_with_new_team_group_id", accountId: "xiaolongxia", agentId: "ops_agent" }
-  - { peerKind: "group", peerId: "oc_replace_with_new_team_group_id", accountId: "yiran_yibao", agentId: "finance_agent" }
+  - { peerKind: "group", peerId: "oc_f785e73d3c00954d4ccd5d49b63ef919", accountId: "aoteman",     agentId: "supervisor_agent" }
+  - { peerKind: "group", peerId: "oc_f785e73d3c00954d4ccd5d49b63ef919", accountId: "xiaolongxia", agentId: "ops_agent" }
+  - { peerKind: "group", peerId: "oc_f785e73d3c00954d4ccd5d49b63ef919", accountId: "yiran_yibao", agentId: "finance_agent" }
 ```
 
 扩展建议：
@@ -245,20 +245,20 @@ agents:
 
 输入：
 - teamGroup:
-  - { peerKind: "group", peerId: "oc_replace_with_new_team_group_id" }
+  - { peerKind: "group", peerId: "oc_f785e73d3c00954d4ccd5d49b63ef919" }
 - accountMappings:
-  - { accountId: "aoteman", appId: "cli_a923c749bab6dcba", appSecret: "<真实值>", encryptKey: "<websocket 可留空，webhook 建议填写>", verificationToken: "<websocket 可留空，webhook 建议填写>" }
-  - { accountId: "xiaolongxia", appId: "cli_a9f1849b67f9dcc2", appSecret: "<真实值>", encryptKey: "<websocket 可留空，webhook 建议填写>", verificationToken: "<websocket 可留空，webhook 建议填写>" }
-  - { accountId: "yiran_yibao", appId: "cli_a923c71498b8dcc9", appSecret: "<真实值>", encryptKey: "<websocket 可留空，webhook 建议填写>", verificationToken: "<websocket 可留空，webhook 建议填写>" }
+  - { accountId: "aoteman", appId: "cli_a923c749bab6dcba", appSecret: "TWpD207Ri2g1Qqmw4R5YhfkPRhOokCGX", encryptKey: "", verificationToken: "" }
+  - { accountId: "xiaolongxia", appId: "cli_a9f1849b67f9dcc2", appSecret: "g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr", encryptKey: "", verificationToken: "" }
+  - { accountId: "yiran_yibao", appId: "cli_a923c71498b8dcc9", appSecret: "swscrlPKYCwAehOyyoLrlesLTsuYY6nl", encryptKey: "", verificationToken: "" }
 - agents:
   - { id: "supervisor_agent", role: "主管总控", systemPrompt: "你是主管 Agent。必须先 sessions_list，再完成真实派单；必要时只允许 1 轮互审；最终统一收口。无证据不得声称已分配。" }
   - { id: "ops_agent", role: "运营执行", systemPrompt: "你是运营执行 Agent。只处理主管派发的运营任务；若被授权互审，可向财务或销售支持发 1 轮补问；最终必须回主管。" }
   - { id: "finance_agent", role: "财务执行", systemPrompt: "你是财务执行 Agent。只处理主管派发的财务任务；若被授权互审，可向运营发 1 轮补问；最终必须回主管。" }
   - { id: "sales_agent", role: "销售支持", systemPrompt: "你是销售支持 Agent。负责销售策略、话术、商机分析；默认不作为主入口；若被授权互审，可对运营提出承接确认。" }
 - routes:
-  - { peerKind: "group", peerId: "oc_replace_with_new_team_group_id", accountId: "aoteman",     agentId: "supervisor_agent" }
-  - { peerKind: "group", peerId: "oc_replace_with_new_team_group_id", accountId: "xiaolongxia", agentId: "ops_agent" }
-  - { peerKind: "group", peerId: "oc_replace_with_new_team_group_id", accountId: "yiran_yibao", agentId: "finance_agent" }
+  - { peerKind: "group", peerId: "oc_f785e73d3c00954d4ccd5d49b63ef919", accountId: "aoteman",     agentId: "supervisor_agent" }
+  - { peerKind: "group", peerId: "oc_f785e73d3c00954d4ccd5d49b63ef919", accountId: "xiaolongxia", agentId: "ops_agent" }
+  - { peerKind: "group", peerId: "oc_f785e73d3c00954d4ccd5d49b63ef919", accountId: "yiran_yibao", agentId: "finance_agent" }
 
 强约束：
 1. 先读取并审计 ~/.openclaw/openclaw.json。

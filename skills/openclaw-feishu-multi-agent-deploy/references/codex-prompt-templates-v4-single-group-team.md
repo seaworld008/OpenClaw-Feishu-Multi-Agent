@@ -59,7 +59,7 @@ V4 的推荐做法不是“谁都可以在群里随便说话，所有 bot 都自
 ```yaml
 teamGroup:
   peerKind: "group"
-  peerId: "oc_new_team_group"
+  peerId: "oc_f785e73d3c00954d4ccd5d49b63ef919"
 
 visibleBots:
   - { accountId: "aoteman",      botName: "奥特曼",     role: "主管 / 总控",    agentId: "supervisor_agent" }
@@ -148,7 +148,8 @@ flowchart LR
 - 区分键是 `accountId + peerId`。
 
 2. 用户入口只给主管机器人
-- 推荐用户只 `@aoteman`（主管 bot）。
+- 推荐用户只 `@奥特曼`（主管 bot）。
+- 文档里的 `accountId=aoteman` 只用于配置，不是群内实际 `@` 的显示名。
 
 3. 执行角色主要通过主管派单触发
 - 不建议平时让用户直接 `@ops` / `@finance` 执行任务。
@@ -166,12 +167,12 @@ flowchart LR
 ```yaml
 singleTeamGroup:
   peerKind: "group"
-  peerId: "oc_replace_with_new_team_group_id"
+  peerId: "oc_f785e73d3c00954d4ccd5d49b63ef919"
 
 routes:
-  - { peerKind: "group", peerId: "oc_replace_with_new_team_group_id", accountId: "aoteman",     agentId: "supervisor_agent" }
-  - { peerKind: "group", peerId: "oc_replace_with_new_team_group_id", accountId: "xiaolongxia", agentId: "ops_agent" }
-  - { peerKind: "group", peerId: "oc_replace_with_new_team_group_id", accountId: "yiran_yibao", agentId: "finance_agent" }
+  - { peerKind: "group", peerId: "oc_f785e73d3c00954d4ccd5d49b63ef919", accountId: "aoteman",     agentId: "supervisor_agent" }
+  - { peerKind: "group", peerId: "oc_f785e73d3c00954d4ccd5d49b63ef919", accountId: "xiaolongxia", agentId: "ops_agent" }
+  - { peerKind: "group", peerId: "oc_f785e73d3c00954d4ccd5d49b63ef919", accountId: "yiran_yibao", agentId: "finance_agent" }
 ```
 
 可选扩展：
@@ -266,20 +267,20 @@ agents:
 
 输入：
 - teamGroup:
-  - { peerKind: "group", peerId: "oc_replace_with_new_team_group_id" }
+  - { peerKind: "group", peerId: "oc_f785e73d3c00954d4ccd5d49b63ef919" }
 - accountMappings:
-  - { accountId: "aoteman", appId: "cli_a923c749bab6dcba", appSecret: "<真实值>", encryptKey: "<websocket 可留空，webhook 建议填写>", verificationToken: "<websocket 可留空，webhook 建议填写>" }
-  - { accountId: "xiaolongxia", appId: "cli_a9f1849b67f9dcc2", appSecret: "<真实值>", encryptKey: "<websocket 可留空，webhook 建议填写>", verificationToken: "<websocket 可留空，webhook 建议填写>" }
-  - { accountId: "yiran_yibao", appId: "cli_a923c71498b8dcc9", appSecret: "<真实值>", encryptKey: "<websocket 可留空，webhook 建议填写>", verificationToken: "<websocket 可留空，webhook 建议填写>" }
+  - { accountId: "aoteman", appId: "cli_a923c749bab6dcba", appSecret: "TWpD207Ri2g1Qqmw4R5YhfkPRhOokCGX", encryptKey: "", verificationToken: "" }
+  - { accountId: "xiaolongxia", appId: "cli_a9f1849b67f9dcc2", appSecret: "g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr", encryptKey: "", verificationToken: "" }
+  - { accountId: "yiran_yibao", appId: "cli_a923c71498b8dcc9", appSecret: "swscrlPKYCwAehOyyoLrlesLTsuYY6nl", encryptKey: "", verificationToken: "" }
 - agents:
   - { id: "supervisor_agent", role: "主管总控", systemPrompt: "你是主管 Agent。必须先 sessions_list，再至少 2-3 次 sessions_send，未完成则返回 DISPATCH_INCOMPLETE。禁止文本模拟派单。" }
   - { id: "ops_agent", role: "运营执行", systemPrompt: "你是运营执行 Agent。只处理主管派发的运营任务；若用户直接要求统筹全局，请提示由主管机器人统一分派。" }
   - { id: "finance_agent", role: "财务执行", systemPrompt: "你是财务执行 Agent。只处理主管派发的财务任务；若用户直接要求统筹全局，请提示由主管机器人统一分派。" }
   - { id: "sales_agent", role: "销售支持", systemPrompt: "你是销售支持 Agent。可作为静默或未来扩展角色，由主管或其他执行角色调用；不直接接管全局任务。" }
 - routes:
-  - { peerKind: "group", peerId: "oc_replace_with_new_team_group_id", accountId: "aoteman",     agentId: "supervisor_agent" }
-  - { peerKind: "group", peerId: "oc_replace_with_new_team_group_id", accountId: "xiaolongxia", agentId: "ops_agent" }
-  - { peerKind: "group", peerId: "oc_replace_with_new_team_group_id", accountId: "yiran_yibao", agentId: "finance_agent" }
+  - { peerKind: "group", peerId: "oc_f785e73d3c00954d4ccd5d49b63ef919", accountId: "aoteman",     agentId: "supervisor_agent" }
+  - { peerKind: "group", peerId: "oc_f785e73d3c00954d4ccd5d49b63ef919", accountId: "xiaolongxia", agentId: "ops_agent" }
+  - { peerKind: "group", peerId: "oc_f785e73d3c00954d4ccd5d49b63ef919", accountId: "yiran_yibao", agentId: "finance_agent" }
 
 强约束：
 1. 先读取并审计 ~/.openclaw/openclaw.json。
