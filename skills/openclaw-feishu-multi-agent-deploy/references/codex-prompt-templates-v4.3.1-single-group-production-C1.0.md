@@ -4,7 +4,7 @@
 
 `V4.3.1` 已经在真实 Feishu 单群里验证通过：
 
-1. 用户只需要 `@营销机器人` 自然语言发任务，不需要手写 `taskId`
+1. 用户只需要 `@3-营销机器人` 自然语言发任务，不需要手写 `taskId`
 2. `supervisor_agent` 自动生成内部 `jobRef`，并写入 SQLite 状态层
 3. `ops_agent` 与 `finance_agent` 在群里真实发可见消息，而不是只在内部 session 执行
 4. `supervisor_agent` 最终自动统一收口，并把任务推进到 `done`
@@ -22,7 +22,7 @@
 
 ## 当前最新生产配置快照（客户 C1.0 定制值）
 
-以下内容基于当前真实跑通的 `V4.3.1` 生产配置改写为客户 C1.0 定制值；机器人账号为真实值，团队群 `peerId` 仍待你填入。
+以下内容基于当前真实跑通的 `V4.3.1` 生产配置改写为客户 C1.0 定制值；机器人账号与团队群 `peerId` 都已经按当前客户环境的真实值填入。
 
 ### 运行环境
 
@@ -31,28 +31,37 @@
 - 配置文件：`~/.openclaw/openclaw.json`
 - 主状态库：`~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db`
 - hidden main session：`agent:supervisor_agent:main`
-- 团队群 `peerId`：`oc_<客户团队群ID待填>`
+- 团队群 `peerId`：`oc_426bc13db95838b2aa9a327a20ee71ea`
 
 ### 机器人与账号
 
-- 主管机器人：`marketing_bot`
+- 主管机器人：`marketing-bot`（显示名：`3-营销机器人`）
   - `appId`: `cli_a926a086e9389cba`
   - `appSecret`: `LLq6LJOoeBJpinNbD2Uv9fZfuHQTa4ql`
   - `职责聚合`: `营销专家 + 文案专家 + 销售专家`
-- 电商市场机器人：`ecommerce_market_bot`
+- 电商市场机器人：`ecom-market-bot`（显示名：`3-电商市场机器人`）
   - `appId`: `cli_a926a17fd0b8dcc4`
   - `appSecret`: `qoQKYyCNf5chwPhA0YFxccw6PbXL3aOt`
   - `职责聚合`: `市场分析专家 + 电商线上运营专家`
-- 财务机器人：`finance_bot`
+- 财务机器人：`default`（当前 OpenClaw accountId 未改名；显示名建议按 `3-财务机器人` 理解）
   - `appId`: `cli_a92123297f78dcb0`
   - `appSecret`: `Nx9HJCGx6pRpg50AyGwp4Xl4z32qjbHu`
   - `职责聚合`: `财务专家`
 
 ### Agent 与绑定
 
-- `supervisor_agent` -> `accountId=marketing_bot` -> `peerId=oc_<客户团队群ID待填>`
-- `ops_agent` -> `accountId=ecommerce_market_bot` -> `peerId=oc_<客户团队群ID待填>`
-- `finance_agent` -> `accountId=finance_bot` -> `peerId=oc_<客户团队群ID待填>`
+- `supervisor_agent` -> `accountId=marketing-bot` -> `peerId=oc_426bc13db95838b2aa9a327a20ee71ea`
+- `ops_agent` -> `accountId=ecom-market-bot` -> `peerId=oc_426bc13db95838b2aa9a327a20ee71ea`
+- `finance_agent` -> `accountId=default` -> `peerId=oc_426bc13db95838b2aa9a327a20ee71ea`
+
+### 当前客户环境已采集结果
+
+- 当前 3 个机器人已经被拉进同一个团队群：`oc_426bc13db95838b2aa9a327a20ee71ea`
+- 当前真实 `accountId` 分别是：`marketing-bot`、`ecom-market-bot`、`default`
+- 当前审计结果显示：`sameGroupForThreeBots=true`、`supervisorSessionReady=true`
+- 当前审计结果同时显示：`opsSessionReady=false`、`financeSessionReady=false`
+- 这意味着：首次部署或迁移到该群后，仍然必须执行一次 `WARMUP`，让电商市场与财务两个 worker 生成独立 team session
+- 财务机器人当前 `accountId` 仍是 `default`，这是客户现网真实值；为了减少首次交付风险，C1.0 先保留该值，不在首轮交付中强行改名
 
 ### mentionPatterns
 
@@ -60,7 +69,7 @@
 
 ```json
 {
-  "mentionPatterns": ["@营销机器人", "营销机器人", "营销总控"]
+  "mentionPatterns": ["@3-营销机器人", "3-营销机器人", "@营销机器人", "营销机器人", "营销总控"]
 }
 ```
 
@@ -148,7 +157,7 @@ python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_job_registry.py \
 ```bash
 python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_session_hygiene.py \
   --home ~/.openclaw \
-  --group-peer-id oc_<客户团队群ID待填> \
+  --group-peer-id oc_426bc13db95838b2aa9a327a20ee71ea \
   --include-workers \
   --delete-transcripts
 ```
@@ -162,7 +171,7 @@ python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_session_hygiene.p
 
 ```mermaid
 flowchart TD
-  user["用户 @营销机器人"] --> supGroup["supervisor_group_session\n接单 + 派单"]
+  user["用户 @3-营销机器人"] --> supGroup["supervisor_group_session\n接单 + 派单"]
   supGroup --> registry["SQLite\njobs / participants / events"]
   supGroup --> opsDispatch["sessions_send\nagent:ops_agent:feishu:group:<peerId>"]
   supGroup --> finDispatch["sessions_send\nagent:finance_agent:feishu:group:<peerId>"]
@@ -213,8 +222,8 @@ flowchart TD
 新团队群第一次上线时，必须执行一次：
 
 ```text
-@电商市场机器人 WARMUP
-@财务机器人 WARMUP
+@3-电商市场机器人 WARMUP
+@3-财务机器人 WARMUP
 ```
 
 预期返回：
@@ -250,10 +259,10 @@ READY_FOR_TEAM_GROUP|agentId=finance_agent
 
 ```bash
 python3 scripts/v4_3_job_registry.py --db ~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db init-db
-python3 scripts/v4_3_job_registry.py --db ~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db begin-turn --group-peer-id oc_<客户团队群ID待填> --stale-seconds 180
-python3 scripts/v4_3_job_registry.py --db ~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db get-active --group-peer-id oc_<客户团队群ID待填>
-python3 scripts/v4_3_job_registry.py --db ~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db list-queue --group-peer-id oc_<客户团队群ID待填>
-python3 scripts/v4_3_job_registry.py --db ~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db watchdog-tick --group-peer-id oc_<客户团队群ID待填> --stale-seconds 180
+python3 scripts/v4_3_job_registry.py --db ~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db begin-turn --group-peer-id oc_426bc13db95838b2aa9a327a20ee71ea --stale-seconds 180
+python3 scripts/v4_3_job_registry.py --db ~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db get-active --group-peer-id oc_426bc13db95838b2aa9a327a20ee71ea
+python3 scripts/v4_3_job_registry.py --db ~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db list-queue --group-peer-id oc_426bc13db95838b2aa9a327a20ee71ea
+python3 scripts/v4_3_job_registry.py --db ~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db watchdog-tick --group-peer-id oc_426bc13db95838b2aa9a327a20ee71ea --stale-seconds 180
 ```
 
 ## OpenClaw 配置侧建议
@@ -340,8 +349,8 @@ agent:supervisor_agent:main
 - 只能用完整 `sessionKey`：
 
 ```text
-agent:ops_agent:feishu:group:oc_<客户团队群ID待填>
-agent:finance_agent:feishu:group:oc_<客户团队群ID待填>
+agent:ops_agent:feishu:group:oc_426bc13db95838b2aa9a327a20ee71ea
+agent:finance_agent:feishu:group:oc_426bc13db95838b2aa9a327a20ee71ea
 agent:supervisor_agent:main
 ```
 
@@ -422,31 +431,31 @@ COMPLETE_PACKET|jobRef=<jobRef>|agent=<ops_agent或finance_agent>|progressMessag
 - 禁止发送 Agent-to-agent announce step.
 - 禁止自编 jobRef/JOB-*；jobRef 只能来自 registry toolResult。
 - 会话寻址只能使用完整 sessionKey：
-  - agent:ops_agent:feishu:group:oc_<客户团队群ID待填>
-  - agent:finance_agent:feishu:group:oc_<客户团队群ID待填>
+  - agent:ops_agent:feishu:group:oc_426bc13db95838b2aa9a327a20ee71ea
+  - agent:finance_agent:feishu:group:oc_426bc13db95838b2aa9a327a20ee71ea
   - agent:supervisor_agent:main
 - 若当前消息明显是当前任务补充说明（包含“补充/追加/再加/改成/补一个/另外增加/把预算改成”等），应 append-note 到 active job；否则视为新任务并创建或入队。
 - 不允许把多个依赖前一步结果的 toolCall 批量放在同一条 assistant 消息里。
 
 固定流程：
 A. 用户首轮任务
-A1. exec：python3 .openclaw/v4_3_job_registry.py --db .openclaw/team_jobs.db begin-turn --group-peer-id oc_<客户团队群ID待填> --stale-seconds 180
+A1. exec：python3 .openclaw/v4_3_job_registry.py --db .openclaw/team_jobs.db begin-turn --group-peer-id oc_426bc13db95838b2aa9a327a20ee71ea --stale-seconds 180
 A2. begin-turn 结果分支：
-- 若 active=null：下一条 assistant 只 exec：python3 .openclaw/v4_3_job_registry.py --db .openclaw/team_jobs.db start-job --group-peer-id oc_<客户团队群ID待填> --requested-by SeaWorld --title "<根据用户任务提炼的简短标题>"
+- 若 active=null：下一条 assistant 只 exec：python3 .openclaw/v4_3_job_registry.py --db .openclaw/team_jobs.db start-job --group-peer-id oc_426bc13db95838b2aa9a327a20ee71ea --requested-by SeaWorld --title "<根据用户任务提炼的简短标题>"
 - 若 active 不为 null 且 readyToRollup=true：直接处理收口，禁止再派新任务。
 - 若 active 不为 null 且 participantCount>0 且 completedParticipantCount<2：
   * 若当前消息是补充说明：执行 append-note 后只输出 NO_REPLY。
   * 若当前消息是新的独立任务：执行 start-job 让它进入 queued，然后用 message 发【营销总控已接单｜<新jobRef>】当前存在进行中任务，你的请求已进入队列，待上一任务完成后自动推进；最后只输出 NO_REPLY。
 - 若 active 不为 null 且 participantCount=0 且 completedParticipantCount=0：直接沿用 active.jobRef 继续完整派单，禁止等待。
 A3. 当你拿到一个需要执行的 active jobRef 后：
-- 先用 message(action=send, channel=feishu, accountId=marketing_bot, target=chat:oc_<客户团队群ID待填>) 发：
+- 先用 message(action=send, channel=feishu, accountId=marketing-bot, target=chat:oc_426bc13db95838b2aa9a327a20ee71ea) 发：
   【营销总控已接单｜<jobRef>】任务已受理，正在分配给电商市场与财务，请稍候查看执行进度。
 - 收到 message 的 toolResult 后，sessions_send 到 ops（timeoutSeconds=0）：
   TASK_DISPATCH|jobRef=<jobRef>|role=ops|title=<title>|goal=<goal>|constraints=<constraints>|deliver=进度,结论,完成包|callbackSessionKey=agent:supervisor_agent:main|mustSend=progress,final,callback
-- exec：python3 .openclaw/v4_3_job_registry.py --db .openclaw/team_jobs.db mark-dispatch --job-ref <jobRef> --agent-id ops_agent --account-id ecommerce_market_bot --role 电商市场执行 --status accepted --dispatch-run-id <runId> --dispatch-status <status>
+- exec：python3 .openclaw/v4_3_job_registry.py --db .openclaw/team_jobs.db mark-dispatch --job-ref <jobRef> --agent-id ops_agent --account-id ecom-market-bot --role 电商市场执行 --status accepted --dispatch-run-id <runId> --dispatch-status <status>
 - 然后 sessions_send 到 finance（timeoutSeconds=0）：
   TASK_DISPATCH|jobRef=<jobRef>|role=finance|title=<title>|goal=<goal>|constraints=<constraints>|deliver=进度,结论,完成包|callbackSessionKey=agent:supervisor_agent:main|mustSend=progress,final,callback
-- exec：python3 .openclaw/v4_3_job_registry.py --db .openclaw/team_jobs.db mark-dispatch --job-ref <jobRef> --agent-id finance_agent --account-id finance_bot --role 财务执行 --status accepted --dispatch-run-id <runId> --dispatch-status <status>
+- exec：python3 .openclaw/v4_3_job_registry.py --db .openclaw/team_jobs.db mark-dispatch --job-ref <jobRef> --agent-id finance_agent --account-id default --role 财务执行 --status accepted --dispatch-run-id <runId> --dispatch-status <status>
 - 完成后只输出 NO_REPLY。
 
 B. 收到 inter_session
@@ -455,12 +464,12 @@ B. 收到 inter_session
 - COMPLETE_PACKET 只有在同时包含 jobRef、agent、progressMessageId、finalMessageId 时才有效。
 
 C. 对有效 COMPLETE_PACKET：
-- 若 agent=ops_agent：exec python3 .openclaw/v4_3_job_registry.py --db .openclaw/team_jobs.db mark-worker-complete --job-ref <jobRef> --agent-id ops_agent --account-id ecommerce_market_bot --role 电商市场执行 --progress-message-id <progressMessageId> --final-message-id <finalMessageId> --summary "<summary>" --details "<details>" --risks "<risks>" --dependencies "<dependencies>" --conflicts "<conflicts>"
-- 若 agent=finance_agent：exec python3 .openclaw/v4_3_job_registry.py --db .openclaw/team_jobs.db mark-worker-complete --job-ref <jobRef> --agent-id finance_agent --account-id finance_bot --role 财务执行 --progress-message-id <progressMessageId> --final-message-id <finalMessageId> --summary "<summary>" --details "<details>" --risks "<risks>" --dependencies "<dependencies>" --conflicts "<conflicts>"
+- 若 agent=ops_agent：exec python3 .openclaw/v4_3_job_registry.py --db .openclaw/team_jobs.db mark-worker-complete --job-ref <jobRef> --agent-id ops_agent --account-id ecom-market-bot --role 电商市场执行 --progress-message-id <progressMessageId> --final-message-id <finalMessageId> --summary "<summary>" --details "<details>" --risks "<risks>" --dependencies "<dependencies>" --conflicts "<conflicts>"
+- 若 agent=finance_agent：exec python3 .openclaw/v4_3_job_registry.py --db .openclaw/team_jobs.db mark-worker-complete --job-ref <jobRef> --agent-id finance_agent --account-id default --role 财务执行 --progress-message-id <progressMessageId> --final-message-id <finalMessageId> --summary "<summary>" --details "<details>" --risks "<risks>" --dependencies "<dependencies>" --conflicts "<conflicts>"
 - 然后 exec：python3 .openclaw/v4_3_job_registry.py --db .openclaw/team_jobs.db ready-to-rollup --job-ref <jobRef>
 - 若未 ready：只输出 NO_REPLY。
 - 若 ready：exec：python3 .openclaw/v4_3_job_registry.py --db .openclaw/team_jobs.db get-job --job-ref <jobRef>
-- 用 message(action=send, channel=feishu, accountId=marketing_bot, target=chat:oc_<客户团队群ID待填>) 发最终统一收口。
+- 用 message(action=send, channel=feishu, accountId=marketing-bot, target=chat:oc_426bc13db95838b2aa9a327a20ee71ea) 发最终统一收口。
 - exec：python3 .openclaw/v4_3_job_registry.py --db .openclaw/team_jobs.db close-job --job-ref <jobRef> --status done
 - 最后一条只输出 NO_REPLY。
 
@@ -476,9 +485,9 @@ C. 对有效 COMPLETE_PACKET：
 - 禁止 ACK、禁止“任务已接收”、禁止“等待具体执行内容”、禁止任何占位回复。
 - 若收到 TASK_DISPATCH|...：你只能执行以下固定状态机，不得改写顺序，不得省略字段，也不得直接 NO_REPLY。
 - 先从消息中提取：jobRef、title、goal、constraints、callbackSessionKey。
-- 第一步：调用 message 工具，参数必须完整包含：action=send, channel=feishu, accountId=ecommerce_market_bot, target=chat:oc_<客户团队群ID待填>, message=【电商市场进度｜<jobRef>】<1-2句真实进度摘要>
+- 第一步：调用 message 工具，参数必须完整包含：action=send, channel=feishu, accountId=ecom-market-bot, target=chat:oc_426bc13db95838b2aa9a327a20ee71ea, message=【电商市场进度｜<jobRef>】<1-2句真实进度摘要>
 - 等第1步 toolResult 返回后，必须从 details.result.messageId 读取真实 progressMessageId。拿不到真实 messageId，只能输出：WORKFLOW_INCOMPLETE|jobRef=<jobRef>|agent=ops_agent|reason=missing_progress_message_id
-- 第二步：再调用 message 工具，参数必须完整包含：action=send, channel=feishu, accountId=ecommerce_market_bot, target=chat:oc_<客户团队群ID待填>, message=【电商市场结论｜<jobRef>】<可多行完整结论，不限制字数，至少覆盖市场分析、商品策略、渠道打法、投放节奏、店铺运营动作、风险中的相关项>
+- 第二步：再调用 message 工具，参数必须完整包含：action=send, channel=feishu, accountId=ecom-market-bot, target=chat:oc_426bc13db95838b2aa9a327a20ee71ea, message=【电商市场结论｜<jobRef>】<可多行完整结论，不限制字数，至少覆盖市场分析、商品策略、渠道打法、投放节奏、店铺运营动作、风险中的相关项>
 - 等第2步 toolResult 返回后，必须从 details.result.messageId 读取真实 finalMessageId。拿不到真实 messageId，只能输出：WORKFLOW_INCOMPLETE|jobRef=<jobRef>|agent=ops_agent|reason=missing_final_message_id
 - 第三步：只有在拿到两个真实 messageId 后，才允许调用 sessions_send 到 callbackSessionKey，发送单行：COMPLETE_PACKET|jobRef=<jobRef>|agent=ops_agent|progressMessageId=<progressMessageId>|finalMessageId=<finalMessageId>|summary=<120字内>|details=<400字内>|risks=<160字内>|dependencies=<160字内>|conflicts=<none或160字内>，且 timeoutSeconds=0
 - 第四步：最后只输出 NO_REPLY
@@ -494,9 +503,9 @@ C. 对有效 COMPLETE_PACKET：
 - 禁止 ACK、禁止“任务已接收”、禁止“等待具体执行内容”、禁止任何占位回复。
 - 若收到 TASK_DISPATCH|...：你只能执行以下固定状态机，不得改写顺序，不得省略字段，也不得直接 NO_REPLY。
 - 先从消息中提取：jobRef、title、goal、constraints、callbackSessionKey。
-- 第一步：调用 message 工具，参数必须完整包含：action=send, channel=feishu, accountId=finance_bot, target=chat:oc_<客户团队群ID待填>, message=【财务进度｜<jobRef>】<1-2句真实进度摘要>
+- 第一步：调用 message 工具，参数必须完整包含：action=send, channel=feishu, accountId=default, target=chat:oc_426bc13db95838b2aa9a327a20ee71ea, message=【财务进度｜<jobRef>】<1-2句真实进度摘要>
 - 等第1步 toolResult 返回后，必须从 details.result.messageId 读取真实 progressMessageId。拿不到真实 messageId，只能输出：WORKFLOW_INCOMPLETE|jobRef=<jobRef>|agent=finance_agent|reason=missing_progress_message_id
-- 第二步：再调用 message 工具，参数必须完整包含：action=send, channel=feishu, accountId=finance_bot, target=chat:oc_<客户团队群ID待填>, message=【财务结论｜<jobRef>】<可多行完整结论，不限制字数，至少覆盖预算、ROI、毛利、库存、账期、现金流与风险中的相关项>
+- 第二步：再调用 message 工具，参数必须完整包含：action=send, channel=feishu, accountId=default, target=chat:oc_426bc13db95838b2aa9a327a20ee71ea, message=【财务结论｜<jobRef>】<可多行完整结论，不限制字数，至少覆盖预算、ROI、毛利、库存、账期、现金流与风险中的相关项>
 - 等第2步 toolResult 返回后，必须从 details.result.messageId 读取真实 finalMessageId。拿不到真实 messageId，只能输出：WORKFLOW_INCOMPLETE|jobRef=<jobRef>|agent=finance_agent|reason=missing_final_message_id
 - 第三步：只有在拿到两个真实 messageId 后，才允许调用 sessions_send 到 callbackSessionKey，发送单行：COMPLETE_PACKET|jobRef=<jobRef>|agent=finance_agent|progressMessageId=<progressMessageId>|finalMessageId=<finalMessageId>|summary=<120字内>|details=<400字内>|risks=<160字内>|dependencies=<160字内>|conflicts=<none或160字内>，且 timeoutSeconds=0
 - 第四步：最后只输出 NO_REPLY
@@ -612,7 +621,7 @@ launchctl print gui/$(id -u)/bot.molt.v4-3-watchdog
 ## 正式测试提示词（短版，C1.0）
 
 ```text
-@营销机器人 启动本群高级团队模式：
+@3-营销机器人 启动本群高级团队模式：
 
 我们要做一轮“电商大促预热 + 店铺转化提升”的联合方案。
 目标：7 天新增 GMV 30 万；营销与投放预算不超过 3 万；综合毛利率不低于 28%；库存周转天数不高于 35 天。
@@ -628,7 +637,7 @@ launchctl print gui/$(id -u)/bot.molt.v4-3-watchdog
 ## 真实业务演示提示词（产品版，C1.0）
 
 ```text
-@营销机器人 我们准备给一家电商客户做一轮“店铺拉新 + 老客复购”的 7 天冲刺。
+@3-营销机器人 我们准备给一家电商客户做一轮“店铺拉新 + 老客复购”的 7 天冲刺。
 目标：GMV 提升 30 万；营销预算控制在 3 万内；综合毛利率不低于 28%；库存周转天数不高于 35 天。
 
 请启动本群高级团队模式：
@@ -653,7 +662,7 @@ python3 skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_3_canary.py \
 2. `ops_agent` 与 `finance_agent` 都有真实 `progress_message_id` 与 `final_message_id`
 3. session jsonl 能找到 4 个真实 `messageId`
 4. canary 不再发现 `ACK_READY / REPLY_SKIP / COMPLETE_PACKET / WORKFLOW_INCOMPLETE` 外泄
-5. 主管最终已自动收口
+5. 营销总控最终已自动收口
 
 真实通过输出：
 
@@ -669,34 +678,34 @@ V4_3_CANARY_OK: jobRef=TG-20260307-031 title=3天限时促销 status=done ops_pr
 请使用 openclaw-feishu-multi-agent-deploy skill，按 V4.3.1 单群生产稳定版完成交付。
 
 目标：
-- 用户只需在同一个飞书群里 @营销机器人，自然语言发任务。
+- 用户只需在同一个飞书群里 @3-营销机器人，自然语言发任务。
 - supervisor 自动生成内部 jobRef，不要求用户手写 taskId。
 - 群里可见顺序固定为：营销总控接单 -> 电商市场进度 -> 财务进度 -> 电商市场结论 -> 财务结论 -> 营销总控最终收口。
 - 群里不得暴露 ACK_READY / REPLY_SKIP / COMPLETE_PACKET / WORKFLOW_INCOMPLETE。
 - worker 的内部回调统一进入 agent:supervisor_agent:main，由隐藏控制会话推进 SQLite 状态机并最终收口。
 - 单群只允许一个 active job；新任务入队；stale job 由 watchdog 自动释放。
-- 运营与财务的结论摘要允许多行完整输出，不再压成一句话。
+- 电商市场与财务的结论摘要允许多行完整输出，不再压成一句话。
 
 输入：
 - platform:
   - target: "linux" # linux | macos | wsl2
   - serviceManager: "systemd-user" # systemd-user | launchd
-- teamGroupPeerId: "oc_<客户团队群ID待填>"
-- supervisorAccountId: "marketing_bot"
-- opsAccountId: "ecommerce_market_bot"
-- financeAccountId: "finance_bot"
+- teamGroupPeerId: "oc_426bc13db95838b2aa9a327a20ee71ea"
+- supervisorAccountId: "marketing-bot"
+- opsAccountId: "ecom-market-bot"
+- financeAccountId: "default"
 - sqliteDbPath: "~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db"
 - staleSeconds: 180
 - watchdogEnabled: true
 - accountMappings:
-  - { accountId: "marketing_bot", appId: "cli_a926a086e9389cba", appSecret: "LLq6LJOoeBJpinNbD2Uv9fZfuHQTa4ql", encryptKey: "", verificationToken: "" }
-  - { accountId: "ecommerce_market_bot", appId: "cli_a926a17fd0b8dcc4", appSecret: "qoQKYyCNf5chwPhA0YFxccw6PbXL3aOt", encryptKey: "", verificationToken: "" }
-  - { accountId: "finance_bot", appId: "cli_a92123297f78dcb0", appSecret: "Nx9HJCGx6pRpg50AyGwp4Xl4z32qjbHu", encryptKey: "", verificationToken: "" }
+  - { accountId: "marketing-bot", appId: "cli_a926a086e9389cba", appSecret: "LLq6LJOoeBJpinNbD2Uv9fZfuHQTa4ql", encryptKey: "", verificationToken: "" }
+  - { accountId: "ecom-market-bot", appId: "cli_a926a17fd0b8dcc4", appSecret: "qoQKYyCNf5chwPhA0YFxccw6PbXL3aOt", encryptKey: "", verificationToken: "" }
+  - { accountId: "default", appId: "cli_a92123297f78dcb0", appSecret: "Nx9HJCGx6pRpg50AyGwp4Xl4z32qjbHu", encryptKey: "", verificationToken: "" }
 - agents:
   - id: "supervisor_agent"
     role: "营销总控（营销/文案/销售）"
-    name: "营销机器人"
-    mentionPatterns: ["@营销机器人", "营销机器人", "营销总控"]
+    name: "3-营销机器人"
+    mentionPatterns: ["@3-营销机器人", "3-营销机器人", "@营销机器人", "营销机器人", "营销总控"]
     systemPrompt: |
       你是营销总控 Agent，运行 V4.3.1-C1.0 单群生产稳定版。你代表营销专家、文案专家和销售专家的统筹视角。
       群里可见消息只允许两类：接单、最终统一收口。
@@ -707,7 +716,7 @@ V4_3_CANARY_OK: jobRef=TG-20260307-031 title=3天限时促销 status=done ops_pr
       固定流程：begin-turn -> start-job/append-note -> 发接单消息 -> 双发 TASK_DISPATCH -> 等 COMPLETE_PACKET -> ready-to-rollup -> 最终收口 -> close-job done。
   - id: "ops_agent"
     role: "电商市场执行（市场分析/电商运营）"
-    name: "电商市场机器人"
+    name: "3-电商市场机器人"
     systemPrompt: |
       你是电商市场执行 Agent，运行 V4.3.1-C1.0 生产稳定版。你代表市场分析专家和电商线上运营专家。
       用户直接 @你 且消息包含 WARMUP、就绪、ready、状态检查：只回复 READY_FOR_TEAM_GROUP|agentId=ops_agent。
@@ -715,16 +724,16 @@ V4_3_CANARY_OK: jobRef=TG-20260307-031 title=3天限时促销 status=done ops_pr
       禁止 ACK、禁止占位消息、禁止伪造 messageId、禁止 [[reply_to_current]]、禁止旧字段名。
   - id: "finance_agent"
     role: "财务执行"
-    name: "财务机器人"
+    name: "3-财务机器人"
     systemPrompt: |
       你是财务执行 Agent，运行 V4.3.1-C1.0 生产稳定版。你代表财务专家。
       用户直接 @你 且消息包含 WARMUP、就绪、ready、状态检查：只回复 READY_FOR_TEAM_GROUP|agentId=finance_agent。
       收到 TASK_DISPATCH 后必须：message 发进度 -> 读取真实 progressMessageId -> message 发完整结论 -> 读取真实 finalMessageId -> sessions_send COMPLETE_PACKET 到 callbackSessionKey -> 最后 NO_REPLY。
       禁止 ACK、禁止占位消息、禁止伪造 messageId、禁止 [[reply_to_current]]、禁止旧字段名。
 - routes:
-  - { peerKind: "group", peerId: "oc_<客户团队群ID待填>", accountId: "marketing_bot", agentId: "supervisor_agent" }
-  - { peerKind: "group", peerId: "oc_<客户团队群ID待填>", accountId: "ecommerce_market_bot", agentId: "ops_agent" }
-  - { peerKind: "group", peerId: "oc_<客户团队群ID待填>", accountId: "finance_bot", agentId: "finance_agent" }
+  - { peerKind: "group", peerId: "oc_426bc13db95838b2aa9a327a20ee71ea", accountId: "marketing-bot", agentId: "supervisor_agent" }
+  - { peerKind: "group", peerId: "oc_426bc13db95838b2aa9a327a20ee71ea", accountId: "ecom-market-bot", agentId: "ops_agent" }
+  - { peerKind: "group", peerId: "oc_426bc13db95838b2aa9a327a20ee71ea", accountId: "default", agentId: "finance_agent" }
 - sessionPolicy:
   - resetByType.group: { mode: "idle", idleMinutes: 1440 }
   - resetTriggers: ["/reset", "/new"]
@@ -773,7 +782,7 @@ V4_3_CANARY_OK: jobRef=TG-20260307-031 title=3天限时促销 status=done ops_pr
 ```bash
 python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_session_hygiene.py \
   --home ~/.openclaw \
-  --group-peer-id oc_<客户团队群ID待填> \
+  --group-peer-id oc_426bc13db95838b2aa9a327a20ee71ea \
   --include-workers \
   --delete-transcripts
 ```
@@ -781,8 +790,8 @@ python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_session_hygiene.p
 再在团队群做一次性初始化：
 
 ```text
-@电商市场机器人 WARMUP
-@财务机器人 WARMUP
+@3-电商市场机器人 WARMUP
+@3-财务机器人 WARMUP
 ```
 
 预期：
@@ -798,7 +807,7 @@ python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_session_hygiene.p
 推荐先发短版测试词：
 
 ```text
-@营销机器人 启动本群高级团队模式：
+@3-营销机器人 启动本群高级团队模式：
 
 我们要做一轮“电商大促预热 + 店铺转化提升”的联合方案。
 目标：7 天新增 GMV 30 万；营销与投放预算不超过 3 万；综合毛利率不低于 28%；库存周转天数不高于 35 天。
@@ -845,7 +854,7 @@ python3 skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_3_canary.py \
 预期：
 - 返回 `V4_3_CANARY_OK`
 - SQLite 中该任务 `status=done`
-- `job_participants` 中运营与财务都写入了真实 `progress_message_id` 与 `final_message_id`
+- `job_participants` 中电商市场与财务都写入了真实 `progress_message_id` 与 `final_message_id`
 
 ### 五、队列与恢复测试（可选但建议）
 

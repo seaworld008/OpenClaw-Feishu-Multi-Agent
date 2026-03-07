@@ -1291,13 +1291,17 @@ class V431DocumentationContentTests(unittest.TestCase):
         content = V4_3_1_C1_DOC.read_text(encoding="utf-8")
 
         self.assertIn("V4.3.1-C1.0", content)
-        self.assertIn("marketing_bot", content)
-        self.assertIn("ecommerce_market_bot", content)
-        self.assertIn("finance_bot", content)
+        self.assertIn("marketing-bot", content)
+        self.assertIn("ecom-market-bot", content)
+        self.assertIn("default", content)
         self.assertIn("cli_a926a086e9389cba", content)
         self.assertIn("cli_a926a17fd0b8dcc4", content)
         self.assertIn("cli_a92123297f78dcb0", content)
-        self.assertIn("oc_<客户团队群ID待填>", content)
+        self.assertIn("oc_426bc13db95838b2aa9a327a20ee71ea", content)
+        self.assertIn("3-营销机器人", content)
+        self.assertIn("3-电商市场机器人", content)
+        self.assertIn("3-财务机器人", content)
+        self.assertIn("当前 OpenClaw accountId 未改名", content)
 
     def test_v431_c1_doc_keeps_three_bot_six_expert_mapping(self):
         content = V4_3_1_C1_DOC.read_text(encoding="utf-8")
