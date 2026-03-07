@@ -34,6 +34,9 @@
 - [ ] （V4.2）若返回 `TIMEOUT_BUT_WORKER_DELIVERED`，已检查 worker 回包证据，并确认 supervisor 具备二次收口策略
 - [ ] （V4.2）若详细执行任务采用 fire-and-forget，已确认 `dispatchEvidence` 中记录 `accepted`，并通过 `sessions_history` / worker session jsonl 完成二次收口
 - [ ] （V4.2）若出现被 `@` 后 `NO_REPLY`，已同时检查 `messages.groupChat.mentionPatterns`、supervisor `groupChat.mentionPatterns` 与 `PLAIN_TEXT` / 代码块包裹兼容
+- [ ] （V4.2）若刚改过 supervisor / mention / tools / sendPolicy，已 fresh session 后再验收；不要直接沿用旧团队群会话
+- [ ] （V4.2）若 fresh session 已创建，已确认 `supervisor_agent` workspace 不再保留默认 `BOOTSTRAP.md`，且 `IDENTITY.md` / `USER.md` / `SOUL.md` 已生产化
+- [ ] （V4.2）若 `sessions_send` 出现 `No session found`，已核对主管使用的固定 sessionKey 是否为 `agent:<agentId>:feishu:group:<peerId>`
 - [ ] （V4.2）执行 `scripts/check_v4_2_team_canary.sh` 后，结果已记录到验收报告
 
 ## D. 稳定性验证

@@ -134,6 +134,9 @@ python3 scripts/build_openclaw_feishu_snippets.py \
 - V4.2 若出现 `TIMEOUT_BUT_WORKER_DELIVERED`：说明 worker 已执行但 supervisor 仍以 timeout 未收口，应优先补 timeout 二次判定或 ACK 双阶段派单
 - V4.2 若 ACK 成功但详细任务持续超时：优先改为 `ACK timeoutSeconds=15 + 详细任务 timeoutSeconds=0 + sessions_history 二次收口`
 - V4.2 若出现 `TRIGGER_MISS_ON_MENTION_OR_FORMAT_WRAP`：说明被提及后仍没进入工具链，应优先同时补 `messages.groupChat.mentionPatterns`、`agents.list[].groupChat.mentionPatterns` 与 `PLAIN_TEXT` / 代码块包裹兼容
+- V4.2 若配置已经升级但 supervisor 仍表现出旧行为：优先怀疑 stale group session。群级 system prompt 只在新 group session 第一轮生效，应先单独发送 `/reset`，或由运维清理该 group 的 supervisor session 映射并重启 gateway，再用新 `taskId` 复测
+- V4.2 若 fresh session 已创建但 supervisor 仍持续 `tool_call_required/no_tool_call`：继续检查 `supervisor_agent` workspace 是否残留默认 `BOOTSTRAP.md` 与空白身份模板；生产单群团队 Agent 不应保留首次引导工作区残留
+- V4.2 若 `sessions_send` 报 `No session found`：先查 sessionKey 是否写错。飞书群聊必须使用官方完整键 `agent:<agentId>:feishu:group:<peerId>`，不要使用 `feishu:chat:...` 或其他自造格式
 - 公开群里的 `@其他机器人` 只能作为展示层，不应作为控制面正确性的唯一证据
 
 ## 可直接复用的文件

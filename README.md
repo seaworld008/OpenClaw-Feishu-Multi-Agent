@@ -855,6 +855,9 @@ agents:
 13. V4.2 若出现 `TIMEOUT_BUT_WORKER_DELIVERED`，说明 worker 已执行但 supervisor 还没完成二次收口，应优先做 timeout 二次判定或 ACK 派单。
 14. V4.2 若出现 `TRIGGER_MISS_ON_MENTION_OR_FORMAT_WRAP`，说明被 `@` 后仍没进工具链，应同时补 `messages.groupChat.mentionPatterns`、`agents.list[].groupChat.mentionPatterns`，并兼容 `PLAIN_TEXT` / 代码块包裹文本。
 15. V4.2 若 ACK 能成功但详细任务常超时，优先改为“ACK `timeoutSeconds=15` + 详细任务 `timeoutSeconds=0` + `sessions_history` 追收正文结果”。
+16. V4.2 若你已经升级了 prompt / mention / tools，但主管仍明显表现出旧行为，优先怀疑 stale group session。官方群文档说明群级 system prompt 只在新 group session 第一轮进入上下文；此时应先单独发送 `/reset`，或由运维清理该 group 的 supervisor session 映射后重启 gateway，再用新 `taskId` 复测。
+17. V4.2 若 fresh session 已创建，但主管第一轮仍持续 `tool_call_required/no_tool_call`，检查 `supervisor_agent` 的 workspace 是否还保留默认 `BOOTSTRAP.md` 与空白 `IDENTITY.md` / `USER.md` 模板。单群团队模式的生产 workspace 应直接定义为“主管团队 Agent”，不要保留首次引导残留。
+18. V4.2 若 `sessions_send` 报 `No session found`，优先检查主管是否用了错误的 `sessionKey`。飞书群聊应使用官方完整格式：`agent:<agentId>:feishu:group:<peerId>`；不要使用 `feishu:chat:...` 或自造短键。
 
 V3 建议加一道自动门禁（2 分钟窗口）：
 ```bash
@@ -915,6 +918,9 @@ V4/V4.1/V4.2 验收补充：
 - 若返回 `TIMEOUT_BUT_WORKER_DELIVERED`，优先检查 worker session jsonl、二次收口逻辑，以及是否应采用 ACK -> 正文 的双阶段派单
 - 若返回 `TRIGGER_MISS_ON_MENTION_OR_FORMAT_WRAP`，优先检查 `messages.groupChat.mentionPatterns`、supervisor `groupChat.mentionPatterns` 与输入包裹兼容
 - 单群生产推荐把详细执行任务改为 `timeoutSeconds=0`，再用 `sessions_history` / worker session jsonl 做二次收口
+- 若刚升级过 V4.2 配置，先 fresh session 再测：优先单独发送 `/reset`，不要直接沿用旧团队群会话
+- 若 fresh session 已生效但仍无工具调用，继续排查 workspace 初始化状态：`BOOTSTRAP.md` 应移除，`IDENTITY.md` / `USER.md` / `SOUL.md` 应完成生产化
+- 若 `sessions_send` 返回 `No session found`，先核对使用的是不是 `agent:ops_agent:feishu:group:<peerId>` / `agent:finance_agent:feishu:group:<peerId>`
 
 ## 维护约定
 

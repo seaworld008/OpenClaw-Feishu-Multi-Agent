@@ -164,6 +164,39 @@ class V42CanaryScriptTests(unittest.TestCase):
             )
             return result
 
+    def run_script_without_rg(self, session_files, *extra_args):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            agents_root = root / "agents"
+            log_path = root / "openclaw.log"
+            log_path.write_text("", encoding="utf-8")
+
+            for rel_path, content in session_files.items():
+                target = agents_root / rel_path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(content, encoding="utf-8")
+
+            env = dict(**subprocess.os.environ)
+            env["PATH"] = "/usr/bin:/bin"
+            result = subprocess.run(
+                [
+                    "bash",
+                    str(V4_2_CANARY_SCRIPT),
+                    "--session-root",
+                    str(agents_root),
+                    "--log",
+                    str(log_path),
+                    "--start-line",
+                    "0",
+                    *extra_args,
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+                env=env,
+            )
+            return result
+
     def test_v42_canary_reports_list_miss_when_send_path_exists(self):
         result = self.run_script(
             {
@@ -262,8 +295,52 @@ class V42CanaryScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertIn("TEAM_CANARY_OK", result.stdout)
 
+    def test_v42_canary_falls_back_without_rg(self):
+        result = self.run_script_without_rg(
+            {
+                "supervisor_agent/sessions/s1.jsonl": "\n".join(
+                    [
+                        "task team-v4-2-001",
+                        "dispatchEvidence",
+                        "sessions_send target=agent:ops_agent:feishu:group:oc_demo sendStatus=ok runId=run-ops sentAt=2026-03-06T12:00:00Z evidenceSource=session-jsonl",
+                        "sessions_send target=agent:finance_agent:feishu:group:oc_demo sendStatus=ok runId=run-fin sentAt=2026-03-06T12:00:01Z evidenceSource=session-jsonl",
+                    ]
+                ),
+                "ops_agent/sessions/o1.jsonl": "team-v4-2-001 ops task received",
+                "finance_agent/sessions/f1.jsonl": "team-v4-2-001 finance task received",
+            },
+            "--task-id",
+            "team-v4-2-001",
+        )
 
-class V42DocumentationTests(unittest.TestCase):
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("TEAM_CANARY_OK", result.stdout)
+
+
+class V42DocumentationContentTests(unittest.TestCase):
+    def test_v42_doc_requires_fresh_session_after_prompt_changes(self):
+        content = V4_2_DOC.read_text(encoding="utf-8")
+
+        self.assertIn("/reset", content)
+        self.assertIn("新 group session 的第一轮", content)
+        self.assertIn("不要直接拿旧群会话继续测", content)
+
+    def test_v42_doc_requires_workspace_initialization(self):
+        content = V4_2_DOC.read_text(encoding="utf-8")
+
+        self.assertIn("BOOTSTRAP.md", content)
+        self.assertIn("IDENTITY.md", content)
+        self.assertIn("生产工作区必须完成初始化", content)
+
+
+    def test_v42_doc_requires_official_session_key_format(self):
+        content = V4_2_DOC.read_text(encoding="utf-8")
+
+        self.assertIn("agent:<agentId>:feishu:group:<peerId>", content)
+        self.assertIn("禁止使用 `feishu:chat:...`", content)
+
+
+class V42DocumentationExecutionTests(unittest.TestCase):
     def test_v42_doc_requires_history_check_and_fire_and_forget(self):
         content = V4_2_DOC.read_text(encoding="utf-8")
 

@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.1.3] - 2026-03-07
+
+### Added
+- 为 `V4.2` 增加基于远端 VMware 实测沉淀的两类运行前提：
+  - 群级 prompt 变更后必须 fresh session（优先 `/reset`）
+  - `supervisor_agent` 工作区必须完成生产化初始化，不能保留默认 `BOOTSTRAP.md`
+- 新增自动化测试，覆盖：
+  - `V4.2` 文档要求 fresh session
+  - `V4.2` 文档要求生产化 workspace 初始化
+  - `V4.2` 文档要求使用官方完整 `sessionKey` 格式
+  - `check_v4_2_team_canary.sh` 在无 `rg` 环境下的回退执行
+
+### Changed
+- `V4.2` 主文档、README、SKILL、验收清单统一补充：
+  - stale group session 的恢复步骤
+  - workspace bootstrap 残留的排障规则
+  - 飞书单群 `sessionKey` 必须使用 `agent:<agentId>:feishu:group:<peerId>`
+- `check_v4_2_team_canary.sh` 改为在缺少 `rg` 时自动回退到 Python 检索，不再依赖目标机器预装 ripgrep。
+
+### Fixed
+- 修复 `V4.2` 在 fresh session 后仍可能被默认 workspace bootstrap 稀释掉团队调度行为的问题。
+- 修复 `V4.2` 文档对固定 `sessionKey` 格式约束不够硬，导致主管错误使用 `feishu:chat:...` 并触发 `No session found` 的问题。
+- 修复远端验收脚本在没有 `rg` 的客户环境下会假失败的问题。
+
 ## [1.1.2] - 2026-03-07
 
 ### Added

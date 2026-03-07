@@ -118,8 +118,91 @@ cleanup() {
 }
 trap cleanup EXIT
 
+HAS_RG=0
+if command -v rg >/dev/null 2>&1; then
+  HAS_RG=1
+fi
+
 trim() {
   echo "$1" | xargs
+}
+
+search_fixed_in_path() {
+  local needle="$1"
+  local target="$2"
+  if [[ ! -e "$target" ]]; then
+    return 1
+  fi
+  if [[ "$HAS_RG" -eq 1 ]]; then
+    rg -q --fixed-strings "$needle" "$target"
+    return
+  fi
+  python3 - "$needle" "$target" <<'PY'
+import pathlib, sys
+needle = sys.argv[1]
+target = pathlib.Path(sys.argv[2])
+paths = [target] if target.is_file() else [p for p in target.rglob("*") if p.is_file()]
+for path in paths:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except Exception:
+        continue
+    if needle in text:
+        raise SystemExit(0)
+raise SystemExit(1)
+PY
+}
+
+search_regex_in_path() {
+  local pattern="$1"
+  local target="$2"
+  if [[ ! -e "$target" ]]; then
+    return 1
+  fi
+  if [[ "$HAS_RG" -eq 1 ]]; then
+    rg -q "$pattern" "$target"
+    return
+  fi
+  python3 - "$pattern" "$target" <<'PY'
+import pathlib, re, sys
+pattern = re.compile(sys.argv[1])
+target = pathlib.Path(sys.argv[2])
+paths = [target] if target.is_file() else [p for p in target.rglob("*") if p.is_file()]
+for path in paths:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except Exception:
+        continue
+    if pattern.search(text):
+        raise SystemExit(0)
+raise SystemExit(1)
+PY
+}
+
+search_multiline_in_path() {
+  local pattern="$1"
+  local target="$2"
+  if [[ ! -e "$target" ]]; then
+    return 1
+  fi
+  if [[ "$HAS_RG" -eq 1 ]]; then
+    rg -q --multiline "$pattern" "$target"
+    return
+  fi
+  python3 - "$pattern" "$target" <<'PY'
+import pathlib, re, sys
+pattern = re.compile(sys.argv[1], re.S)
+target = pathlib.Path(sys.argv[2])
+paths = [target] if target.is_file() else [p for p in target.rglob("*") if p.is_file()]
+for path in paths:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except Exception:
+        continue
+    if pattern.search(text):
+        raise SystemExit(0)
+raise SystemExit(1)
+PY
 }
 
 agent_session_dir() {
@@ -131,12 +214,12 @@ agent_has_session_task() {
   local agent="$1"
   local dir
   dir="$(agent_session_dir "$agent")"
-  [[ -d "$dir" ]] && rg -q --fixed-strings "$TASK_ID" "$dir"
+  [[ -d "$dir" ]] && search_fixed_in_path "$TASK_ID" "$dir"
 }
 
 agent_has_log_trace() {
   local agent="$1"
-  [[ -n "$TMP_LOG" ]] && rg -q "session=agent:${agent}:" "$TMP_LOG"
+  [[ -n "$TMP_LOG" ]] && search_regex_in_path "session=agent:${agent}:" "$TMP_LOG"
 }
 
 supervisor_has_send_path_for_agent() {
@@ -150,10 +233,10 @@ supervisor_has_send_path_for_agent() {
     "${agent}.*runId|runId.*${agent}"
   )
   for pattern in "${patterns[@]}"; do
-    if [[ -d "$dir" ]] && rg -q --multiline "(?s)${TASK_ID}.*(${pattern})|(${pattern}).*${TASK_ID}" "$dir"; then
+    if [[ -d "$dir" ]] && search_multiline_in_path "(?s)${TASK_ID}.*(${pattern})|(${pattern}).*${TASK_ID}" "$dir"; then
       return 0
     fi
-    if [[ -n "$TMP_LOG" ]] && rg -q --multiline "(?s)${TASK_ID}.*(${pattern})|(${pattern}).*${TASK_ID}" "$TMP_LOG"; then
+    if [[ -n "$TMP_LOG" ]] && search_multiline_in_path "(?s)${TASK_ID}.*(${pattern})|(${pattern}).*${TASK_ID}" "$TMP_LOG"; then
       return 0
     fi
   done
@@ -164,20 +247,20 @@ supervisor_has_pattern() {
   local pattern="$1"
   local dir
   dir="$(agent_session_dir "$SUPERVISOR_AGENT")"
-  if [[ -d "$dir" ]] && rg -q "$pattern" "$dir"; then
+  if [[ -d "$dir" ]] && search_regex_in_path "$pattern" "$dir"; then
     return 0
   fi
-  [[ -n "$TMP_LOG" ]] && rg -q "$pattern" "$TMP_LOG"
+  [[ -n "$TMP_LOG" ]] && search_regex_in_path "$pattern" "$TMP_LOG"
 }
 
 supervisor_task_pattern() {
   local pattern="$1"
   local dir
   dir="$(agent_session_dir "$SUPERVISOR_AGENT")"
-  if [[ -d "$dir" ]] && rg -q --multiline "(?s)${TASK_ID}.*${pattern}|${pattern}.*${TASK_ID}" "$dir"; then
+  if [[ -d "$dir" ]] && search_multiline_in_path "(?s)${TASK_ID}.*${pattern}|${pattern}.*${TASK_ID}" "$dir"; then
     return 0
   fi
-  [[ -n "$TMP_LOG" ]] && rg -q --multiline "(?s)${TASK_ID}.*${pattern}|${pattern}.*${TASK_ID}" "$TMP_LOG"
+  [[ -n "$TMP_LOG" ]] && search_multiline_in_path "(?s)${TASK_ID}.*${pattern}|${pattern}.*${TASK_ID}" "$TMP_LOG"
 }
 
 print_source() {
