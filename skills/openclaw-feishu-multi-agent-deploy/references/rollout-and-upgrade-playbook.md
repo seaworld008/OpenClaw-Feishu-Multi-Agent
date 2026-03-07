@@ -5,8 +5,17 @@
 2. 生成配置 patch
 3. `openclaw config validate`
 4. 重启网关
+5. 若目标为 `V4.3.1`，先执行一次会话卫生：
+```bash
+python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_session_hygiene.py \
+  --home ~/.openclaw \
+  --group-peer-id <团队群peerId> \
+  --include-workers \
+  --delete-transcripts
+```
 5. 安装平台对应 watchdog（Linux/WSL2 用 `systemd --user`，macOS 用 `launchd`）
-6. 验收 checklist 全部通过
+6. 执行一次性 `WARMUP`
+7. 验收 checklist 全部通过
 
 ## B. 增量改造（Brownfield，推荐）
 1. 备份：
@@ -17,6 +26,14 @@ cp ~/.openclaw/openclaw.json ~/.openclaw/openclaw.json.bak.$TS
 2. 只改必要字段：`channels.feishu` + `bindings`
 3. canary 群验证（至少 2 条消息 + 1 次重启后复测）
 4. 放量到全量群
+
+### 会话卫生说明
+- 只改普通 bindings / account secret 时，通常不需要清 session。
+- 只要修改了以下任一项，就要先跑 `v4_3_session_hygiene.py`：
+  - `supervisor/ops/finance` 的 `systemPrompt`
+  - `callbackSessionKey`
+  - `COMPLETE_PACKET` 字段
+  - hidden main session 的消费逻辑
 
 ### 平台补充
 - Linux / WSL2：优先启用 `templates/systemd/v4-3-watchdog.service` + `templates/systemd/v4-3-watchdog.timer`

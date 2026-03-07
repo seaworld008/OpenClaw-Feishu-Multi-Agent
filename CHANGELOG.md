@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.5.1] - 2026-03-07
+
+### Added
+- 新增 `scripts/v4_3_session_hygiene.py`，用于首次上线、协议变更或脏上下文后，一次性清理 `supervisor group/main + worker group` 会话。
+- 新增 [V4.3.1 新机器快速启动 SOP](skills/openclaw-feishu-multi-agent-deploy/references/v4-3-1-quick-start.md)，统一 `init-db -> hygiene -> WARMUP -> canary` 的最小闭环。
+
+### Changed
+- `V4.3.1` 主文档、README、SKILL、上线手册和验收清单统一接入会话卫生流程。
+- `V4.3.1` 真实通过样板升级为 `TG-20260307-031`，并同步最新 `messageId` 与最终收口证据。
+- `deployment-inputs.example.yaml` 增加 `runtime_hygiene` 段，明确何时需要执行会话卫生脚本。
+
+### Fixed
+- 修复仓库只记录了人工恢复经验、没有把“快速启动 + 会话卫生”固化为标准交付步骤的问题。
+- 修复 `V4.3.1` 主文档和 README 仍引用旧成功样板 `TG-20260307-029` 的问题。
+
 ## [1.5.0] - 2026-03-07
 
 ### Added

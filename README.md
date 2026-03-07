@@ -4,7 +4,7 @@
 
 ## 当前版本
 
-- `v1.5.0`（2026-03-07）
+- `v1.5.1`（2026-03-07）
 - 默认技术路线：官方插件 `@openclaw/feishu`
 - 兼容路线：legacy `chat-feishu`
 - 单群演示推荐版：`V4.2.1`
@@ -76,6 +76,36 @@ openclaw config validate
 openclaw gateway restart
 openclaw agents list --bindings
 ```
+
+## V4.3.1 快速启动
+
+如果你的目标是“在一台新机器上快速拉起单群生产稳定版”，直接按这两个入口执行：
+
+1. 完整上线手册：
+- [V4.3.1 新机器快速启动 SOP](skills/openclaw-feishu-multi-agent-deploy/references/v4-3-1-quick-start.md)
+
+2. Codex 真实交付模板：
+- [V4.3.1 单群生产稳定版模板](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.3.1-single-group-production.md)
+
+其中最关键的两个命令是：
+
+```bash
+python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_job_registry.py \
+  --db ~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db \
+  init-db
+```
+
+```bash
+python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_session_hygiene.py \
+  --home ~/.openclaw \
+  --group-peer-id oc_f785e73d3c00954d4ccd5d49b63ef919 \
+  --include-workers \
+  --delete-transcripts
+```
+
+作用：
+1. `init-db`：初始化 SQLite 状态层
+2. `v4_3_session_hygiene.py`：在首次上线、协议变更或脏上下文后，一次性清理 `supervisor group/main + worker group` 会话，避免旧会话污染新任务
 
 ## V4.3.1 跨平台部署路线
 
@@ -822,7 +852,7 @@ routes:
 - V4.2.1 真实跑通样板：`team-v4-2-015`（运营/财务真实群发 messageId 后主管最终收口）
 - V4.3 单群生产版交叉验证（见 `references/source-cross-validation-2026-03-07.md`）
 - V4.3.1 生产稳定版：增加一次性初始化、watchdog、SQLite canary
-- V4.3.1 真实跑通样板：`TG-20260307-029`，最终状态 `done`，`check_v4_3_canary.py` 返回 `V4_3_CANARY_OK`
+- V4.3.1 真实跑通样板：`TG-20260307-031`，最终状态 `done`，`check_v4_3_canary.py` 返回 `V4_3_CANARY_OK`
 - 跨平台交叉验证：`references/source-cross-validation-2026-03-07-platforms.md`
 - 飞书开放平台官方文档（事件订阅、消息事件、鉴权）
 

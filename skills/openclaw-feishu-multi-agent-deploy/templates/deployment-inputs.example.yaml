@@ -105,6 +105,17 @@ tooling:
   session_send_policy:
     default: "allow"
 
+runtime_hygiene:
+  enabled: true
+  script: "skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_session_hygiene.py"
+  include_workers: true
+  delete_transcripts: true
+  required_after_changes:
+    - "group systemPrompt"
+    - "callbackSessionKey"
+    - "COMPLETE_PACKET schema"
+    - "hidden main session consumer"
+
 permissions:
   minimum:
     - "im:message"

@@ -100,6 +100,14 @@ python3 scripts/build_openclaw_feishu_snippets.py \
 - 先备份配置
 - 执行 `openclaw config validate`
 - 重启网关
+- 若是 `V4.3.1` 或任何协议字段改动（`systemPrompt / callbackSessionKey / COMPLETE_PACKET / hidden main`），先执行：
+```bash
+python3 scripts/v4_3_session_hygiene.py \
+  --home ~/.openclaw \
+  --group-peer-id <团队群peerId> \
+  --include-workers \
+  --delete-transcripts
+```
 - 先 canary 群验收，再全量放量
 
 8. 回归与验收
@@ -203,4 +211,5 @@ python3 scripts/build_openclaw_feishu_snippets.py \
   - `scripts/check_v3_dispatch_canary.sh`
   - `scripts/check_v4_1_team_canary.sh`
   - `scripts/check_v4_2_team_canary.sh`
-  - `scripts/check_v4_3_canary.py`
+- `scripts/check_v4_3_canary.py`
+- `scripts/v4_3_session_hygiene.py`

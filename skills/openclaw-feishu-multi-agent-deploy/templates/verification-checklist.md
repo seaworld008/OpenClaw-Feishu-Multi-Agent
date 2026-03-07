@@ -52,6 +52,7 @@
 - [ ] （V4.3）状态层（SQLite 或飞书多维表格镜像）中可查到 `jobRef`、状态、worker messageId 和最终收口证据
 - [ ] （V4.3）supervisor 只有在 `ops_agent` 与 `finance_agent` 都写入完整完成包后，才最终统一收口
 - [ ] （V4.3.1）部署完成后已做一次性 `WARMUP`，worker 的 team session 已创建成功
+- [ ] （V4.3.1）首次上线、协议变更或脏上下文恢复后，已先执行 `scripts/v4_3_session_hygiene.py`
 - [ ] （V4.3.1）worker 只发 1 条进度摘要和 1 条结论摘要，不再出现“任务已接收/等待具体内容”
 - [ ] （V4.3.1）运营与财务的结论摘要允许多行完整输出，不再被压成一句话
 - [ ] （V4.3.1）supervisor 在群里只发接单与最终收口两条消息，不再插入中间状态播报

@@ -11,12 +11,13 @@
 5. 群里不再泄漏 `ACK_READY / REPLY_SKIP / COMPLETE_PACKET` 这类内部协议
 
 真实验收样板：
-- `jobRef`: `TG-20260307-029`
+- `jobRef`: `TG-20260307-031`
 - `status`: `done`
-- `ops_progress`: `om_x100b55f415d54ca8b4a251aefedbe8e`
-- `ops_final`: `om_x100b55f415ec7cb0b285c5a23638f30`
-- `finance_progress`: `om_x100b55f410fb0d3cb260eaa520d7198`
-- `finance_final`: `om_x100b55f4108d94acb2c4d97d6c72f29`
+- `ops_progress`: `om_x100b55f5a7482cb0c34ce9dee645486`
+- `ops_final`: `om_x100b55f5a74660a4c4f55650cc2fa81`
+- `finance_progress`: `om_x100b55f5a57560b0b27e52c4be5a996`
+- `finance_final`: `om_x100b55f5a50d34a4b2cce0ae416508c`
+- `supervisor_final`: `om_x100b55f5beb1a908b3df8e78d8a7bc5`
 - canary 输出：`V4_3_CANARY_OK`
 
 ## 当前最新生产配置快照（真实值）
@@ -116,6 +117,31 @@
 2. 平台差异只体现在 watchdog 托管、service manager 命令和运维 SOP。
 3. Windows 客户默认按 `WSL2` 交付；如果客户坚持原生 Windows，需要额外记录偏差。
 
+## 快速启动命令（新机器最小闭环）
+
+先初始化 SQLite：
+
+```bash
+python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_job_registry.py \
+  --db ~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db \
+  init-db
+```
+
+再执行一次会话卫生：
+
+```bash
+python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_session_hygiene.py \
+  --home ~/.openclaw \
+  --group-peer-id oc_f785e73d3c00954d4ccd5d49b63ef919 \
+  --include-workers \
+  --delete-transcripts
+```
+
+说明：
+1. `init-db` 负责初始化状态层，不会切断旧 team session。
+2. `v4_3_session_hygiene.py` 负责清理 `supervisor group/main + worker group` 会话，适用于首次上线、协议变更、脏上下文恢复。
+3. 正确顺序必须是：`init-db -> hygiene -> WARMUP -> validate/restart -> canary`。
+
 ## 生产架构
 
 ```mermaid
@@ -186,6 +212,7 @@ READY_FOR_TEAM_GROUP|agentId=finance_agent
 - 这一步的目的是创建 worker 的 team session
 - 日常使用不需要重复做
 - 只有在清理 team session、重建环境、迁移群之后才需要重新初始化
+- 如果刚执行过 `v4_3_session_hygiene.py`，必须重新做一次 `WARMUP`
 
 ## SQLite 状态层
 
@@ -600,7 +627,7 @@ launchctl print gui/$(id -u)/bot.molt.v4-3-watchdog
 ```bash
 python3 skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_3_canary.py \
   --db ~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db \
-  --job-ref TG-20260307-029 \
+  --job-ref TG-20260307-031 \
   --session-root ~/.openclaw/agents \
   --require-visible-messages
 ```
@@ -615,7 +642,7 @@ python3 skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_3_canary.py \
 真实通过输出：
 
 ```text
-V4_3_CANARY_OK: jobRef=TG-20260307-029 title=4月签约冲刺：视频号直播+私域转化 status=done ops_progress=om_x100b55f415d54ca8b4a251aefedbe8e ops_final=om_x100b55f415ec7cb0b285c5a23638f30 finance_progress=om_x100b55f410fb0d3cb260eaa520d7198 finance_final=om_x100b55f4108d94acb2c4d97d6c72f29
+V4_3_CANARY_OK: jobRef=TG-20260307-031 title=3天限时促销 status=done ops_progress=om_x100b55f5a7482cb0c34ce9dee645486 ops_final=om_x100b55f5a74660a4c4f55650cc2fa81 finance_progress=om_x100b55f5a57560b0b27e52c4be5a996 finance_final=om_x100b55f5a50d34a4b2cce0ae416508c
 ```
 
 ## Codex 真实交付模板（V4.3.1，完整可执行版）
@@ -703,26 +730,39 @@ V4_3_CANARY_OK: jobRef=TG-20260307-029 title=4月签约冲刺：视频号直播+
 8) 必须输出 group session reset 策略，避免旧 transcript 长期污染。
 9) 若目标平台是 macOS，输出 launchd 安装命令；若目标平台是 wsl2，输出 systemd --user 安装命令；不要给 Windows 原生 service 方案。
 10) 上线步骤里显式加入一次性 WARMUP 前置，不要把它写成每次任务都要做。
-11) 输出完整命令：
+11) 上线步骤里显式加入 `v4_3_session_hygiene.py`，顺序必须是：备份 -> init-db -> hygiene -> WARMUP -> validate -> restart -> canary。
+12) supervisor 必须把 `Chat history since last reply` 当作不可信补充上下文；历史里即使出现 `WARMUP`，也不能把本轮正式任务误判成初始化消息。
+13) 输出完整命令：
    - 备份
    - 初始化 SQLite
+   - 会话卫生
    - 一次性 WARMUP
    - validate
    - restart
    - watchdog
    - canary
    - rollback
-12) 最后输出“真实用户使用示例”：用户不写 taskId，只自然发任务；然后展示系统如何自动生成 jobRef。
-13) 最后输出“部署后测试顺序”：先发什么，再发什么，再跑什么命令，每一步的预期效果是什么。
-14) 不允许再把 systemPrompt 缩写成概念性描述，必须按本模板里的真实生产规则写入。
-15) 如果目标机器是 Windows，默认改成 WSL2 路线；不要输出 Windows 原生 service 安装方案。
+14) 最后输出“真实用户使用示例”：用户不写 taskId，只自然发任务；然后展示系统如何自动生成 jobRef。
+15) 最后输出“部署后测试顺序”：先发什么，再发什么，再跑什么命令，每一步的预期效果是什么。
+16) 不允许再把 systemPrompt 缩写成概念性描述，必须按本模板里的真实生产规则写入。
+17) 如果目标机器是 Windows，默认改成 WSL2 路线；不要输出 Windows 原生 service 安装方案。
 ```
 
 ## 部署后测试顺序（必须写给客户和 Codex）
 
 ### 一、初始化阶段
 
-先在团队群做一次性初始化：
+先执行会话卫生：
+
+```bash
+python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_session_hygiene.py \
+  --home ~/.openclaw \
+  --group-peer-id oc_f785e73d3c00954d4ccd5d49b63ef919 \
+  --include-workers \
+  --delete-transcripts
+```
+
+再在团队群做一次性初始化：
 
 ```text
 @小龙虾找妈妈 WARMUP

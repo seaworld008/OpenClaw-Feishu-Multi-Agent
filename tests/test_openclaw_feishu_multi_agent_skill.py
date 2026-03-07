@@ -19,6 +19,8 @@ V4_3_DOC = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/cod
 V4_3_1_DOC = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.3.1-single-group-production.md"
 V4_3_SQL = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/v4-3-job-registry.example.sql"
 V4_3_REGISTRY = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_job_registry.py"
+V4_3_HYGIENE_SCRIPT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_session_hygiene.py"
+V4_3_QUICKSTART_DOC = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/v4-3-1-quick-start.md"
 LAUNCHD_TEMPLATE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/launchd/v4-3-watchdog.plist"
 WSL_CONF_TEMPLATE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/windows/wsl.conf.example"
 WINDOWS_WSL2_NOTES = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/windows-wsl2-deployment-notes.md"
@@ -1236,8 +1238,9 @@ class V431DocumentationContentTests(unittest.TestCase):
         self.assertIn("主管接单", content)
         self.assertIn("运营进度", content)
         self.assertIn("财务结论", content)
-        self.assertIn("TG-20260307-029", content)
+        self.assertIn("TG-20260307-031", content)
         self.assertIn("V4_3_CANARY_OK", content)
+        self.assertIn("om_x100b55f5beb1a908b3df8e78d8a7bc5", content)
 
     def test_v431_doc_embeds_real_production_config_values(self):
         content = V4_3_1_DOC.read_text(encoding="utf-8")
@@ -1269,11 +1272,120 @@ class V431DocumentationContentTests(unittest.TestCase):
         content = V4_3_1_DOC.read_text(encoding="utf-8")
 
         self.assertIn("部署后测试顺序（必须写给客户和 Codex）", content)
+        self.assertIn("v4_3_session_hygiene.py", content)
         self.assertIn("@小龙虾找妈妈 WARMUP", content)
         self.assertIn("@易燃易爆 WARMUP", content)
         self.assertIn("群里预期顺序", content)
         self.assertIn("命令行验收", content)
         self.assertIn("队列与恢复测试", content)
+
+    def test_v431_doc_mentions_history_guard_after_warmup(self):
+        content = V4_3_1_DOC.read_text(encoding="utf-8")
+
+        self.assertIn("Chat history since last reply", content)
+        self.assertIn("WARMUP", content)
+        self.assertIn("不能把本轮正式任务误判成初始化消息", content)
+
+
+class V431QuickStartAndHygieneTests(unittest.TestCase):
+    def run_hygiene(self, home_path, *args):
+        result = subprocess.run(
+            [
+                "python3",
+                str(V4_3_HYGIENE_SCRIPT),
+                "--home",
+                str(home_path),
+                "--group-peer-id",
+                "oc_demo_group",
+                *args,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return result
+
+    def test_quickstart_doc_covers_hygiene_then_warmup_then_canary(self):
+        content = V4_3_QUICKSTART_DOC.read_text(encoding="utf-8")
+
+        self.assertIn("v4_3_session_hygiene.py", content)
+        self.assertIn("WARMUP", content)
+        self.assertIn("check_v4_3_canary.py", content)
+        self.assertIn("3 天限时促销", content)
+
+    def test_deployment_inputs_document_runtime_hygiene(self):
+        content = (REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/deployment-inputs.example.yaml").read_text(encoding="utf-8")
+
+        self.assertIn("runtime_hygiene", content)
+        self.assertIn("group systemPrompt", content)
+        self.assertIn("hidden main session consumer", content)
+
+    def test_hygiene_script_removes_group_and_main_sessions(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir) / ".openclaw"
+            sup_dir = home / "agents" / "supervisor_agent" / "sessions"
+            sup_dir.mkdir(parents=True, exist_ok=True)
+            sessions_json = sup_dir / "sessions.json"
+            sessions_json.write_text(
+                json.dumps(
+                    {
+                        "agent:supervisor_agent:feishu:group:oc_demo_group": "sup-group-1",
+                        "agent:supervisor_agent:main": {
+                            "sessionId": "sup-main-1",
+                            "sessionFile": str(sup_dir / "sup-main-1.jsonl"),
+                        },
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            (sup_dir / "sup-group-1.jsonl").write_text("old group transcript", encoding="utf-8")
+            (sup_dir / "sup-main-1.jsonl").write_text("old main transcript", encoding="utf-8")
+
+            result = self.run_hygiene(home, "--delete-transcripts")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            statuses = {(item["agentId"], item["sessionKey"]): item["status"] for item in payload["results"]}
+            self.assertEqual(statuses[("supervisor_agent", "agent:supervisor_agent:feishu:group:oc_demo_group")], "removed")
+            self.assertEqual(statuses[("supervisor_agent", "agent:supervisor_agent:main")], "removed")
+
+            current = json.loads(sessions_json.read_text(encoding="utf-8"))
+            self.assertEqual(current, {})
+            self.assertFalse((sup_dir / "sup-group-1.jsonl").exists())
+            self.assertFalse((sup_dir / "sup-main-1.jsonl").exists())
+
+    def test_hygiene_script_include_workers_and_dry_run(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir) / ".openclaw"
+            for agent_id, session_id in [("ops_agent", "ops-1"), ("finance_agent", "fin-1")]:
+                session_dir = home / "agents" / agent_id / "sessions"
+                session_dir.mkdir(parents=True, exist_ok=True)
+                (session_dir / "sessions.json").write_text(
+                    json.dumps(
+                        {
+                            f"agent:{agent_id}:feishu:group:oc_demo_group": {
+                                "sessionId": session_id,
+                                "sessionFile": str(session_dir / f"{session_id}.jsonl"),
+                            }
+                        },
+                        ensure_ascii=False,
+                        indent=2,
+                    ),
+                    encoding="utf-8",
+                )
+                (session_dir / f"{session_id}.jsonl").write_text("worker transcript", encoding="utf-8")
+
+            result = self.run_hygiene(home, "--include-workers", "--delete-transcripts", "--dry-run")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["includeWorkers"], True)
+            statuses = [item["status"] for item in payload["results"] if item["agentId"] in {"ops_agent", "finance_agent"}]
+            self.assertTrue(all(status == "would_remove" for status in statuses))
+            self.assertTrue((home / "agents" / "ops_agent" / "sessions" / "ops-1.jsonl").exists())
+            self.assertTrue((home / "agents" / "finance_agent" / "sessions" / "fin-1.jsonl").exists())
 
 
 if __name__ == "__main__":
