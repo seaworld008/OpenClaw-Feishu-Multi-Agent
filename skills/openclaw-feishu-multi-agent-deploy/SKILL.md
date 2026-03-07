@@ -17,6 +17,17 @@ description: Use when delivering production-ready OpenClaw Feishu multi-agent se
 - 默认 `match.channel = "feishu"`
 - `chat-feishu` 仅作为历史配置兼容路径
 
+## 平台兼容策略
+- `Linux`：正式推荐，默认按 `systemd --user` 交付
+- `macOS`：正式推荐，默认按 `launchd / LaunchAgent` 交付
+- `Windows + WSL2`：正式推荐，复用 Linux 运行模型
+- `Windows 原生`：不作为默认生产路径；若客户坚持原生部署，必须单独记录偏差与未验证项
+
+平台原则：
+1. `V4.3.1` 的协议、SQLite、canary、WARMUP 不分平台分叉。
+2. 平台差异只体现在 service manager、watchdog 模板和运维 SOP。
+3. Windows 客户默认输出 `WSL2` 路线，不要把原生 Windows service 写成与 Linux 等价。
+
 ## 何时使用
 - 客户要求在飞书里搭建多 Agent 团队（各司其职）
 - 需要把不同群/私聊稳定路由到不同 Agent
@@ -49,6 +60,8 @@ description: Use when delivering production-ready OpenClaw Feishu multi-agent se
 - 检查 OpenClaw 与插件版本
 - 检查飞书权限与事件订阅
 - 明确变更窗口和回滚责任人
+- 明确目标平台：`linux` / `macos` / `wsl2`；若是 Windows，默认先收敛为 `wsl2`
+- 明确 service manager：`systemd --user` / `launchd` / `manual`
 
 2. 模式识别
 - 如果现网已用 `channels.feishu.*`，保持插件模式
@@ -108,6 +121,7 @@ python3 scripts/build_openclaw_feishu_snippets.py \
 - 最终 patch（只含本次改动）
 - `to_add` / `to_update` / `to_keep_unchanged`
 - 变更命令、验证命令、回滚命令
+- 按平台分支的 service manager 命令（Linux/WSL2 用 `systemd --user`，macOS 用 `launchd`，Windows 默认给 `WSL2` 方案）
 - 验收结果（通过/失败 + 证据）
 - （可选）`tools.agentToAgent` 的启用范围与风险说明
 - （V3 可选）`tools.allow`（是否包含 `group:sessions`）
@@ -147,6 +161,8 @@ python3 scripts/build_openclaw_feishu_snippets.py \
 - V4.3 若用户补充说明被错误识别成新任务：先补“消息分类”规则，再补状态层，不要继续堆 prompt 文案
 - V4.3.1 若 worker 频繁卡在旧行为：优先怀疑旧 team session 沿用了旧 prompt；应关闭当前 active job，清空三方 team session，并重新执行一次性 `WARMUP`
 - V4.3.1 若任务长期卡住阻塞后续消息：不要要求用户重发或手工排障；优先执行 `watchdog-tick`，让 stale active job 自动失败并释放队列
+- macOS 客户不要套用 `systemctl --user`；应使用 `launchctl bootstrap/print` 与 `templates/launchd/v4-3-watchdog.plist`
+- Windows 客户不要默认承诺原生 service 版；应优先交付 `WSL2`，并引用 `references/windows-wsl2-deployment-notes.md`
 - V4.3.1 若需要证明“真的稳定”，不要只看群聊观感；必须同时核对 SQLite `jobs/job_participants` 与 `check_v4_3_canary.py`
 - V4.3.1 若群里仍泄漏 `ACK_READY / REPLY_SKIP / COMPLETE_PACKET`：优先检查 worker 的 callback 是否仍打到主管群会话；生产版必须统一回到 `agent:supervisor_agent:main`，内部协议最终只输出 `NO_REPLY`
 - V4.3.1 若主管收不到最终完成包：优先检查 `mark-worker-complete` 是否仍强依赖 `--account-id/--role`；当前稳定版应允许这两个参数兜底，不应因字段漂移卡死
@@ -162,6 +178,10 @@ python3 scripts/build_openclaw_feishu_snippets.py \
   - `templates/verification-checklist.md`
   - `templates/systemd/v4-3-watchdog.service`
   - `templates/systemd/v4-3-watchdog.timer`
+  - `templates/launchd/v4-3-watchdog.plist`
+  - `templates/windows/wsl.conf.example`
+  - `references/windows-wsl2-deployment-notes.md`
+  - `references/source-cross-validation-2026-03-07-platforms.md`
 - 输入样板：
   - `references/input-template.json`
   - `references/input-template-plugin.json`

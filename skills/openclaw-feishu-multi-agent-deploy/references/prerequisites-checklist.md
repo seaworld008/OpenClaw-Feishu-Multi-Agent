@@ -3,6 +3,8 @@
 ## 1. OpenClaw 侧
 - 已安装 OpenClaw，建议版本 `v2026.3.1+`
 - 已安装官方 Feishu 插件：`@openclaw/feishu`
+- 已明确目标平台：`Linux` / `macOS` / `WSL2`
+- 若客户是 Windows，默认采用 `WSL2`，不把 Windows 原生 service 作为默认生产路线
 - 可访问并修改配置文件：`~/.openclaw/openclaw.json`
 - 可执行命令：
   - `openclaw config validate`

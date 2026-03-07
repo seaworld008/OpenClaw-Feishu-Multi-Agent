@@ -7,6 +7,8 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+README_FILE = REPO_ROOT / "README.md"
+SKILL_FILE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/SKILL.md"
 BUILD_SCRIPT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/build_openclaw_feishu_snippets.py"
 CANARY_SCRIPT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/check_v3_dispatch_canary.sh"
 V4_2_CANARY_SCRIPT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_2_team_canary.sh"
@@ -17,6 +19,9 @@ V4_3_DOC = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/cod
 V4_3_1_DOC = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.3.1-single-group-production.md"
 V4_3_SQL = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/v4-3-job-registry.example.sql"
 V4_3_REGISTRY = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_job_registry.py"
+LAUNCHD_TEMPLATE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/launchd/v4-3-watchdog.plist"
+WSL_CONF_TEMPLATE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/windows/wsl.conf.example"
+WINDOWS_WSL2_NOTES = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/windows-wsl2-deployment-notes.md"
 
 
 def load_build_module():
@@ -401,6 +406,22 @@ class V42DocumentationExecutionTests(unittest.TestCase):
 
 
 class DocumentationConsistencyTests(unittest.TestCase):
+    def test_readme_documents_platform_matrix(self):
+        content = README_FILE.read_text(encoding="utf-8")
+
+        self.assertIn("平台兼容矩阵", content)
+        self.assertIn("Windows + WSL2", content)
+        self.assertIn("launchd", content)
+        self.assertIn("WSL2", content)
+
+    def test_skill_documents_platform_policy(self):
+        content = SKILL_FILE.read_text(encoding="utf-8")
+
+        self.assertIn("平台兼容策略", content)
+        self.assertIn("Windows + WSL2", content)
+        self.assertIn("launchd", content)
+        self.assertIn("systemd --user", content)
+
     def test_v42_1_doc_keeps_visible_message_guidance(self):
         content = V4_2_1_DOC.read_text(encoding="utf-8")
 
@@ -439,11 +460,52 @@ class DocumentationConsistencyTests(unittest.TestCase):
         self.assertIn("主管已接单", content)
         self.assertIn("最终统一收口", content)
 
+    def test_v43_1_doc_documents_cross_platform_delivery(self):
+        content = V4_3_1_DOC.read_text(encoding="utf-8")
+
+        self.assertIn("平台兼容策略", content)
+        self.assertIn("Windows + WSL2", content)
+        self.assertIn("launchd", content)
+        self.assertIn("systemd --user", content)
+
+    def test_v43_1_doc_keeps_full_codex_delivery_template(self):
+        content = V4_3_1_DOC.read_text(encoding="utf-8")
+
+        self.assertIn("Codex 真实交付模板（V4.3.1，完整可执行版）", content)
+        self.assertIn("accountMappings", content)
+        self.assertIn("routes", content)
+        self.assertIn("部署后测试顺序", content)
+        self.assertIn("READY_FOR_TEAM_GROUP|agentId=ops_agent", content)
+        self.assertIn("V4_3_CANARY_OK", content)
+        self.assertIn("status=queued", content)
+
     def test_v43_sql_schema_enforces_single_active_job(self):
         content = V4_3_SQL.read_text(encoding="utf-8")
 
         self.assertIn("idx_jobs_group_single_active", content)
         self.assertIn("WHERE status = 'active'", content)
+
+    def test_launchd_template_targets_watchdog_registry(self):
+        content = LAUNCHD_TEMPLATE.read_text(encoding="utf-8")
+
+        self.assertIn("bot.molt.v4-3-watchdog", content)
+        self.assertIn("v4_3_job_registry.py", content)
+        self.assertIn("StartInterval", content)
+        self.assertIn("__TEAM_GROUP_PEER_ID__", content)
+
+    def test_windows_wsl2_notes_prefer_wsl_and_systemd(self):
+        content = WINDOWS_WSL2_NOTES.read_text(encoding="utf-8")
+
+        self.assertIn("WSL2", content)
+        self.assertIn("systemd=true", content)
+        self.assertIn("Windows 原生", content)
+        self.assertIn("不推荐", content)
+
+    def test_wsl_conf_template_enables_systemd(self):
+        content = WSL_CONF_TEMPLATE.read_text(encoding="utf-8")
+
+        self.assertIn("[boot]", content)
+        self.assertIn("systemd=true", content)
 
 
 class V43RegistryTests(unittest.TestCase):

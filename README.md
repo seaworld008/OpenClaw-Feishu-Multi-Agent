@@ -4,7 +4,7 @@
 
 ## 当前版本
 
-- `v1.4.0`（2026-03-07）
+- `v1.5.0`（2026-03-07）
 - 默认技术路线：官方插件 `@openclaw/feishu`
 - 兼容路线：legacy `chat-feishu`
 - 单群演示推荐版：`V4.2.1`
@@ -32,6 +32,20 @@ README.md
 - Brownfield 增量改造（incremental）与灰度放量（canary）
 - 配置生成脚本（从输入 JSON 生成 patch + 验证摘要）
 - 前置条件、验收清单、回滚流程、升级回归手册
+
+## 平台兼容矩阵
+
+| 平台 | 交付建议 | service 管理 | 当前建议 |
+|---|---|---|---|
+| `Linux` | 正式推荐 | `systemd --user` | 生产首选 |
+| `macOS` | 正式推荐 | `launchd` / `LaunchAgent` | 生产可用 |
+| `Windows + WSL2` | 正式推荐 | 复用 Linux 路线（建议启用 `systemd`） | Windows 客户首选 |
+| `Windows 原生` | 不作为默认生产路径 | 需单独评估 | 不默认承诺 |
+
+核心原则：
+1. `V4.3.1` 的运行模型不按平台分叉，分叉的是 service 管理与运维模板。
+2. Windows 客户默认按 `WSL2` 交付，不把 Windows 原生 service 当成标准路线。
+3. `SQLite + hidden main session + 6 类群内可见消息` 这套协议，在 Linux / macOS / WSL2 上保持一致。
 
 ## 快速使用
 
@@ -62,6 +76,50 @@ openclaw config validate
 openclaw gateway restart
 openclaw agents list --bindings
 ```
+
+## V4.3.1 跨平台部署路线
+
+`V4.3.1` 的核心运行模型一致，差异只在 watchdog 和服务托管方式。
+
+### Linux / WSL2
+
+- OpenClaw 主运行时：官方 CLI + `systemd --user`
+- watchdog：
+  - [systemd service 模板](skills/openclaw-feishu-multi-agent-deploy/templates/systemd/v4-3-watchdog.service)
+  - [systemd timer 模板](skills/openclaw-feishu-multi-agent-deploy/templates/systemd/v4-3-watchdog.timer)
+- 典型安装：
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now v4-3-watchdog.timer
+systemctl --user status v4-3-watchdog.timer
+```
+
+### macOS
+
+- OpenClaw 主运行时：官方 CLI + `launchd` / `LaunchAgent`
+- watchdog：
+  - [launchd 模板](skills/openclaw-feishu-multi-agent-deploy/templates/launchd/v4-3-watchdog.plist)
+- 典型安装：
+
+```bash
+mkdir -p ~/Library/LaunchAgents ~/.openclaw/logs
+cp skills/openclaw-feishu-multi-agent-deploy/templates/launchd/v4-3-watchdog.plist ~/Library/LaunchAgents/bot.molt.v4-3-watchdog.plist
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/bot.molt.v4-3-watchdog.plist 2>/dev/null || true
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/bot.molt.v4-3-watchdog.plist
+launchctl print gui/$(id -u)/bot.molt.v4-3-watchdog
+```
+
+### Windows
+
+- 默认推荐：`Windows + WSL2`，不要把 OpenClaw 主运行时直接放在 Windows 原生 service。
+- 参考文档：
+  - [Windows / WSL2 部署说明](skills/openclaw-feishu-multi-agent-deploy/references/windows-wsl2-deployment-notes.md)
+  - [WSL2 systemd 示例](skills/openclaw-feishu-multi-agent-deploy/templates/windows/wsl.conf.example)
+
+说明：
+- `openclaw gateway restart` 这条 CLI 命令在三条推荐路线中保持一致。
+- `WARMUP` 仍然是一次性初始化动作，不是最终用户日常操作。
 
 ## 飞书与 OpenClaw 信息采集（你现在最容易卡的点）
 
@@ -738,6 +796,9 @@ routes:
 - [V4.3 job registry 脚本](skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_job_registry.py)
 - [V4.3 canary 脚本](skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_3_canary.py)
 - [V4.3 watchdog systemd 模板](skills/openclaw-feishu-multi-agent-deploy/templates/systemd/v4-3-watchdog.service)
+- [V4.3 watchdog launchd 模板](skills/openclaw-feishu-multi-agent-deploy/templates/launchd/v4-3-watchdog.plist)
+- [Windows / WSL2 部署说明](skills/openclaw-feishu-multi-agent-deploy/references/windows-wsl2-deployment-notes.md)
+- [WSL2 systemd 示例](skills/openclaw-feishu-multi-agent-deploy/templates/windows/wsl.conf.example)
 
 ## 推荐阅读顺序
 
@@ -751,6 +812,8 @@ routes:
 8. 上线前看：`templates/brownfield-change-plan.example.md`
 9. 上线后看：`templates/verification-checklist.md`
 10. 升级回归看：`references/rollout-and-upgrade-playbook.md`
+11. 如果客户是 macOS，看 `templates/launchd/v4-3-watchdog.plist`
+12. 如果客户是 Windows，看 `references/windows-wsl2-deployment-notes.md`
 
 ## 最佳实践来源
 
@@ -760,6 +823,7 @@ routes:
 - V4.3 单群生产版交叉验证（见 `references/source-cross-validation-2026-03-07.md`）
 - V4.3.1 生产稳定版：增加一次性初始化、watchdog、SQLite canary
 - V4.3.1 真实跑通样板：`TG-20260307-029`，最终状态 `done`，`check_v4_3_canary.py` 返回 `V4_3_CANARY_OK`
+- 跨平台交叉验证：`references/source-cross-validation-2026-03-07-platforms.md`
 - 飞书开放平台官方文档（事件订阅、消息事件、鉴权）
 
 ## 交叉验证更新（2026-03-05）

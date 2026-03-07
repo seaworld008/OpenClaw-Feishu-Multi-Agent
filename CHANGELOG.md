@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.5.0] - 2026-03-07
+
+### Added
+- 新增跨平台交付材料：
+  - `templates/launchd/v4-3-watchdog.plist`
+  - `templates/windows/wsl.conf.example`
+  - `references/windows-wsl2-deployment-notes.md`
+  - `references/source-cross-validation-2026-03-07-platforms.md`
+- 新增自动化测试，覆盖：
+  - README / SKILL / `V4.3.1` 文档中的平台矩阵
+  - `launchd` watchdog 模板存在性与关键字段
+  - `WSL2` 路线说明与 `wsl.conf` 示例
+
+### Changed
+- README、SKILL、`V4.3.1` 主文档统一补充平台兼容策略：
+  - Linux：`systemd --user`
+  - macOS：`launchd`
+  - Windows：默认推荐 `WSL2`
+- `deployment-inputs.example.yaml` 增加 `platform` / `service_manager` / watchdog 平台参数。
+- 验收清单与前置条件、上线升级手册新增平台分支要求，不再把 Linux 运维命令写成默认唯一答案。
+- `V4.3.1` 的 Codex 真实交付模板不再使用缩减版，已补回完整输入、约束、部署后测试顺序、预期群聊效果和队列/恢复测试说明。
+
+### Fixed
+- 修复仓库交付材料明显偏 Linux、对 macOS 和 Windows 客户缺少正式运维路径的问题。
+- 修复单群生产版虽然架构已稳定，但文档仍无法直接指导 macOS / WSL2 客户部署 watchdog 的问题。
+
 ## [1.4.1] - 2026-03-07
 
 ### Changed

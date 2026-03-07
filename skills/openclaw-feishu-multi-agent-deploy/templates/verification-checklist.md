@@ -5,6 +5,8 @@
 - [ ] `openclaw plugins list` 已确认 `@openclaw/feishu`
 - [ ] 配置文件已备份（含时间戳）
 - [ ] 飞书权限和事件订阅已完成审批
+- [ ] 已确认目标平台：`Linux` / `macOS` / `WSL2`；若客户是 Windows，已明确记录采用 `WSL2` 还是接受原生偏差
+- [ ] 已确认 service manager：`systemd --user` / `launchd` / `manual`
 
 ## B. 配置校验
 - [ ] `openclaw config validate` 通过
@@ -60,6 +62,9 @@
 
 ## D. 稳定性验证
 - [ ] 网关重启后路由仍正确
+- [ ] 若目标为 Linux / WSL2：`systemctl --user status v4-3-watchdog.timer` 正常
+- [ ] 若目标为 macOS：`launchctl print gui/$(id -u)/bot.molt.v4-3-watchdog` 正常
+- [ ] 若目标为 Windows：已明确不是原生 Windows service 正式验收，或已单独记录偏差与补救方案
 - [ ] 5 分钟连续对话无异常报错
 - [ ] 日志无权限拒绝与 schema 报错
 - [ ] （V3）日志无 sessions 权限拒绝与 sendPolicy 拦截

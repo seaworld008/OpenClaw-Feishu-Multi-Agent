@@ -3,11 +3,23 @@ project:
   owner: delivery-team
   environment: prod
 
+platform:
+  target: "linux" # linux | macos | wsl2 | windows-native-not-recommended
+  service_manager: "systemd-user" # systemd-user | launchd | manual
+  python_command: "python3"
+  openclaw_home: "~/.openclaw"
+  watchdog:
+    enabled: true
+    stale_seconds: 180
+    systemd_timer_name: "v4-3-watchdog.timer"
+    launchd_label: "bot.molt.v4-3-watchdog"
+
 openclaw:
   version: "v2026.3.2"
   config_path: "~/.openclaw/openclaw.json"
   restart_command: "openclaw gateway restart"
   healthcheck_command: "openclaw gateway status"
+  # service manager 路线：Linux/WSL2 通常走 systemd-user，macOS 走 launchd，Windows 默认走 WSL2
   plugin:
     id: "@openclaw/feishu"
     installed: true

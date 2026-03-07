@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>bot.molt.v4-3-watchdog</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/env</string>
+    <string>python3</string>
+    <string>__HOME__/.openclaw/workspace-supervisor_agent/.openclaw/v4_3_job_registry.py</string>
+    <string>--db</string>
+    <string>__HOME__/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db</string>
+    <string>watchdog-tick</string>
+    <string>--group-peer-id</string>
+    <string>__TEAM_GROUP_PEER_ID__</string>
+    <string>--stale-seconds</string>
+    <string>__STALE_SECONDS__</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>__HOME__/.openclaw/workspace-supervisor_agent/.openclaw</string>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>StartInterval</key>
+  <integer>60</integer>
+
+  <key>StandardOutPath</key>
+  <string>__HOME__/.openclaw/logs/v4-3-watchdog.stdout.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>__HOME__/.openclaw/logs/v4-3-watchdog.stderr.log</string>
+</dict>
+</plist>

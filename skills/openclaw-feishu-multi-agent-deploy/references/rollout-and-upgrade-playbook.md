@@ -5,7 +5,8 @@
 2. 生成配置 patch
 3. `openclaw config validate`
 4. 重启网关
-5. 验收 checklist 全部通过
+5. 安装平台对应 watchdog（Linux/WSL2 用 `systemd --user`，macOS 用 `launchd`）
+6. 验收 checklist 全部通过
 
 ## B. 增量改造（Brownfield，推荐）
 1. 备份：
@@ -16,6 +17,11 @@ cp ~/.openclaw/openclaw.json ~/.openclaw/openclaw.json.bak.$TS
 2. 只改必要字段：`channels.feishu` + `bindings`
 3. canary 群验证（至少 2 条消息 + 1 次重启后复测）
 4. 放量到全量群
+
+### 平台补充
+- Linux / WSL2：优先启用 `templates/systemd/v4-3-watchdog.service` + `templates/systemd/v4-3-watchdog.timer`
+- macOS：优先启用 `templates/launchd/v4-3-watchdog.plist`
+- Windows：默认转为 `WSL2` 路线，并参考 `references/windows-wsl2-deployment-notes.md`
 
 ## C. 回滚
 ```bash
