@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.1.2] - 2026-03-07
+
+### Added
+- 为 `V4.2` 增加基于远端实测的正式运行策略说明：`ACK timeoutSeconds=15 -> 详细任务 timeoutSeconds=0 -> sessions_history / worker session jsonl 二次收口`。
+- 新增自动化测试，覆盖 `accepted + worker evidence` 的 fire-and-forget 成功路径。
+
+### Changed
+- `V4.2` 主文档、README、SKILL、验收清单统一升级为：
+  - 全局 `messages.groupChat.mentionPatterns` + 主管级 `agents.list[].groupChat.mentionPatterns`
+  - ACK / 正文双阶段派单
+  - `sessions_history` 二次收口
+- `V4`、`V4.1` 文档补充“历史/过渡版本”提示，明确单群生产优先使用 `V4.2`。
+- 交叉验证记录补充 OpenClaw 官方 `timeoutSeconds=0 -> accepted` 语义与远端 VMware 运行结论。
+
+### Fixed
+- 修复 `V4.2` 文档仍停留在“只写 ACK 双阶段建议、未写 fire-and-forget / sessions_history 实施细节”的缺口。
+- 修复 `V4.2` 文档未明确要求全局 `messages.groupChat.mentionPatterns` 兜底的问题。
+
 ## [1.1.1] - 2026-03-06
 
 ### Added

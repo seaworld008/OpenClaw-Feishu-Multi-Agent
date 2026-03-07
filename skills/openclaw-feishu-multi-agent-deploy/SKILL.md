@@ -132,7 +132,8 @@ python3 scripts/build_openclaw_feishu_snippets.py \
 - V4/V4.1/V4.2 单群团队推荐采用 send-first probe：优先验证真实 `sessions_send`，不要只依赖 `sessions_list`
 - V4.2 若出现 `SEND_PATH_AVAILABLE_BUT_LIST_MISS`：说明固定 sessionKey 的 send 路径已可用，但 `sessions_list` 不能再作为唯一存在性判断
 - V4.2 若出现 `TIMEOUT_BUT_WORKER_DELIVERED`：说明 worker 已执行但 supervisor 仍以 timeout 未收口，应优先补 timeout 二次判定或 ACK 双阶段派单
-- V4.2 若出现 `TRIGGER_MISS_ON_MENTION_OR_FORMAT_WRAP`：说明被提及后仍没进入工具链，应优先补 `mentionPatterns` 与 `PLAIN_TEXT` / 代码块包裹兼容
+- V4.2 若 ACK 成功但详细任务持续超时：优先改为 `ACK timeoutSeconds=15 + 详细任务 timeoutSeconds=0 + sessions_history 二次收口`
+- V4.2 若出现 `TRIGGER_MISS_ON_MENTION_OR_FORMAT_WRAP`：说明被提及后仍没进入工具链，应优先同时补 `messages.groupChat.mentionPatterns`、`agents.list[].groupChat.mentionPatterns` 与 `PLAIN_TEXT` / 代码块包裹兼容
 - 公开群里的 `@其他机器人` 只能作为展示层，不应作为控制面正确性的唯一证据
 
 ## 可直接复用的文件

@@ -12,6 +12,7 @@
 1. OpenClaw Session Tool 的核心是会话级派发能力：`sessions_list`、`sessions_history`、`sessions_send`、`sessions_spawn`。
 - 这支持 manager-worker 架构，但不保证“所有派发都同步完成”。
 - 公开文档对 `sessions_send` 的语义偏向 best-effort。
+- 官方文档同时说明：`timeoutSeconds=0` 时，`sessions_send` 会以 fire-and-forget 方式返回 `accepted`；后续结果应通过 `sessions_history` 或 worker transcript 追踪。
 - 来源：<https://docs.openclaw.ai/session-tool>
 - 来源：<https://docs.openclaw.ai/tools>
 
@@ -30,6 +31,7 @@
 4. OpenClaw Groups / GroupChat 配置支持 `mentionPatterns`。
 - 这可作为 native mention 之外的兜底触发方式。
 - 对 `PLAIN_TEXT` / 代码块包裹文本尤其有价值。
+- 在你们当前单群团队模式里，建议同时使用 `messages.groupChat.mentionPatterns` 与 `agents.list[].groupChat.mentionPatterns` 两层兜底。
 - 来源：<https://docs.openclaw.ai/configuration/groups>
 - 来源：<https://docs.openclaw.ai/zh-CN/configuration/groups>
 
@@ -39,6 +41,10 @@
 - 来源：<https://www.anthropic.com/engineering/built-multi-agent-research-system>
 
 6. 两阶段交互（先 ACK，再发正文）是降低超时假阴性的常见工程化手段。
+- 结合官方 `timeoutSeconds=0 -> accepted` 语义，当前最稳路线是：
+  - ACK 阶段：`timeoutSeconds=15` 左右
+  - 正文阶段：`timeoutSeconds=0`
+  - 收口阶段：`sessions_history` + worker session jsonl 二次确认
 - 公开资料没有针对 OpenClaw Feishu 的专门教程，但在 agent / workflow 编排实践里，这是合理的保守策略。
 - 本仓库将其纳入 `V4.2` 推荐，而不是强制默认。
 - 来源：OpenAI / Anthropic 的 agent 编排方法论 + 本地运行时序分析。
@@ -49,8 +55,9 @@
 2. `sessions_list` 只做观察，不再作为唯一 gating。
 3. `sessions_spawn` 只做兜底。
 4. 若 `sessions_send timeout` 但 worker 已出现同 `taskId` 回包，应进入 `timeout_observed_worker_delivered` 分支，而不是继续误报纯失败。
-5. 对被 `@` 的主管任务，若正文命中任务关键词，不应再落入 `NO_REPLY`；需要通过 `mentionPatterns` 与包裹文本兼容来增强鲁棒性。
-6. 公开群里的 `@其他机器人` 只作为展示层，不作为控制面正确性的唯一依据。
+5. 详细执行任务优先走 `timeoutSeconds=0` fire-and-forget；收口靠 `sessions_history` 与 worker session jsonl，不再强依赖同步返回。
+6. 对被 `@` 的主管任务，若正文命中任务关键词，不应再落入 `NO_REPLY`；需要通过全局 `messages.groupChat.mentionPatterns`、主管级 `groupChat.mentionPatterns` 与包裹文本兼容来增强鲁棒性。
+7. 公开群里的 `@其他机器人` 只作为展示层，不作为控制面正确性的唯一依据。
 
 ## 仍然保留的现实边界
 

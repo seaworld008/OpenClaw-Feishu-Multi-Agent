@@ -9,6 +9,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 BUILD_SCRIPT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/build_openclaw_feishu_snippets.py"
 CANARY_SCRIPT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/check_v3_dispatch_canary.sh"
 V4_2_CANARY_SCRIPT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_2_team_canary.sh"
+V4_2_DOC = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.2-single-group-team.md"
 
 
 def load_build_module():
@@ -238,6 +239,43 @@ class V42CanaryScriptTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 2)
         self.assertIn("TRIGGER_MISS_ON_MENTION_OR_FORMAT_WRAP", result.stdout)
+
+    def test_v42_canary_accepts_fire_and_forget_with_worker_evidence(self):
+        result = self.run_script(
+            {
+                "supervisor_agent/sessions/s1.jsonl": "\n".join(
+                    [
+                        "task team-v4-2-001",
+                        "dispatchEvidence",
+                        "sessions_send target=agent:ops_agent:feishu:group:oc_demo sendStatus=accepted runId=run-ops sentAt=2026-03-06T12:00:00Z evidenceSource=session-jsonl",
+                        "sessions_send target=agent:finance_agent:feishu:group:oc_demo sendStatus=accepted runId=run-fin sentAt=2026-03-06T12:00:01Z evidenceSource=session-jsonl",
+                        "sessions_history verified worker transcript",
+                    ]
+                ),
+                "ops_agent/sessions/o1.jsonl": "team-v4-2-001 ACK toSupervisorSummary=ready",
+                "finance_agent/sessions/f1.jsonl": "team-v4-2-001 ACK toSupervisorSummary=ready",
+            },
+            "--task-id",
+            "team-v4-2-001",
+        )
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("TEAM_CANARY_OK", result.stdout)
+
+
+class V42DocumentationTests(unittest.TestCase):
+    def test_v42_doc_requires_history_check_and_fire_and_forget(self):
+        content = V4_2_DOC.read_text(encoding="utf-8")
+
+        self.assertIn("sessions_history", content)
+        self.assertIn("timeoutSeconds=0", content)
+        self.assertIn("ACK", content)
+
+    def test_v42_doc_uses_global_and_agent_level_mention_patterns(self):
+        content = V4_2_DOC.read_text(encoding="utf-8")
+
+        self.assertIn("messages.groupChat.mentionPatterns", content)
+        self.assertIn("agents.list[].groupChat.mentionPatterns", content)
 
 
 if __name__ == "__main__":

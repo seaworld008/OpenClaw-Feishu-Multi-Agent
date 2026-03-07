@@ -639,6 +639,9 @@ routes:
 - 控制面默认采用 send-first probe
 - `sessions_list` 不再作为唯一存在性判断
 - `sessions_spawn` 只做兜底，并显式承认 Feishu 下可能不可用
+- ACK 阶段建议短超时，详细执行阶段建议 `timeoutSeconds=0` fire-and-forget
+- 二次收口优先看 `sessions_history` 与 worker session jsonl
+- 主管触发建议同时配置 `messages.groupChat.mentionPatterns` 与 `agents.list[].groupChat.mentionPatterns`
 - 公开群里的主动 @ 与机器人讨论只作为展示层
 - 正确性仍然只依赖 `dispatchEvidence` / `reviewEvidence`
 
@@ -850,7 +853,8 @@ agents:
 11. V4/V4.1/V4.2 不应把公开群里的 `@其他机器人` 作为控制面正确性依赖，最佳实践是 `sessions_send` 做控制面、公开 @ 做展示层。
 12. V4.2 若出现 `SEND_PATH_AVAILABLE_BUT_LIST_MISS`，说明真实 send 路径已可用，但 `sessions_list` 不能再作为唯一会话存在性判断。
 13. V4.2 若出现 `TIMEOUT_BUT_WORKER_DELIVERED`，说明 worker 已执行但 supervisor 还没完成二次收口，应优先做 timeout 二次判定或 ACK 派单。
-14. V4.2 若出现 `TRIGGER_MISS_ON_MENTION_OR_FORMAT_WRAP`，说明被 `@` 后仍没进工具链，应补 `mentionPatterns` 并兼容 `PLAIN_TEXT` / 代码块包裹文本。
+14. V4.2 若出现 `TRIGGER_MISS_ON_MENTION_OR_FORMAT_WRAP`，说明被 `@` 后仍没进工具链，应同时补 `messages.groupChat.mentionPatterns`、`agents.list[].groupChat.mentionPatterns`，并兼容 `PLAIN_TEXT` / 代码块包裹文本。
+15. V4.2 若 ACK 能成功但详细任务常超时，优先改为“ACK `timeoutSeconds=15` + 详细任务 `timeoutSeconds=0` + `sessions_history` 追收正文结果”。
 
 V3 建议加一道自动门禁（2 分钟窗口）：
 ```bash
@@ -909,7 +913,8 @@ V4/V4.1/V4.2 验收补充：
 - V4/V4.1/V4.2 默认应采用 send-first probe，不要只依赖 `sessions_list`
 - 若返回 `SEND_PATH_AVAILABLE_BUT_LIST_MISS`，优先检查 `dispatchEvidence`、固定 sessionKey 的 `sendStatus=ok`、worker session jsonl
 - 若返回 `TIMEOUT_BUT_WORKER_DELIVERED`，优先检查 worker session jsonl、二次收口逻辑，以及是否应采用 ACK -> 正文 的双阶段派单
-- 若返回 `TRIGGER_MISS_ON_MENTION_OR_FORMAT_WRAP`，优先检查 supervisor `mentionPatterns` 与输入包裹兼容
+- 若返回 `TRIGGER_MISS_ON_MENTION_OR_FORMAT_WRAP`，优先检查 `messages.groupChat.mentionPatterns`、supervisor `groupChat.mentionPatterns` 与输入包裹兼容
+- 单群生产推荐把详细执行任务改为 `timeoutSeconds=0`，再用 `sessions_history` / worker session jsonl 做二次收口
 
 ## 维护约定
 
