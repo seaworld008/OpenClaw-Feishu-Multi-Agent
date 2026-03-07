@@ -4,9 +4,10 @@
 
 ## 当前版本
 
-- `v1.0.0`（2026-03-04）
+- `v1.2.0`（2026-03-07）
 - 默认技术路线：官方插件 `@openclaw/feishu`
 - 兼容路线：legacy `chat-feishu`
+- 单群当前推荐版：`V4.2.1`
 
 ## 仓库结构
 
@@ -460,7 +461,7 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
 
 ## 版本地图与推荐选型
 
-这一套仓库现在建议按 5 个版本理解，不要再把所有配置混在一起看。
+这一套仓库现在建议按 7 个版本理解，不要再把所有配置混在一起看。
 
 ### 版本总览
 
@@ -471,7 +472,8 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
 | `V3.1` | 主管派单 + 三群执行 + 自动收口 | 真派单、真执行、真收口，可审计验收 | 正式生产交付、客户 PoC、经营执行闭环 | 中到高 | 跨群生产最推荐 |
 | `V4` | 单群团队模式 | 3 个机器人在同一群，主管主入口，执行角色协作 | 老板群、作战室、客户演示 | 中 | 单群演示推荐 |
 | `V4.1` | 单群团队模式增强版 | 主管主导协商 + 执行角色有限互审 | 高级演示、单群指挥中心、未来团队模式 | 高 | 仍可用 |
-| `V4.2` | 单群团队模式最佳实践版 | send-first probe + 展示层/控制面分离 + 主动 @ 展示协作 | 真实单群交付、高级演示、未来团队模式 | 高 | 单群当前最推荐 |
+| `V4.2` | 单群团队模式最佳实践版 | send-first probe + 展示层/控制面分离 | 真实单群交付、高级演示、未来团队模式 | 高 | 仍可用 |
+| `V4.2.1` | 单群团队可见协作版 | send-first probe + worker 显式群发摘要 + 最终收口 | 客户现场演示、老板群、可见团队协作交付 | 高 | 单群当前最推荐 |
 
 ### 最推荐的配置怎么选
 
@@ -480,11 +482,11 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
 3. 如果你要做真正能执行的跨群团队，直接上 `V3.1`。这是当前跨群生产最推荐版本。
 4. 如果你要做“一个群里像一人公司一样协作”的效果，选 `V4`。
 5. 如果你要做单群里的主管编排、执行角色有限互审、看起来更像未来团队 Agent 形态，选 `V4.1`。
-6. 如果你还要兼顾“真实可交付”与“群里看起来像团队在协作”，直接选 `V4.2`。
+6. 如果你还要兼顾“真实可交付”与“群里看起来像团队在协作”，优先选 `V4.2.1`。
 
 一句话结论：
 - 跨群正式交付：`V3.1` 最推荐
-- 单群高级演示：`V4.2` 最推荐
+- 单群高级演示：`V4.2.1` 最推荐
 - 最低风险起步：`V1`
 
 ## 各版本详细说明
@@ -657,6 +659,28 @@ routes:
 文档入口：
 - [飞书单群高级 Agent 团队交付蓝图（V4.2）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.2-single-group-team.md)
 
+### V4.2.1：单群团队可见协作版
+
+`V4.2.1` 是在 `V4.2` 跑通控制面的基础上，继续把“群里真的看到其他机器人发言”做成正式交付标准的一版：
+
+- 保留 `V4.2` 的 send-first probe、ACK 双阶段派单、`sessions_history` 二次收口
+- 不再依赖隐式 announce 作为展示层主路径
+- worker 在收到详细任务后，必须显式调用 `message` 工具往团队群发 1 条短摘要
+- 详细结果仍然回主管，主管最后统一收口
+- 验收不再只看 `dispatchEvidence`，还要看 worker 的真实 `messageId`
+
+作用：
+- 客户演示时，群里真的能看到运营/财务机器人在执行
+- 不牺牲控制面正确性
+- 更适合老板群、作战室、单群高级团队演示
+
+最适合：
+- 需要现场演示“多个机器人像团队一样工作”
+- 需要把“群里可见协作”也做成验收项
+
+文档入口：
+- [飞书单群高级 Agent 团队交付蓝图（V4.2.1）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.2.1-single-group-team.md)
+
 ## 推荐阅读顺序
 
 1. 先读：`references/prerequisites-checklist.md`
@@ -664,7 +688,7 @@ routes:
 3. 如果要最低风险上线，先按 `V1`
 4. 如果要管理层自动汇总，读 `V2`
 5. 如果要正式跨群交付，直接读 `V3.1`
-6. 如果要单群高级演示，读 `V4`、`V4.1` 或直接 `V4.2`
+6. 如果要单群高级演示，读 `V4`、`V4.1`、`V4.2`，正式交付优先 `V4.2.1`
 7. 上线前看：`templates/brownfield-change-plan.example.md`
 8. 上线后看：`templates/verification-checklist.md`
 9. 升级回归看：`references/rollout-and-upgrade-playbook.md`
@@ -673,6 +697,7 @@ routes:
 
 - OpenClaw 官方文档与 Release（已在 `references/source-cross-validation-2026-03-05.md` 记录）
 - V4.2 单群团队补充交叉验证（见 `references/source-cross-validation-2026-03-06.md`）
+- V4.2.1 真实跑通样板：`team-v4-2-015`（运营/财务真实群发 messageId 后主管最终收口）
 - 飞书开放平台官方文档（事件订阅、消息事件、鉴权）
 
 ## 交叉验证更新（2026-03-05）
@@ -858,6 +883,8 @@ agents:
 16. V4.2 若你已经升级了 prompt / mention / tools，但主管仍明显表现出旧行为，优先怀疑 stale group session。官方群文档说明群级 system prompt 只在新 group session 第一轮进入上下文；此时应先单独发送 `/reset`，或由运维清理该 group 的 supervisor session 映射后重启 gateway，再用新 `taskId` 复测。
 17. V4.2 若 fresh session 已创建，但主管第一轮仍持续 `tool_call_required/no_tool_call`，检查 `supervisor_agent` 的 workspace 是否还保留默认 `BOOTSTRAP.md` 与空白 `IDENTITY.md` / `USER.md` 模板。单群团队模式的生产 workspace 应直接定义为“主管团队 Agent”，不要保留首次引导残留。
 18. V4.2 若 `sessions_send` 报 `No session found`，优先检查主管是否用了错误的 `sessionKey`。飞书群聊应使用官方完整格式：`agent:<agentId>:feishu:group:<peerId>`；不要使用 `feishu:chat:...` 或自造短键。
+19. V4.2.1 若控制面已成功但群里仍看不到其他机器人发言，不要继续依赖隐式 announce；应改为 worker 在详细任务阶段显式调用 `message` 工具，并校验真实 `messageId`。
+20. V4.2.1 若 worker 已生成“进度摘要”文本但群里没有出站消息，优先检查 `message` 工具参数：`channel=feishu`、正确 `accountId`、`target=chat:<peerId>`。
 
 V3 建议加一道自动门禁（2 分钟窗口）：
 ```bash
@@ -892,11 +919,11 @@ bash skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_1_team_canary.sh
   --optional-agents "sales_agent"
 ```
 
-V4.2 单群最佳实践建议改用新门禁：
+V4.2 / V4.2.1 单群最佳实践建议改用新门禁：
 ```bash
 LOG="/tmp/openclaw/openclaw-$(date +%F).log"
 START_LINE=$(wc -l < "$LOG")
-# 先在团队群 warm-up worker，再发送 V4.2 测试指令
+# 先在团队群 warm-up worker，再发送 V4.2 / V4.2.1 测试指令
 sleep 120
 bash skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_2_team_canary.sh \
   --task-id "team-v4-2-001" \
@@ -905,9 +932,18 @@ bash skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_2_team_canary.sh
   --start-line "$START_LINE" \
   --required-agents "ops_agent,finance_agent" \
   --optional-agents "sales_agent"
+
+# 如果是 V4.2.1 的“群内可见协作”交付，追加：
+bash skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_2_team_canary.sh \
+  --task-id "team-v4-2-015" \
+  --session-root "${HOME}/.openclaw/agents" \
+  --log "$LOG" \
+  --start-line "$START_LINE" \
+  --required-agents "ops_agent,finance_agent" \
+  --require-visible-messages
 ```
 
-V4/V4.1/V4.2 验收补充：
+V4/V4.1/V4.2/V4.2.1 验收补充：
 - 先看 `~/.openclaw/agents/*/sessions/*.jsonl`
 - 再看 gateway log
 - 若主管返回 `warmup_required`，先补 worker warm-up 再复测
@@ -921,6 +957,7 @@ V4/V4.1/V4.2 验收补充：
 - 若刚升级过 V4.2 配置，先 fresh session 再测：优先单独发送 `/reset`，不要直接沿用旧团队群会话
 - 若 fresh session 已生效但仍无工具调用，继续排查 workspace 初始化状态：`BOOTSTRAP.md` 应移除，`IDENTITY.md` / `USER.md` / `SOUL.md` 应完成生产化
 - 若 `sessions_send` 返回 `No session found`，先核对使用的是不是 `agent:ops_agent:feishu:group:<peerId>` / `agent:finance_agent:feishu:group:<peerId>`
+- 若是 `V4.2.1`，还要确认 worker session 中存在真实 `messageId`，并且群里能看到两条短摘要
 
 ## 维护约定
 

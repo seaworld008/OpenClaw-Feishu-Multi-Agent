@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.2.0] - 2026-03-07
+
+### Added
+- 新增 `V4.2.1` 单群团队可见协作版文档：`references/codex-prompt-templates-v4.2.1-single-group-team.md`
+- `check_v4_2_team_canary.sh` 新增 `--require-visible-messages`，可校验 worker 是否产出真实群发 `messageId`
+- 新增自动化测试，覆盖：
+  - `VISIBLE_MESSAGE_MISSING`
+  - `--require-visible-messages` 成功路径
+  - `V4.2.1` 文档中的真实成功样板与显式 `message` 规则
+
+### Changed
+- README、SKILL、验收清单统一把单群当前推荐版切换为 `V4.2.1`
+- README 新增 `V4.2.1` 版本说明、真实跑通样板 `team-v4-2-015`、群内可见协作验收方式
+- `V4.2.1` 正式要求 worker 在详细任务阶段显式调用 `message` 工具群发短摘要，再回主管交付详细结果
+
+### Fixed
+- 修复单群团队模式中“控制面成功但群里看不到其他机器人发言”的交付缺口
+- 修复验收脚本只能校验派单链路、不能校验 worker 真实群发消息的问题
+
 ## [1.1.3] - 2026-03-07
 
 ### Added

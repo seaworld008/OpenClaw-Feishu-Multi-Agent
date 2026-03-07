@@ -98,6 +98,7 @@ python3 scripts/build_openclaw_feishu_snippets.py \
 - `check_v3_dispatch_canary.sh` 返回 `3` 表示证据不足，不能视为派单成功
 - V4/V4.1 单群团队场景必须优先执行 worker warm-up，再跑 `scripts/check_v4_1_team_canary.sh`
 - V4/V4.2 单群最佳实践场景优先使用 `scripts/check_v4_2_team_canary.sh`
+- 若交付要求“群里必须看见 worker 发言”，单群当前推荐使用 `V4.2.1`，并在 canary 中追加 `--require-visible-messages`
 - V4/V4.1/V4.2 验收证据优先级：`~/.openclaw/agents/*/sessions/*.jsonl` 高于 gateway log
 
 ## 输出要求（给客户/交付文档）
@@ -137,6 +138,8 @@ python3 scripts/build_openclaw_feishu_snippets.py \
 - V4.2 若配置已经升级但 supervisor 仍表现出旧行为：优先怀疑 stale group session。群级 system prompt 只在新 group session 第一轮生效，应先单独发送 `/reset`，或由运维清理该 group 的 supervisor session 映射并重启 gateway，再用新 `taskId` 复测
 - V4.2 若 fresh session 已创建但 supervisor 仍持续 `tool_call_required/no_tool_call`：继续检查 `supervisor_agent` workspace 是否残留默认 `BOOTSTRAP.md` 与空白身份模板；生产单群团队 Agent 不应保留首次引导工作区残留
 - V4.2 若 `sessions_send` 报 `No session found`：先查 sessionKey 是否写错。飞书群聊必须使用官方完整键 `agent:<agentId>:feishu:group:<peerId>`，不要使用 `feishu:chat:...` 或其他自造格式
+- V4.2.1 若控制面已经跑通但群里看不到其他机器人发言：不要继续依赖隐式 announce。应在 worker 详细任务中显式调用 `message` 工具，用各自 `accountId` 往团队群发送短摘要，并在 worker session 中保留真实 `messageId`
+- V4.2.1 若 worker 已生成摘要文本但 gateway 没有对应 `dispatch complete`：优先检查 `message` 工具的 `channel/account/target` 是否正确，尤其是 `target=chat:<peerId>`
 - 公开群里的 `@其他机器人` 只能作为展示层，不应作为控制面正确性的唯一证据
 
 ## 可直接复用的文件
@@ -159,6 +162,7 @@ python3 scripts/build_openclaw_feishu_snippets.py \
   - `references/codex-prompt-templates-v4-single-group-team.md`
   - `references/codex-prompt-templates-v4.1-single-group-team.md`
   - `references/codex-prompt-templates-v4.2-single-group-team.md`
+  - `references/codex-prompt-templates-v4.2.1-single-group-team.md`
 - 辅助脚本：
   - `scripts/check_v3_dispatch_canary.sh`
   - `scripts/check_v4_1_team_canary.sh`

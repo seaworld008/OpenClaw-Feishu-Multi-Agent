@@ -38,6 +38,11 @@
 - [ ] （V4.2）若 fresh session 已创建，已确认 `supervisor_agent` workspace 不再保留默认 `BOOTSTRAP.md`，且 `IDENTITY.md` / `USER.md` / `SOUL.md` 已生产化
 - [ ] （V4.2）若 `sessions_send` 出现 `No session found`，已核对主管使用的固定 sessionKey 是否为 `agent:<agentId>:feishu:group:<peerId>`
 - [ ] （V4.2）执行 `scripts/check_v4_2_team_canary.sh` 后，结果已记录到验收报告
+- [ ] （V4.2.1）若本次交付包含“群内可见协作”，已使用 `--require-visible-messages` 执行 `scripts/check_v4_2_team_canary.sh`
+- [ ] （V4.2.1）`ops_agent` 已在团队群发出真实可见短摘要，且 worker session 中可定位真实 `messageId`
+- [ ] （V4.2.1）`finance_agent` 已在团队群发出真实可见短摘要，且 worker session 中可定位真实 `messageId`
+- [ ] （V4.2.1）worker 群发摘要为短消息，详细执行结果仍回主管，未把完整长文刷到群里
+- [ ] （V4.2.1）主管最终收口发生在 worker 群发摘要之后，形成“群内可见协作 + 主管统一交付”的完整链路
 
 ## D. 稳定性验证
 - [ ] 网关重启后路由仍正确

@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 用法:
-  check_v4_2_team_canary.sh --task-id <id> [--session-root <path>] [--supervisor-agent <id>] [--required-agents "ops_agent,finance_agent"] [--optional-agents "sales_agent"] [--log <path> --start-line <n>] [--expect-review] [--max-review-round <n>]
+  check_v4_2_team_canary.sh --task-id <id> [--session-root <path>] [--supervisor-agent <id>] [--required-agents "ops_agent,finance_agent"] [--optional-agents "sales_agent"] [--log <path> --start-line <n>] [--expect-review] [--max-review-round <n>] [--require-visible-messages]
 
 说明:
   - 优先从 ~/.openclaw/agents/*/sessions/*.jsonl 查证据，再回退到网关日志窗口
@@ -14,6 +14,7 @@ usage() {
   - 若 sessions_send 已成功但 sessions_list 未列出 worker，会返回 3 (SEND_PATH_AVAILABLE_BUT_LIST_MISS)
   - 若 supervisor 返回 timeout，但 worker 实际已收到任务，会返回 3 (TIMEOUT_BUT_WORKER_DELIVERED)
   - 若被 @ 后仍落入 NO_REPLY 且无工具调用，会返回 2 (TRIGGER_MISS_ON_MENTION_OR_FORMAT_WRAP)
+  - 若要求群内可见协作但 worker 缺少真实 messageId，会返回 3 (VISIBLE_MESSAGE_MISSING)
   - 成功返回 0 (TEAM_CANARY_OK)
   - 缺少真实派单链返回 2 (DISPATCH_INCOMPLETE)
   - 证据不足或互审证据不足返回 3 (DISPATCH_UNVERIFIED)
@@ -29,6 +30,7 @@ LOG=""
 START_LINE=""
 EXPECT_REVIEW=0
 MAX_REVIEW_ROUND=1
+REQUIRE_VISIBLE_MESSAGES=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -67,6 +69,10 @@ while [[ $# -gt 0 ]]; do
     --max-review-round)
       MAX_REVIEW_ROUND="${2:-}"
       shift 2
+      ;;
+    --require-visible-messages)
+      REQUIRE_VISIBLE_MESSAGES=1
+      shift
       ;;
     -h|--help)
       usage
@@ -222,6 +228,13 @@ agent_has_log_trace() {
   [[ -n "$TMP_LOG" ]] && search_regex_in_path "session=agent:${agent}:" "$TMP_LOG"
 }
 
+agent_has_visible_message() {
+  local agent="$1"
+  local dir
+  dir="$(agent_session_dir "$agent")"
+  [[ -d "$dir" ]] && search_multiline_in_path "(?s)${TASK_ID}.*(messageId|toolCall[^\n]*message|简短进度已群发)|((messageId|toolCall[^\n]*message|简短进度已群发).*)${TASK_ID}" "$dir"
+}
+
 supervisor_has_send_path_for_agent() {
   local agent="$1"
   local dir
@@ -314,6 +327,23 @@ fi
 if [[ ${#send_path_only[@]} -gt 0 ]]; then
   echo "DISPATCH_UNVERIFIED: SEND_PATH_AVAILABLE_BUT_LIST_MISS agents => ${send_path_only[*]}"
   exit 3
+fi
+
+if [[ $REQUIRE_VISIBLE_MESSAGES -eq 1 ]]; then
+  visible_missing=()
+  for raw in "${REQUIRED_LIST[@]}"; do
+    agent="$(trim "$raw")"
+    [[ -z "$agent" ]] && continue
+    if agent_has_visible_message "$agent"; then
+      echo "OK: ${agent} 命中群内可见消息证据 (messageId/session-jsonl)"
+    else
+      visible_missing+=("$agent")
+    fi
+  done
+  if [[ ${#visible_missing[@]} -gt 0 ]]; then
+    echo "DISPATCH_UNVERIFIED: VISIBLE_MESSAGE_MISSING requiredAgents => ${visible_missing[*]}"
+    exit 3
+  fi
 fi
 
 if supervisor_task_pattern "sendStatus[^\\n]*timeout|status[^\\n]*timeout|\"status\"[^\n]*timeout" \
