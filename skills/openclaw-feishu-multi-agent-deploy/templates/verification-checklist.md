@@ -43,6 +43,20 @@
 - [ ] （V4.2.1）`finance_agent` 已在团队群发出真实可见短摘要，且 worker session 中可定位真实 `messageId`
 - [ ] （V4.2.1）worker 群发摘要为短消息，详细执行结果仍回主管，未把完整长文刷到群里
 - [ ] （V4.2.1）主管最终收口发生在 worker 群发摘要之后，形成“群内可见协作 + 主管统一交付”的完整链路
+- [ ] （V4.3）用户可不输入 `taskId`，supervisor 会自动生成内部 `jobRef`
+- [ ] （V4.3）同一个团队群同时最多只有 1 个 `activeJob`
+- [ ] （V4.3）第二个独立任务在当前任务未结束时会进入队列，而不是与当前任务串线
+- [ ] （V4.3）用户补充说明会归并到当前 `activeJob`，不会错误新建第二个任务
+- [ ] （V4.3）状态层（SQLite 或飞书多维表格镜像）中可查到 `jobRef`、状态、worker messageId 和最终收口证据
+- [ ] （V4.3）supervisor 只有在 `ops_agent` 与 `finance_agent` 都写入完整完成包后，才最终统一收口
+- [ ] （V4.3.1）部署完成后已做一次性 `WARMUP`，worker 的 team session 已创建成功
+- [ ] （V4.3.1）worker 只发 1 条进度摘要和 1 条结论摘要，不再出现“任务已接收/等待具体内容”
+- [ ] （V4.3.1）运营与财务的结论摘要允许多行完整输出，不再被压成一句话
+- [ ] （V4.3.1）supervisor 在群里只发接单与最终收口两条消息，不再插入中间状态播报
+- [ ] （V4.3.1）群里不再出现 `ACK_READY / REPLY_SKIP / COMPLETE_PACKET / WORKFLOW_INCOMPLETE`
+- [ ] （V4.3.1）worker 的内部回调统一走 `agent:supervisor_agent:main`，hidden main 会话完成 `mark-worker-complete -> ready-to-rollup -> close-job done`
+- [ ] （V4.3.1）`watchdog-tick` 可识别 stale active job，并在需要时提升队列中的下一条任务
+- [ ] （V4.3.1）执行 `scripts/check_v4_3_canary.py` 返回 `V4_3_CANARY_OK`
 
 ## D. 稳定性验证
 - [ ] 网关重启后路由仍正确
@@ -50,6 +64,8 @@
 - [ ] 日志无权限拒绝与 schema 报错
 - [ ] （V3）日志无 sessions 权限拒绝与 sendPolicy 拦截
 - [ ] （V4/V4.1/V4.2）日志无持续 `thread=true` / `subagent_spawning hooks` 重试风暴
+- [ ] （V4.3）group session 已配置 reset 策略，长期运行不会无限复用同一 transcript
+- [ ] （V4.3.1）active job 卡住后不会永久阻塞后续任务，watchdog 或关闭流程可以释放队列
 
 ## E. 回滚可用性
 - [ ] 回滚命令可执行

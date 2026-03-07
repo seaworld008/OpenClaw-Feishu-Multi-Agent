@@ -1,5 +1,78 @@
 # Changelog
 
+## [1.4.1] - 2026-03-07
+
+### Changed
+- `V4.3.1` 主模板改为以远端真实跑通协议为准：
+  - 主管群会话只负责接单与派单
+  - 隐藏控制会话 `agent:supervisor_agent:main` 负责消费 `COMPLETE_PACKET`、推进 SQLite 状态机并最终收口
+  - worker 结论摘要允许多行完整输出，不再压成一句话
+- README、SKILL、验收清单统一补充：
+  - 群里禁止泄漏 `ACK_READY / REPLY_SKIP / COMPLETE_PACKET`
+  - `V4.3.1` 的可见消息固定为 6 类
+  - `TG-20260307-029` 作为真实通过样板
+- `v4_3_job_registry.py` 同步远端稳定版：
+  - `mark-worker-complete` 支持 `account-id/role` 缺省兜底
+  - 与现网 SQLite 状态机行为对齐
+
+### Added
+- `V4.3.1` 交叉验证记录补充真实成功 run：`TG-20260307-029`
+- 新增测试覆盖：
+  - `mark-worker-complete` 缺省参数兜底
+  - `V4.3.1` 文档中的 hidden main / `NO_REPLY` / 真实 canary 样板
+  - `V4.3` canary 对群会话内部协议外泄的自动拦截
+
+### Fixed
+- 修复本地仓库 `V4.3.1` 文档仍保留旧协议（`REPLY_SKIP`、短字段限制、旧可见结论约束）的问题
+- 修复本地 `v4_3_job_registry.py` 与远端真实稳定版不一致，导致完成包可能因参数漂移卡死的问题
+
+## [1.4.0] - 2026-03-07
+
+### Added
+- 新增 `V4.3.1` 单群生产稳定版文档：`references/codex-prompt-templates-v4.3.1-single-group-production.md`
+- 新增 `V4.3.1` canary：`scripts/check_v4_3_canary.py`
+- 新增 `V4.3.1` 交叉验证记录：`references/source-cross-validation-2026-03-07-v4-3-1.md`
+- 新增 `V4.3.1` 实施计划：`docs/plans/2026-03-07-v4-3-1-single-group-production-stability.md`
+- 新增自动化测试，覆盖：
+  - `mark-dispatch`
+  - `watchdog-tick`
+  - `V4.3` / `V4.3.1` canary 成功路径
+
+### Changed
+- README、SKILL、验收清单统一把单群生产推荐版从 `V4.3` 升级为 `V4.3.1`
+- `v4_3_job_registry.py` 升级为生产稳定版工具，新增：
+  - `mark-dispatch`
+  - `get-job`
+  - `list-queue`
+  - `watchdog-tick`
+  - 更稳的 stale recovery / ready-to-rollup 视图
+- `V4.3` 文档改为基础蓝图，并新增 `V4.3.1` 作为正式稳定版入口
+
+### Fixed
+- 修复单群生产版只有状态层蓝图、没有初始化、watchdog 和自动验收的问题
+- 修复 `V4.3` registry 只能建档、不能稳定表达 dispatch / stale / queue 状态的问题
+- 修复仓库缺少 `V4.3` 生产闭环验收脚本的问题
+
+## [1.3.0] - 2026-03-07
+
+### Added
+- 新增 `V4.3` 单群生产版蓝图：`references/codex-prompt-templates-v4.3-single-group-production.md`
+- 新增 `V4.3` SQLite 任务状态表示例：`templates/v4-3-job-registry.example.sql`
+- 新增 `V4.3` 交叉验证记录：`references/source-cross-validation-2026-03-07.md`
+- 新增设计记录：`docs/plans/2026-03-07-v4-3-single-group-production-design.md`
+- 新增自动化测试，覆盖 `V4.3` 文档的 `jobRef`、`activeJob/queuedJobs` 和单群唯一活跃任务索引
+
+### Changed
+- README 版本地图升级为 `V1 / V2 / V3.1 / V4 / V4.1 / V4.2 / V4.2.1 / V4.3`
+- README、SKILL、验收清单统一拆分：
+  - 单群演示推荐：`V4.2.1`
+  - 单群生产推荐：`V4.3`
+- README 补充“真实客户不应手工输入 taskId”的生产判断、`jobRef` 自动生成、activeJob 队列和状态层建议
+
+### Fixed
+- 修复仓库单群路线只强调演示链路、没有把“真实长期上线”单独建模的问题
+- 修复 README 与 Skill 缺少“一个活跃任务 + 队列 + 外部状态层”生产约束的问题
+
 ## [1.2.0] - 2026-03-07
 
 ### Added

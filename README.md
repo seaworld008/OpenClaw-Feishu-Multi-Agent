@@ -4,10 +4,11 @@
 
 ## 当前版本
 
-- `v1.2.0`（2026-03-07）
+- `v1.4.0`（2026-03-07）
 - 默认技术路线：官方插件 `@openclaw/feishu`
 - 兼容路线：legacy `chat-feishu`
-- 单群当前推荐版：`V4.2.1`
+- 单群演示推荐版：`V4.2.1`
+- 单群生产推荐版：`V4.3.1`
 
 ## 仓库结构
 
@@ -461,7 +462,7 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
 
 ## 版本地图与推荐选型
 
-这一套仓库现在建议按 7 个版本理解，不要再把所有配置混在一起看。
+这一套仓库现在建议按 8 个版本理解，不要再把所有配置混在一起看。
 
 ### 版本总览
 
@@ -474,6 +475,8 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
 | `V4.1` | 单群团队模式增强版 | 主管主导协商 + 执行角色有限互审 | 高级演示、单群指挥中心、未来团队模式 | 高 | 仍可用 |
 | `V4.2` | 单群团队模式最佳实践版 | send-first probe + 展示层/控制面分离 | 真实单群交付、高级演示、未来团队模式 | 高 | 仍可用 |
 | `V4.2.1` | 单群团队可见协作版 | send-first probe + worker 显式群发摘要 + 最终收口 | 客户现场演示、老板群、可见团队协作交付 | 高 | 单群当前最推荐 |
+| `V4.3` | 单群生产基础版 | 自动 `jobRef` + 单群活跃任务队列 + 外部状态层 + 可见协作 | 客户长期上线前的基础蓝图 | 高 | 仍可用 |
+| `V4.3.1` | 单群生产稳定版 | `V4.3` + 一次性初始化 + watchdog + canary + 队列恢复 | 客户长期上线、多人多任务、真实经营协同 | 高 | 单群生产最推荐 |
 
 ### 最推荐的配置怎么选
 
@@ -483,10 +486,12 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
 4. 如果你要做“一个群里像一人公司一样协作”的效果，选 `V4`。
 5. 如果你要做单群里的主管编排、执行角色有限互审、看起来更像未来团队 Agent 形态，选 `V4.1`。
 6. 如果你还要兼顾“真实可交付”与“群里看起来像团队在协作”，优先选 `V4.2.1`。
+7. 如果你要给客户长期上线，不想要求用户手输 `taskId`，并且要解决多轮消息和多任务串线，直接规划 `V4.3.1`。
 
 一句话结论：
 - 跨群正式交付：`V3.1` 最推荐
 - 单群高级演示：`V4.2.1` 最推荐
+- 单群生产上线：`V4.3.1` 最推荐
 - 最低风险起步：`V1`
 
 ## 各版本详细说明
@@ -681,6 +686,59 @@ routes:
 文档入口：
 - [飞书单群高级 Agent 团队交付蓝图（V4.2.1）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.2.1-single-group-team.md)
 
+### V4.3：单群生产版
+
+`V4.3` 是在 `V4.2.1` 演示版成功经验上的生产化升级：
+
+- 用户不再手工输入 `taskId`
+- supervisor 自动生成内部 `jobRef`
+- 单个团队群默认只允许 1 个 activeJob
+- 新任务入队，补充说明归并到当前 activeJob
+- worker 继续在群里显式发“进度摘要 + 结论摘要”
+- supervisor 最终不再只靠 transcript，而是基于状态表统一收口
+
+作用：
+- 解决真实客户长期使用时“不会写 taskId”“多人同时发消息”“旧上下文污染新任务”的问题
+- 保留单群可见协作观感
+- 把排障、审计、回滚能力提升到生产可交付级别
+
+推荐实现：
+- 默认状态层：SQLite
+- 可选业务可视化镜像：飞书多维表格
+
+最适合：
+- 客户正式上线
+- 单群老板群/作战室长期运行
+- 一个群里需要多人、多轮、多任务自然协作
+
+文档入口：
+- [飞书单群高级 Agent 团队交付蓝图（V4.3 生产版）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.3-single-group-production.md)
+- [V4.3 SQLite 任务状态表示例](skills/openclaw-feishu-multi-agent-deploy/templates/v4-3-job-registry.example.sql)
+
+### V4.3.1：单群生产稳定版
+
+`V4.3.1` 是在 `V4.3` 基础上补齐生产稳定件的一版：
+
+- 一次性 `WARMUP` 初始化 worker team session
+- `watchdog-tick` 自动处理 stale active job
+- `check_v4_3_canary.py` 统一验证 SQLite + session jsonl + 可见群消息
+- 明确固定群内顺序：主管接单 -> worker 进度/结论 -> 主管最终收口
+- worker 只允许 1 条进度摘要 + 1 条结论摘要，不再发“任务已接收/等待具体内容”
+- 内部协议统一走隐藏控制会话 `agent:supervisor_agent:main`，群里不再泄漏 `ACK_READY / REPLY_SKIP / COMPLETE_PACKET`
+- 运营与财务的结论摘要允许多行完整输出，不再被压成一句话
+
+最适合：
+- 客户真实上线
+- 单群长期运行
+- 多人、多轮、多任务自然输入
+
+文档入口：
+- [飞书单群高级 Agent 团队交付蓝图（V4.3.1 生产稳定版）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.3.1-single-group-production.md)
+- [V4.3 SQLite 任务状态表示例](skills/openclaw-feishu-multi-agent-deploy/templates/v4-3-job-registry.example.sql)
+- [V4.3 job registry 脚本](skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_job_registry.py)
+- [V4.3 canary 脚本](skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_3_canary.py)
+- [V4.3 watchdog systemd 模板](skills/openclaw-feishu-multi-agent-deploy/templates/systemd/v4-3-watchdog.service)
+
 ## 推荐阅读顺序
 
 1. 先读：`references/prerequisites-checklist.md`
@@ -689,15 +747,19 @@ routes:
 4. 如果要管理层自动汇总，读 `V2`
 5. 如果要正式跨群交付，直接读 `V3.1`
 6. 如果要单群高级演示，读 `V4`、`V4.1`、`V4.2`，正式交付优先 `V4.2.1`
-7. 上线前看：`templates/brownfield-change-plan.example.md`
-8. 上线后看：`templates/verification-checklist.md`
-9. 升级回归看：`references/rollout-and-upgrade-playbook.md`
+7. 如果要单群正式上线，继续读 `V4.3.1`
+8. 上线前看：`templates/brownfield-change-plan.example.md`
+9. 上线后看：`templates/verification-checklist.md`
+10. 升级回归看：`references/rollout-and-upgrade-playbook.md`
 
 ## 最佳实践来源
 
 - OpenClaw 官方文档与 Release（已在 `references/source-cross-validation-2026-03-05.md` 记录）
 - V4.2 单群团队补充交叉验证（见 `references/source-cross-validation-2026-03-06.md`）
 - V4.2.1 真实跑通样板：`team-v4-2-015`（运营/财务真实群发 messageId 后主管最终收口）
+- V4.3 单群生产版交叉验证（见 `references/source-cross-validation-2026-03-07.md`）
+- V4.3.1 生产稳定版：增加一次性初始化、watchdog、SQLite canary
+- V4.3.1 真实跑通样板：`TG-20260307-029`，最终状态 `done`，`check_v4_3_canary.py` 返回 `V4_3_CANARY_OK`
 - 飞书开放平台官方文档（事件订阅、消息事件、鉴权）
 
 ## 交叉验证更新（2026-03-05）
@@ -885,6 +947,9 @@ agents:
 18. V4.2 若 `sessions_send` 报 `No session found`，优先检查主管是否用了错误的 `sessionKey`。飞书群聊应使用官方完整格式：`agent:<agentId>:feishu:group:<peerId>`；不要使用 `feishu:chat:...` 或自造短键。
 19. V4.2.1 若控制面已成功但群里仍看不到其他机器人发言，不要继续依赖隐式 announce；应改为 worker 在详细任务阶段显式调用 `message` 工具，并校验真实 `messageId`。
 20. V4.2.1 若 worker 已生成“进度摘要”文本但群里没有出站消息，优先检查 `message` 工具参数：`channel=feishu`、正确 `accountId`、`target=chat:<peerId>`。
+21. 真实生产环境不建议要求用户手工输入 `taskId`；更稳的方案是由 supervisor 自动生成内部 `jobRef`，并把它落到外部状态层。
+22. 单群长期运行不应只靠 transcript。若客户要长期上线，至少增加“一个活跃任务 + 队列 + 状态表”三件套，优先按 `V4.3` 设计。
+23. `V4.3` 推荐把 SQLite 作为默认状态层，飞书多维表格作为业务可视化镜像，而不是一开始就让多维表格承担唯一状态源。
 
 V3 建议加一道自动门禁（2 分钟窗口）：
 ```bash
@@ -958,6 +1023,8 @@ V4/V4.1/V4.2/V4.2.1 验收补充：
 - 若 fresh session 已生效但仍无工具调用，继续排查 workspace 初始化状态：`BOOTSTRAP.md` 应移除，`IDENTITY.md` / `USER.md` / `SOUL.md` 应完成生产化
 - 若 `sessions_send` 返回 `No session found`，先核对使用的是不是 `agent:ops_agent:feishu:group:<peerId>` / `agent:finance_agent:feishu:group:<peerId>`
 - 若是 `V4.2.1`，还要确认 worker session 中存在真实 `messageId`，并且群里能看到两条短摘要
+- 若是 `V4.3` / `V4.3.1`，还要确认用户可不输入 `taskId`、supervisor 自动生成 `jobRef`、同群只能有一个 activeJob、第二个任务会进入队列或被识别为补充说明
+- 若是 `V4.3.1`，还要确认部署阶段已完成一次性 `WARMUP`，并执行 `check_v4_3_canary.py`
 
 ## 维护约定
 

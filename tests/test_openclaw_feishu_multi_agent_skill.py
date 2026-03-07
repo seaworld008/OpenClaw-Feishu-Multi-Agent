@@ -1,3 +1,4 @@
+import json
 import importlib.util
 import subprocess
 import tempfile
@@ -9,8 +10,13 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 BUILD_SCRIPT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/build_openclaw_feishu_snippets.py"
 CANARY_SCRIPT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/check_v3_dispatch_canary.sh"
 V4_2_CANARY_SCRIPT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_2_team_canary.sh"
+V4_3_CANARY_SCRIPT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_3_canary.py"
 V4_2_DOC = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.2-single-group-team.md"
 V4_2_1_DOC = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.2.1-single-group-team.md"
+V4_3_DOC = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.3-single-group-production.md"
+V4_3_1_DOC = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.3.1-single-group-production.md"
+V4_3_SQL = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/v4-3-job-registry.example.sql"
+V4_3_REGISTRY = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_job_registry.py"
 
 
 def load_build_module():
@@ -393,6 +399,735 @@ class V42DocumentationExecutionTests(unittest.TestCase):
         self.assertIn("timeoutSeconds=0", content)
         self.assertIn("ACK", content)
 
+
+class DocumentationConsistencyTests(unittest.TestCase):
+    def test_v42_1_doc_keeps_visible_message_guidance(self):
+        content = V4_2_1_DOC.read_text(encoding="utf-8")
+
+        self.assertIn("message 工具", content)
+        self.assertIn("worker 显式群发", content)
+
+    def test_v43_doc_describes_internal_jobref_and_queue(self):
+        content = V4_3_DOC.read_text(encoding="utf-8")
+
+        self.assertIn("jobRef", content)
+        self.assertIn("activeJob", content)
+        self.assertIn("queuedJobs", content)
+        self.assertIn("SQLite", content)
+        self.assertIn("taskId", content)
+
+    def test_v43_doc_requires_one_time_warmup(self):
+        content = V4_3_DOC.read_text(encoding="utf-8")
+
+        self.assertIn("WARMUP", content)
+        self.assertIn("一次性", content)
+        self.assertIn("上线前置", content)
+
+    def test_v43_doc_requires_real_message_ids_before_complete_packet(self):
+        content = V4_3_DOC.read_text(encoding="utf-8")
+
+        self.assertIn("两个真实 messageId", content)
+        self.assertIn("WORKFLOW_INCOMPLETE", content)
+        self.assertIn("COMPLETE_PACKET", content)
+
+    def test_v43_1_doc_requires_watchdog_and_one_time_init(self):
+        content = V4_3_1_DOC.read_text(encoding="utf-8")
+
+        self.assertIn("watchdog", content)
+        self.assertIn("一次性", content)
+        self.assertIn("WARMUP", content)
+        self.assertIn("主管已接单", content)
+        self.assertIn("最终统一收口", content)
+
+    def test_v43_sql_schema_enforces_single_active_job(self):
+        content = V4_3_SQL.read_text(encoding="utf-8")
+
+        self.assertIn("idx_jobs_group_single_active", content)
+        self.assertIn("WHERE status = 'active'", content)
+
+
+class V43RegistryTests(unittest.TestCase):
+    def run_registry(self, db_path, *args):
+        result = subprocess.run(
+            [
+                "python3",
+                str(V4_3_REGISTRY),
+                "--db",
+                str(db_path),
+                *args,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return result
+
+    def test_registry_initializes_schema(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "team_jobs.db"
+
+            result = self.run_registry(db_path, "init-db")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("initialized", result.stdout)
+
+    def test_registry_starts_active_then_queues_second_job(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "team_jobs.db"
+
+            self.run_registry(db_path, "init-db")
+            first = self.run_registry(
+                db_path,
+                "start-job",
+                "--group-peer-id",
+                "oc_demo",
+                "--requested-by",
+                "ou_user",
+                "--title",
+                "四月促销方案",
+            )
+            second = self.run_registry(
+                db_path,
+                "start-job",
+                "--group-peer-id",
+                "oc_demo",
+                "--requested-by",
+                "ou_user",
+                "--title",
+                "五月预算看板",
+            )
+
+            self.assertEqual(first.returncode, 0, first.stderr)
+            self.assertEqual(second.returncode, 0, second.stderr)
+            self.assertIn('"status": "active"', first.stdout)
+            self.assertIn('"status": "queued"', second.stdout)
+            self.assertIn('"queuePosition": 1', second.stdout)
+
+    def test_registry_marks_worker_complete_and_ready_to_rollup(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "team_jobs.db"
+
+            self.run_registry(db_path, "init-db")
+            started = self.run_registry(
+                db_path,
+                "start-job",
+                "--group-peer-id",
+                "oc_demo",
+                "--requested-by",
+                "ou_user",
+                "--title",
+                "四月促销方案",
+            )
+            self.assertEqual(started.returncode, 0, started.stderr)
+            job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
+
+            ops = self.run_registry(
+                db_path,
+                "mark-worker-complete",
+                "--job-ref",
+                job_ref,
+                "--agent-id",
+                "ops_agent",
+                "--account-id",
+                "xiaolongxia",
+                "--role",
+                "运营执行",
+                "--progress-message-id",
+                "om_ops_progress",
+                "--final-message-id",
+                "om_ops_final",
+                "--summary",
+                "运营方案已完成",
+            )
+            finance = self.run_registry(
+                db_path,
+                "mark-worker-complete",
+                "--job-ref",
+                job_ref,
+                "--agent-id",
+                "finance_agent",
+                "--account-id",
+                "yiran_yibao",
+                "--role",
+                "财务执行",
+                "--progress-message-id",
+                "om_fin_progress",
+                "--final-message-id",
+                "om_fin_final",
+                "--summary",
+                "财务方案已完成",
+                "--details",
+                "预算与ROI校验完成",
+            )
+            ready = self.run_registry(db_path, "ready-to-rollup", "--job-ref", job_ref)
+            details = self.run_registry(db_path, "get-job", "--job-ref", job_ref)
+
+            self.assertEqual(ops.returncode, 0, ops.stderr)
+            self.assertEqual(finance.returncode, 0, finance.stderr)
+            self.assertEqual(ready.returncode, 0, ready.stderr)
+            self.assertIn('"ready": true', ready.stdout)
+            self.assertEqual(details.returncode, 0, details.stderr)
+            self.assertIn('"completionPackets"', details.stdout)
+            self.assertIn("预算与ROI校验完成", details.stdout)
+
+    def test_registry_mark_worker_complete_backfills_account_and_role(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "team_jobs.db"
+
+            self.run_registry(db_path, "init-db")
+            started = self.run_registry(
+                db_path,
+                "start-job",
+                "--group-peer-id",
+                "oc_demo",
+                "--requested-by",
+                "ou_user",
+                "--title",
+                "四月促销方案",
+            )
+            self.assertEqual(started.returncode, 0, started.stderr)
+            job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
+
+            dispatched = self.run_registry(
+                db_path,
+                "mark-dispatch",
+                "--job-ref",
+                job_ref,
+                "--agent-id",
+                "finance_agent",
+                "--account-id",
+                "yiran_yibao",
+                "--role",
+                "财务执行",
+                "--status",
+                "accepted",
+                "--dispatch-run-id",
+                "run-fin-001",
+                "--dispatch-status",
+                "pending",
+            )
+            completed = self.run_registry(
+                db_path,
+                "mark-worker-complete",
+                "--job-ref",
+                job_ref,
+                "--agent-id",
+                "finance_agent",
+                "--progress-message-id",
+                "om_fin_progress",
+                "--final-message-id",
+                "om_fin_final",
+                "--summary",
+                "财务方案已完成",
+            )
+            import sqlite3
+
+            conn = sqlite3.connect(db_path)
+            row = conn.execute(
+                "SELECT account_id, role FROM job_participants WHERE job_ref = ? AND agent_id = ?",
+                (job_ref, "finance_agent"),
+            ).fetchone()
+            conn.close()
+
+            self.assertEqual(dispatched.returncode, 0, dispatched.stderr)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertIn('"agentId": "finance_agent"', completed.stdout)
+            self.assertEqual(row[0], "yiran_yibao")
+            self.assertEqual(row[1], "财务执行")
+
+    def test_registry_begin_turn_recovers_stale_job_before_reporting_active(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "team_jobs.db"
+
+            self.run_registry(db_path, "init-db")
+            started = self.run_registry(
+                db_path,
+                "start-job",
+                "--group-peer-id",
+                "oc_demo",
+                "--requested-by",
+                "ou_user",
+                "--title",
+                "四月促销方案",
+            )
+            self.assertEqual(started.returncode, 0, started.stderr)
+
+            import sqlite3
+
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                "UPDATE jobs SET created_at = '2026-03-07T00:00:00+00:00', updated_at = '2026-03-07T00:00:00+00:00' WHERE job_ref = 'TG-20260307-001'"
+            )
+            conn.commit()
+            conn.close()
+
+            prepared = self.run_registry(
+                db_path,
+                "begin-turn",
+                "--group-peer-id",
+                "oc_demo",
+                "--stale-seconds",
+                "1",
+            )
+
+            self.assertEqual(prepared.returncode, 0, prepared.stderr)
+            self.assertIn('"recover"', prepared.stdout)
+            self.assertIn('"stale_recovered"', prepared.stdout)
+            self.assertIn('"active": null', prepared.stdout)
+
+    def test_registry_begin_turn_preserves_non_stale_active_job(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "team_jobs.db"
+
+            self.run_registry(db_path, "init-db")
+            started = self.run_registry(
+                db_path,
+                "start-job",
+                "--group-peer-id",
+                "oc_demo",
+                "--requested-by",
+                "ou_user",
+                "--title",
+                "四月促销方案",
+            )
+            self.assertEqual(started.returncode, 0, started.stderr)
+
+            prepared = self.run_registry(
+                db_path,
+                "begin-turn",
+                "--group-peer-id",
+                "oc_demo",
+                "--stale-seconds",
+                "999999",
+            )
+
+            self.assertEqual(prepared.returncode, 0, prepared.stderr)
+            self.assertIn('"active_ok"', prepared.stdout)
+            self.assertIn('"jobRef": "TG-20260307-001"', prepared.stdout)
+
+    def test_registry_appends_note_to_active_job_without_creating_new_one(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "team_jobs.db"
+
+            self.run_registry(db_path, "init-db")
+            started = self.run_registry(
+                db_path,
+                "start-job",
+                "--group-peer-id",
+                "oc_demo",
+                "--requested-by",
+                "ou_user",
+                "--title",
+                "四月促销方案",
+            )
+            job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
+
+            note = self.run_registry(
+                db_path,
+                "append-note",
+                "--group-peer-id",
+                "oc_demo",
+                "--sender-id",
+                "ou_user",
+                "--text",
+                "预算上限改成18万，并补一个直播方案",
+            )
+            active = self.run_registry(db_path, "get-active", "--group-peer-id", "oc_demo")
+
+            self.assertEqual(note.returncode, 0, note.stderr)
+            self.assertIn(job_ref, note.stdout)
+            self.assertEqual(active.returncode, 0, active.stderr)
+            self.assertIn(job_ref, active.stdout)
+
+    def test_registry_recovers_stale_active_and_promotes_queued_job(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "team_jobs.db"
+
+            self.run_registry(db_path, "init-db")
+            first = self.run_registry(
+                db_path,
+                "start-job",
+                "--group-peer-id",
+                "oc_demo",
+                "--requested-by",
+                "ou_user",
+                "--title",
+                "四月促销方案",
+            )
+            second = self.run_registry(
+                db_path,
+                "start-job",
+                "--group-peer-id",
+                "oc_demo",
+                "--requested-by",
+                "ou_user",
+                "--title",
+                "五月促销方案",
+            )
+            first_ref = first.stdout.split('"jobRef": "')[1].split('"', 1)[0]
+            second_ref = second.stdout.split('"jobRef": "')[1].split('"', 1)[0]
+
+            # Force the first job to look stale.
+            subprocess.run(
+                [
+                    "python3",
+                    "-c",
+                    (
+                        "import sqlite3; "
+                        f"conn=sqlite3.connect({str(db_path)!r}); "
+                        "conn.execute(\"UPDATE jobs SET created_at='2026-03-07T00:00:00+00:00', updated_at='2026-03-07T00:00:00+00:00' WHERE job_ref=?\", "
+                        f"({first_ref!r},)); "
+                        "conn.commit()"
+                    ),
+                ],
+                check=True,
+            )
+
+            recovered = self.run_registry(
+                db_path,
+                "recover-stale",
+                "--group-peer-id",
+                "oc_demo",
+                "--stale-seconds",
+                "1",
+            )
+            active = self.run_registry(db_path, "get-active", "--group-peer-id", "oc_demo")
+
+            self.assertEqual(recovered.returncode, 0, recovered.stderr)
+            self.assertIn('"status": "stale_recovered"', recovered.stdout)
+            self.assertIn(first_ref, recovered.stdout)
+            self.assertIn(second_ref, recovered.stdout)
+            self.assertEqual(active.returncode, 0, active.stderr)
+            self.assertIn(second_ref, active.stdout)
+            self.assertIn('"participantCount": 0', active.stdout)
+
+    def test_registry_get_active_includes_runtime_metadata(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "team_jobs.db"
+
+            self.run_registry(db_path, "init-db")
+            started = self.run_registry(
+                db_path,
+                "start-job",
+                "--group-peer-id",
+                "oc_demo",
+                "--requested-by",
+                "ou_user",
+                "--title",
+                "四月促销方案",
+            )
+            job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
+
+            active = self.run_registry(db_path, "get-active", "--group-peer-id", "oc_demo")
+
+            self.assertEqual(active.returncode, 0, active.stderr)
+            self.assertIn(job_ref, active.stdout)
+            self.assertIn('"createdAt"', active.stdout)
+            self.assertIn('"updatedAt"', active.stdout)
+            self.assertIn('"participantCount": 0', active.stdout)
+            self.assertIn('"completedParticipantCount": 0', active.stdout)
+
+    def test_registry_marks_dispatch_and_reports_job_details(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "team_jobs.db"
+
+            self.run_registry(db_path, "init-db")
+            started = self.run_registry(
+                db_path,
+                "start-job",
+                "--group-peer-id",
+                "oc_demo",
+                "--requested-by",
+                "ou_user",
+                "--title",
+                "四月促销方案",
+            )
+            job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
+
+            marked = self.run_registry(
+                db_path,
+                "mark-dispatch",
+                "--job-ref",
+                job_ref,
+                "--agent-id",
+                "ops_agent",
+                "--account-id",
+                "xiaolongxia",
+                "--role",
+                "运营执行",
+                "--status",
+                "accepted",
+                "--dispatch-run-id",
+                "run-ops",
+                "--dispatch-status",
+                "ping_ok",
+            )
+            details = self.run_registry(db_path, "get-job", "--job-ref", job_ref)
+
+            self.assertEqual(marked.returncode, 0, marked.stderr)
+            self.assertIn('"dispatchStatus": "ping_ok"', marked.stdout)
+            self.assertEqual(details.returncode, 0, details.stderr)
+            self.assertIn('"ops_agent"', details.stdout)
+            self.assertIn('"dispatchStatus": "ping_ok"', details.stdout)
+
+    def test_registry_watchdog_marks_stale_active_failed(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "team_jobs.db"
+
+            self.run_registry(db_path, "init-db")
+            started = self.run_registry(
+                db_path,
+                "start-job",
+                "--group-peer-id",
+                "oc_demo",
+                "--requested-by",
+                "ou_user",
+                "--title",
+                "四月促销方案",
+            )
+            self.assertEqual(started.returncode, 0, started.stderr)
+
+            subprocess.run(
+                [
+                    "python3",
+                    "-c",
+                    (
+                        "import sqlite3; "
+                        f"conn=sqlite3.connect({str(db_path)!r}); "
+                        "conn.execute(\"UPDATE jobs SET updated_at='2026-03-07T00:00:00+00:00' WHERE job_ref='TG-20260307-001'\"); "
+                        "conn.commit()"
+                    ),
+                ],
+                check=True,
+            )
+
+            watchdog = self.run_registry(
+                db_path,
+                "watchdog-tick",
+                "--group-peer-id",
+                "oc_demo",
+                "--stale-seconds",
+                "1",
+            )
+            active = self.run_registry(db_path, "get-active", "--group-peer-id", "oc_demo")
+
+            self.assertEqual(watchdog.returncode, 0, watchdog.stderr)
+            self.assertIn('"stale_recovered"', watchdog.stdout)
+            self.assertEqual(active.returncode, 0, active.stderr)
+            self.assertIn('"active": null', active.stdout)
+
+
+class V43CanaryTests(unittest.TestCase):
+    def run_registry(self, db_path, *args):
+        result = subprocess.run(
+            ["python3", str(V4_3_REGISTRY), "--db", str(db_path), *args],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return result
+
+    def run_canary(self, db_path, session_root, *args):
+        result = subprocess.run(
+            ["python3", str(V4_3_CANARY_SCRIPT), "--db", str(db_path), "--session-root", str(session_root), *args],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return result
+
+    def test_v43_canary_requires_done_job(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "team_jobs.db"
+            session_root = Path(tmpdir) / "agents"
+            session_root.mkdir()
+
+            self.run_registry(db_path, "init-db")
+            started = self.run_registry(
+                db_path,
+                "start-job",
+                "--group-peer-id",
+                "oc_demo",
+                "--requested-by",
+                "ou_user",
+                "--title",
+                "四月促销方案",
+            )
+            job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
+
+            result = self.run_canary(db_path, session_root, "--job-ref", job_ref)
+
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("PARTICIPANTS_MISSING", result.stdout)
+
+    def test_v43_canary_accepts_done_job_with_visible_messages(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "team_jobs.db"
+            session_root = Path(tmpdir) / "agents"
+            for agent in ("ops_agent", "finance_agent"):
+                (session_root / agent / "sessions").mkdir(parents=True)
+
+            self.run_registry(db_path, "init-db")
+            started = self.run_registry(
+                db_path,
+                "start-job",
+                "--group-peer-id",
+                "oc_demo",
+                "--requested-by",
+                "ou_user",
+                "--title",
+                "四月促销方案",
+            )
+            job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
+
+            self.run_registry(
+                db_path,
+                "mark-worker-complete",
+                "--job-ref",
+                job_ref,
+                "--agent-id",
+                "ops_agent",
+                "--account-id",
+                "xiaolongxia",
+                "--role",
+                "运营执行",
+                "--progress-message-id",
+                "om_ops_progress",
+                "--final-message-id",
+                "om_ops_final",
+                "--summary",
+                "运营方案已完成",
+            )
+            self.run_registry(
+                db_path,
+                "mark-worker-complete",
+                "--job-ref",
+                job_ref,
+                "--agent-id",
+                "finance_agent",
+                "--account-id",
+                "yiran_yibao",
+                "--role",
+                "财务执行",
+                "--progress-message-id",
+                "om_fin_progress",
+                "--final-message-id",
+                "om_fin_final",
+                "--summary",
+                "财务方案已完成",
+            )
+            self.run_registry(db_path, "close-job", "--job-ref", job_ref, "--status", "done")
+
+            (session_root / "ops_agent" / "sessions" / "ops.jsonl").write_text(
+                "om_ops_progress\nom_ops_final\n", encoding="utf-8"
+            )
+            (session_root / "finance_agent" / "sessions" / "fin.jsonl").write_text(
+                "om_fin_progress\nom_fin_final\n", encoding="utf-8"
+            )
+
+            result = self.run_canary(
+                db_path,
+                session_root,
+                "--job-ref",
+                job_ref,
+                "--require-visible-messages",
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("V4_3_CANARY_OK", result.stdout)
+
+    def test_v43_canary_rejects_protocol_leak_in_visible_session(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "team_jobs.db"
+            session_root = Path(tmpdir) / "agents"
+            for agent in ("ops_agent", "finance_agent", "supervisor_agent"):
+                (session_root / agent / "sessions").mkdir(parents=True)
+
+            self.run_registry(db_path, "init-db")
+            started = self.run_registry(
+                db_path,
+                "start-job",
+                "--group-peer-id",
+                "oc_demo",
+                "--requested-by",
+                "ou_user",
+                "--title",
+                "四月促销方案",
+            )
+            job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
+
+            self.run_registry(
+                db_path,
+                "mark-worker-complete",
+                "--job-ref",
+                job_ref,
+                "--agent-id",
+                "ops_agent",
+                "--account-id",
+                "xiaolongxia",
+                "--role",
+                "运营执行",
+                "--progress-message-id",
+                "om_ops_progress",
+                "--final-message-id",
+                "om_ops_final",
+                "--summary",
+                "运营方案已完成",
+            )
+            self.run_registry(
+                db_path,
+                "mark-worker-complete",
+                "--job-ref",
+                job_ref,
+                "--agent-id",
+                "finance_agent",
+                "--account-id",
+                "yiran_yibao",
+                "--role",
+                "财务执行",
+                "--progress-message-id",
+                "om_fin_progress",
+                "--final-message-id",
+                "om_fin_final",
+                "--summary",
+                "财务方案已完成",
+            )
+            self.run_registry(db_path, "close-job", "--job-ref", job_ref, "--status", "done")
+
+            (session_root / "ops_agent" / "sessions" / "ops.jsonl").write_text(
+                "om_ops_progress\nom_ops_final\n", encoding="utf-8"
+            )
+            (session_root / "finance_agent" / "sessions" / "fin.jsonl").write_text(
+                "om_fin_progress\nom_fin_final\n", encoding="utf-8"
+            )
+            (session_root / "supervisor_agent" / "sessions" / "sup.jsonl").write_text(
+                "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "message": {
+                                    "role": "assistant",
+                                    "content": [{"type": "text", "text": f"ACK_READY|jobRef={job_ref}|agent=ops_agent"}],
+                                }
+                            },
+                            ensure_ascii=False,
+                        )
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_canary(
+                db_path,
+                session_root,
+                "--job-ref",
+                job_ref,
+                "--require-visible-messages",
+            )
+
+            self.assertEqual(result.returncode, 3)
+            self.assertIn("VISIBLE_PROTOCOL_LEAK", result.stdout)
+
     def test_v42_doc_uses_global_and_agent_level_mention_patterns(self):
         content = V4_2_DOC.read_text(encoding="utf-8")
 
@@ -414,6 +1149,33 @@ class V421DocumentationContentTests(unittest.TestCase):
         self.assertIn("team-v4-2-015", content)
         self.assertIn("om_x100b558f16d170e0c4ac92409ae2e2c", content)
         self.assertIn("om_x100b558f147928a0b214ccb83766041", content)
+
+
+class V43DocumentationContentTests(unittest.TestCase):
+    def test_v43_doc_mentions_auto_jobref_and_queue(self):
+        content = V4_3_DOC.read_text(encoding="utf-8")
+
+        self.assertIn("自动生成内部 `jobRef`", content)
+        self.assertIn("activeJob", content)
+        self.assertIn("queued", content)
+
+
+class V431DocumentationContentTests(unittest.TestCase):
+    def test_v431_doc_mentions_hidden_control_session(self):
+        content = V4_3_1_DOC.read_text(encoding="utf-8")
+
+        self.assertIn("agent:supervisor_agent:main", content)
+        self.assertIn("COMPLETE_PACKET", content)
+        self.assertIn("NO_REPLY", content)
+
+    def test_v431_doc_describes_visible_sequence_and_real_success(self):
+        content = V4_3_1_DOC.read_text(encoding="utf-8")
+
+        self.assertIn("主管接单", content)
+        self.assertIn("运营进度", content)
+        self.assertIn("财务结论", content)
+        self.assertIn("TG-20260307-029", content)
+        self.assertIn("V4_3_CANARY_OK", content)
 
 
 if __name__ == "__main__":

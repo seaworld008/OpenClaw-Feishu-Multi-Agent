@@ -98,7 +98,9 @@ python3 scripts/build_openclaw_feishu_snippets.py \
 - `check_v3_dispatch_canary.sh` 返回 `3` 表示证据不足，不能视为派单成功
 - V4/V4.1 单群团队场景必须优先执行 worker warm-up，再跑 `scripts/check_v4_1_team_canary.sh`
 - V4/V4.2 单群最佳实践场景优先使用 `scripts/check_v4_2_team_canary.sh`
-- 若交付要求“群里必须看见 worker 发言”，单群当前推荐使用 `V4.2.1`，并在 canary 中追加 `--require-visible-messages`
+- 若交付要求“群里必须看见 worker 发言”，单群演示推荐使用 `V4.2.1`，并在 canary 中追加 `--require-visible-messages`
+- 若交付目标是“真实长期上线且用户不手输 taskId”，单群生产推荐直接按 `V4.3.1` 设计：supervisor 自动生成 `jobRef`，并引入外部状态层、一次性初始化、watchdog 与 activeJob/queue 机制
+- `V4.3.1` 验收优先使用 `scripts/check_v4_3_canary.py`
 - V4/V4.1/V4.2 验收证据优先级：`~/.openclaw/agents/*/sessions/*.jsonl` 高于 gateway log
 
 ## 输出要求（给客户/交付文档）
@@ -140,6 +142,15 @@ python3 scripts/build_openclaw_feishu_snippets.py \
 - V4.2 若 `sessions_send` 报 `No session found`：先查 sessionKey 是否写错。飞书群聊必须使用官方完整键 `agent:<agentId>:feishu:group:<peerId>`，不要使用 `feishu:chat:...` 或其他自造格式
 - V4.2.1 若控制面已经跑通但群里看不到其他机器人发言：不要继续依赖隐式 announce。应在 worker 详细任务中显式调用 `message` 工具，用各自 `accountId` 往团队群发送短摘要，并在 worker session 中保留真实 `messageId`
 - V4.2.1 若 worker 已生成摘要文本但 gateway 没有对应 `dispatch complete`：优先检查 `message` 工具的 `channel/account/target` 是否正确，尤其是 `target=chat:<peerId>`
+- V4.3 若客户环境仍要求用户手工输入 `taskId`：优先判断这是不是把测试手段误当成产品方案；生产建议改为 supervisor 自动生成内部 `jobRef`
+- V4.3 若单群连续收到多个独立任务：不要继续只靠 transcript 自然上下文；应引入外部状态层，显式维护 `active / queued / done / failed`
+- V4.3 若用户补充说明被错误识别成新任务：先补“消息分类”规则，再补状态层，不要继续堆 prompt 文案
+- V4.3.1 若 worker 频繁卡在旧行为：优先怀疑旧 team session 沿用了旧 prompt；应关闭当前 active job，清空三方 team session，并重新执行一次性 `WARMUP`
+- V4.3.1 若任务长期卡住阻塞后续消息：不要要求用户重发或手工排障；优先执行 `watchdog-tick`，让 stale active job 自动失败并释放队列
+- V4.3.1 若需要证明“真的稳定”，不要只看群聊观感；必须同时核对 SQLite `jobs/job_participants` 与 `check_v4_3_canary.py`
+- V4.3.1 若群里仍泄漏 `ACK_READY / REPLY_SKIP / COMPLETE_PACKET`：优先检查 worker 的 callback 是否仍打到主管群会话；生产版必须统一回到 `agent:supervisor_agent:main`，内部协议最终只输出 `NO_REPLY`
+- V4.3.1 若主管收不到最终完成包：优先检查 `mark-worker-complete` 是否仍强依赖 `--account-id/--role`；当前稳定版应允许这两个参数兜底，不应因字段漂移卡死
+- V4.3.1 若演示效果不足：不要把 worker 结论压成一句话；群里的运营/财务结论允许多行完整输出，只对 `COMPLETE_PACKET` 做长度约束
 - 公开群里的 `@其他机器人` 只能作为展示层，不应作为控制面正确性的唯一证据
 
 ## 可直接复用的文件
@@ -149,6 +160,8 @@ python3 scripts/build_openclaw_feishu_snippets.py \
   - `templates/openclaw-multi-bot-route.example.jsonc`
   - `templates/brownfield-change-plan.example.md`
   - `templates/verification-checklist.md`
+  - `templates/systemd/v4-3-watchdog.service`
+  - `templates/systemd/v4-3-watchdog.timer`
 - 输入样板：
   - `references/input-template.json`
   - `references/input-template-plugin.json`
@@ -163,7 +176,11 @@ python3 scripts/build_openclaw_feishu_snippets.py \
   - `references/codex-prompt-templates-v4.1-single-group-team.md`
   - `references/codex-prompt-templates-v4.2-single-group-team.md`
   - `references/codex-prompt-templates-v4.2.1-single-group-team.md`
+  - `references/codex-prompt-templates-v4.3-single-group-production.md`
+  - `references/codex-prompt-templates-v4.3.1-single-group-production.md`
+  - `references/source-cross-validation-2026-03-07.md`
 - 辅助脚本：
   - `scripts/check_v3_dispatch_canary.sh`
   - `scripts/check_v4_1_team_canary.sh`
   - `scripts/check_v4_2_team_canary.sh`
+  - `scripts/check_v4_3_canary.py`
