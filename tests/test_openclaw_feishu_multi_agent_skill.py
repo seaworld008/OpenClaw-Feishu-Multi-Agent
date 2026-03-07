@@ -17,6 +17,7 @@ V4_2_DOC = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/cod
 V4_2_1_DOC = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.2.1-single-group-team.md"
 V4_3_DOC = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.3-single-group-production.md"
 V4_3_1_DOC = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.3.1-single-group-production.md"
+V4_3_1_C1_DOC = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.3.1-single-group-production-C1.0.md"
 V4_3_SQL = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/v4-3-job-registry.example.sql"
 V4_3_REGISTRY = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_job_registry.py"
 V4_3_HYGIENE_SCRIPT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_session_hygiene.py"
@@ -1285,6 +1286,27 @@ class V431DocumentationContentTests(unittest.TestCase):
         self.assertIn("Chat history since last reply", content)
         self.assertIn("WARMUP", content)
         self.assertIn("不能把本轮正式任务误判成初始化消息", content)
+
+    def test_v431_c1_doc_exists_and_uses_customer_robot_accounts(self):
+        content = V4_3_1_C1_DOC.read_text(encoding="utf-8")
+
+        self.assertIn("V4.3.1-C1.0", content)
+        self.assertIn("marketing_bot", content)
+        self.assertIn("ecommerce_market_bot", content)
+        self.assertIn("finance_bot", content)
+        self.assertIn("cli_a926a086e9389cba", content)
+        self.assertIn("cli_a926a17fd0b8dcc4", content)
+        self.assertIn("cli_a92123297f78dcb0", content)
+        self.assertIn("oc_<客户团队群ID待填>", content)
+
+    def test_v431_c1_doc_keeps_three_bot_six_expert_mapping(self):
+        content = V4_3_1_C1_DOC.read_text(encoding="utf-8")
+
+        self.assertIn("营销专家 + 文案专家 + 销售专家", content)
+        self.assertIn("市场分析专家 + 电商线上运营专家", content)
+        self.assertIn("财务专家", content)
+        self.assertIn("营销总控已接单", content)
+        self.assertIn("电商市场结论", content)
 
 
 class V431QuickStartAndHygieneTests(unittest.TestCase):
