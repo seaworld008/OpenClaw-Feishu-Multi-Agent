@@ -1239,6 +1239,42 @@ class V431DocumentationContentTests(unittest.TestCase):
         self.assertIn("TG-20260307-029", content)
         self.assertIn("V4_3_CANARY_OK", content)
 
+    def test_v431_doc_embeds_real_production_config_values(self):
+        content = V4_3_1_DOC.read_text(encoding="utf-8")
+
+        self.assertIn("当前最新生产配置快照（真实值）", content)
+        self.assertIn("oc_f785e73d3c00954d4ccd5d49b63ef919", content)
+        self.assertIn("aoteman", content)
+        self.assertIn("xiaolongxia", content)
+        self.assertIn("yiran_yibao", content)
+        self.assertIn("cli_a923c749bab6dcba", content)
+        self.assertIn("cli_a9f1849b67f9dcc2", content)
+        self.assertIn("cli_a923c71498b8dcc9", content)
+        self.assertIn('"mentionPatterns": ["@奥特曼", "奥特曼", "主管机器人"]', content)
+
+    def test_v431_doc_embeds_real_system_prompts_and_identity_sections(self):
+        content = V4_3_1_DOC.read_text(encoding="utf-8")
+
+        self.assertIn("当前最新生产 systemPrompt（真实值）", content)
+        self.assertIn("supervisor 群级 systemPrompt（真实值）", content)
+        self.assertIn("ops 群级 systemPrompt（真实值）", content)
+        self.assertIn("finance 群级 systemPrompt（真实值）", content)
+        self.assertIn("收到 TASK_DISPATCH 后必须", content)
+        self.assertIn("当前最新 workspace 身份文件（真实值）", content)
+        self.assertIn("奥特曼", content)
+        self.assertIn("小龙虾找妈妈", content)
+        self.assertIn("易燃易爆", content)
+
+    def test_v431_doc_includes_step_by_step_test_flow(self):
+        content = V4_3_1_DOC.read_text(encoding="utf-8")
+
+        self.assertIn("部署后测试顺序（必须写给客户和 Codex）", content)
+        self.assertIn("@小龙虾找妈妈 WARMUP", content)
+        self.assertIn("@易燃易爆 WARMUP", content)
+        self.assertIn("群里预期顺序", content)
+        self.assertIn("命令行验收", content)
+        self.assertIn("队列与恢复测试", content)
+
 
 if __name__ == "__main__":
     unittest.main()
