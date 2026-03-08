@@ -32,6 +32,7 @@ V5_INPUT_TEMPLATE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/refer
 V5_FIXED_ROLE_TEMPLATE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/input-template-v5-fixed-role-multi-group.json"
 V5_DOC = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v5-team-orchestrator.md"
 V5_CONFIG_SNAPSHOT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/openclaw-v5-team-orchestrator.example.jsonc"
+V5_1_QUICKSTART_DOC = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/V5.1-新机器快速启动-SOP.md"
 CUSTOMER_FIRST_USE_CHECKLIST = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用信息清单.md"
 CUSTOMER_FIRST_USE_PROMPT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用-Codex提示词.md"
 CUSTOMER_FIRST_USE_EXAMPLE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用真实案例.md"
@@ -4789,6 +4790,7 @@ class V5ReadmeAndSkillTests(unittest.TestCase):
 
     def test_customer_first_use_docs_exist_and_are_linked_in_readme(self):
         for path in (
+            V5_1_QUICKSTART_DOC,
             CUSTOMER_FIRST_USE_CHECKLIST,
             CUSTOMER_FIRST_USE_PROMPT,
             CUSTOMER_FIRST_USE_EXAMPLE,
@@ -4796,14 +4798,25 @@ class V5ReadmeAndSkillTests(unittest.TestCase):
             self.assertTrue(path.exists(), path.name)
 
         readme = README_FILE.read_text(encoding="utf-8")
+        self.assertIn("V5.1-新机器快速启动-SOP.md", readme)
         self.assertIn("客户首次使用信息清单.md", readme)
         self.assertIn("客户首次使用-Codex提示词.md", readme)
         self.assertIn("客户首次使用真实案例.md", readme)
 
     def test_customer_first_use_docs_cover_collection_prompt_and_real_case(self):
+        quickstart = V5_1_QUICKSTART_DOC.read_text(encoding="utf-8")
         checklist = CUSTOMER_FIRST_USE_CHECKLIST.read_text(encoding="utf-8")
         prompt = CUSTOMER_FIRST_USE_PROMPT.read_text(encoding="utf-8")
         example = CUSTOMER_FIRST_USE_EXAMPLE.read_text(encoding="utf-8")
+
+        self.assertIn("V5 Team Orchestrator / V5.1 Hardening", quickstart)
+        self.assertIn("curl -fsSL https://openclaw.ai/install.sh | bash", quickstart)
+        self.assertIn("openclaw onboard --install-daemon", quickstart)
+        self.assertIn("openclaw plugins install @openclaw/feishu", quickstart)
+        self.assertIn("customer-v51-prod-input.json", quickstart)
+        self.assertIn("v51_team_orchestrator_hygiene.py", quickstart)
+        self.assertIn("v51_team_orchestrator_reconcile.py", quickstart)
+        self.assertIn("主管最终统一收口", quickstart)
 
         self.assertIn("必须先收集", checklist)
         self.assertIn("appId", checklist)

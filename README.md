@@ -106,6 +106,7 @@ openclaw agents list --bindings
 
 2. 交付文档：
 - [V5 Team Orchestrator 交付模板](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v5-team-orchestrator.md)
+- [V5.1 新机器快速启动 SOP](skills/openclaw-feishu-multi-agent-deploy/references/V5.1-新机器快速启动-SOP.md)
 - [客户首次使用信息清单](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用信息清单.md)
 - [客户首次使用-Codex提示词](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用-Codex提示词.md)
 - [客户首次使用真实案例](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用真实案例.md)
