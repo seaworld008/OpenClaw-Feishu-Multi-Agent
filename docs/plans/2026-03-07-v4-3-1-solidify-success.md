@@ -11,14 +11,14 @@
 ---
 
 ### Task 1: 导出远端真相源
-- 读取远端 `v4_3_job_registry.py`
+- 读取远端 `v431_single_group_runtime.py`
 - 读取远端 `openclaw.json` 里 supervisor/ops/finance 团队群 `systemPrompt`
 - 读取远端 `workspace-supervisor_agent/{SOUL,USER}.md`
 - 读取远端 `workspace-{ops,finance}_agent/{SOUL,IDENTITY}.md`
 
 ### Task 2: 同步本地脚本
-- 更新 `skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_job_registry.py`
-- 必要时更新 `skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_3_canary.py`
+- 更新 `skills/openclaw-feishu-multi-agent-deploy/scripts/v431_single_group_runtime.py`
+- 必要时更新 `skills/openclaw-feishu-multi-agent-deploy/scripts/v431_single_group_canary.py`
 - 更新测试 `tests/test_openclaw_feishu_multi_agent_skill.py`
 
 ### Task 3: 同步文档与模板

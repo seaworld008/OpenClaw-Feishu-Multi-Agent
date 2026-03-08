@@ -9,7 +9,7 @@
   <array>
     <string>/usr/bin/env</string>
     <string>python3</string>
-    <string>__HOME__/.openclaw/workspace-supervisor_agent/.openclaw/v4_3_job_registry.py</string>
+    <string>__HOME__/.openclaw/workspace-supervisor_agent/.openclaw/v431_single_group_runtime.py</string>
     <string>--db</string>
     <string>__HOME__/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db</string>
     <string>watchdog-tick</string>

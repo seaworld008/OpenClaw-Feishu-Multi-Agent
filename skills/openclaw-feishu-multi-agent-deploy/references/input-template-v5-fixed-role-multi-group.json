@@ -1,0 +1,163 @@
+{
+  "mode": "plugin",
+  "defaultAccount": "aoteman",
+  "connectionMode": "websocket",
+  "messages": {
+    "groupChat": {
+      "mentionPatterns": ["@奥特曼", "奥特曼", "主管机器人"]
+    }
+  },
+  "tools": {
+    "allow": ["group:fs", "group:runtime", "group:web", "group:messaging", "group:sessions"],
+    "sessions": {
+      "visibility": "all"
+    }
+  },
+  "session": {
+    "sendPolicy": {
+      "default": "allow"
+    }
+  },
+  "accounts": [
+    {
+      "accountId": "aoteman",
+      "appId": "<replace-aoteman-app-id>",
+      "appSecret": "<replace-aoteman-app-secret>"
+    },
+    {
+      "accountId": "xiaolongxia",
+      "appId": "<replace-xiaolongxia-app-id>",
+      "appSecret": "<replace-xiaolongxia-app-secret>"
+    },
+    {
+      "accountId": "yiran_yibao",
+      "appId": "<replace-yiran-yibao-app-id>",
+      "appSecret": "<replace-yiran-yibao-app-secret>"
+    }
+  ],
+  "teams": [
+    {
+      "teamKey": "full_team_demo",
+      "displayName": "全角色示例群",
+      "group": {
+        "peerId": "oc_replace_full_team_group",
+        "entryAccountId": "aoteman",
+        "requireMention": true
+      },
+      "supervisor": {
+        "agentId": "supervisor_full_team_demo",
+        "roleKey": "supervisor",
+        "name": "奥特曼",
+        "description": "主管固定使用 aoteman，负责任务受理、串行调度与最终收口。",
+        "role": "主管总控",
+        "responsibility": "接单、拆解、调度、统一收口",
+        "systemPrompt": "<replace-full-team-supervisor-prompt>"
+      },
+      "workers": [
+        {
+          "agentId": "ops_full_team_demo",
+          "roleKey": "ops",
+          "accountId": "xiaolongxia",
+          "name": "小龙虾找妈妈",
+          "description": "运营角色固定使用 xiaolongxia。",
+          "role": "运营专家",
+          "responsibility": "活动打法、节奏、执行动作",
+          "visibility": "visible",
+          "systemPrompt": "<replace-full-team-ops-prompt>"
+        },
+        {
+          "agentId": "finance_full_team_demo",
+          "roleKey": "finance",
+          "accountId": "yiran_yibao",
+          "name": "易燃易爆",
+          "description": "财务角色固定使用 yiran_yibao。",
+          "role": "财务专家",
+          "responsibility": "预算、毛利、ROI 与风险",
+          "visibility": "visible",
+          "systemPrompt": "<replace-full-team-finance-prompt>"
+        }
+      ],
+      "workflow": {
+        "mode": "serial",
+        "stages": [
+          { "agentId": "ops_full_team_demo" },
+          { "agentId": "finance_full_team_demo" }
+        ]
+      }
+    },
+    {
+      "teamKey": "ops_only_demo",
+      "displayName": "运营单 worker 示例群",
+      "group": {
+        "peerId": "oc_replace_ops_only_group",
+        "entryAccountId": "aoteman",
+        "requireMention": true
+      },
+      "supervisor": {
+        "agentId": "supervisor_ops_only_demo",
+        "roleKey": "supervisor",
+        "name": "奥特曼",
+        "description": "主管仍固定使用 aoteman，但本群只启用运营角色。",
+        "role": "主管总控",
+        "responsibility": "接单、拆解、调度、统一收口",
+        "systemPrompt": "<replace-ops-only-supervisor-prompt>"
+      },
+      "workers": [
+        {
+          "agentId": "ops_ops_only_demo",
+          "roleKey": "ops",
+          "accountId": "xiaolongxia",
+          "name": "小龙虾找妈妈",
+          "description": "本群只启用运营角色，提示词按群独立配置。",
+          "role": "运营专家",
+          "responsibility": "活动打法、节奏、执行动作",
+          "visibility": "visible",
+          "systemPrompt": "<replace-ops-only-ops-prompt>"
+        }
+      ],
+      "workflow": {
+        "mode": "serial",
+        "stages": [
+          { "agentId": "ops_ops_only_demo" }
+        ]
+      }
+    },
+    {
+      "teamKey": "finance_only_demo",
+      "displayName": "财务单 worker 示例群",
+      "group": {
+        "peerId": "oc_replace_finance_only_group",
+        "entryAccountId": "aoteman",
+        "requireMention": true
+      },
+      "supervisor": {
+        "agentId": "supervisor_finance_only_demo",
+        "roleKey": "supervisor",
+        "name": "奥特曼",
+        "description": "主管仍固定使用 aoteman，但本群只启用财务角色。",
+        "role": "主管总控",
+        "responsibility": "接单、拆解、调度、统一收口",
+        "systemPrompt": "<replace-finance-only-supervisor-prompt>"
+      },
+      "workers": [
+        {
+          "agentId": "finance_finance_only_demo",
+          "roleKey": "finance",
+          "accountId": "yiran_yibao",
+          "name": "易燃易爆",
+          "description": "本群只启用财务角色，提示词按群独立配置。",
+          "role": "财务专家",
+          "responsibility": "预算、毛利、ROI 与风险",
+          "visibility": "visible",
+          "systemPrompt": "<replace-finance-only-finance-prompt>"
+        }
+      ],
+      "workflow": {
+        "mode": "serial",
+        "stages": [
+          { "agentId": "finance_finance_only_demo" }
+        ]
+      }
+    }
+  ]
+}

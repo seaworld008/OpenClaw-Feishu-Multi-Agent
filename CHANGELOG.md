@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.6.1] - 2026-03-08
+
+### Added
+- 新增 `V5.1 Hardening` 设计与实施文档：
+  - `docs/plans/2026-03-08-v5-1-hardening-design.md`
+  - `docs/plans/2026-03-08-v5-1-hardening-implementation.md`
+- `v5 runtime manifest` 新增 `Deterministic Orchestrator` 控制面元数据：
+  - `orchestratorVersion`
+  - `runtime.controlPlane.commands.startJob`
+  - `runtime.controlPlane.commands.nextAction`
+  - `runtime.controlPlane.commands.buildRollupContext`
+  - `runtime.controlPlane.commands.readyToRollup`
+
+### Changed
+- `core_job_registry.py` 升级为 `V5.1 Hardening` 控制面，新增：
+  - `start-job-with-workflow`
+  - `get-next-action`
+  - `build-rollup-context`
+- `ready-to-rollup` 从“按已有 participant 推断”改为“按显式状态机 `next_action=rollup` 判断”。
+- README、SKILL、`V5` 交付模板、输入模板和 JSONC 快照统一升级到 `V5.1 Hardening` 口径，明确 `LLM 负责内容，代码负责流程`。
+
+### Fixed
+- 修复 `V5` 主管在 worker 完成后仍可能直接 `NO_REPLY`、漏派下一阶段 worker 的结构性问题。
+- 修复旧 `team_jobs.db` 升级到 `V5.1 Hardening` 时缺少状态机字段的问题。
+
 ## [1.6.0] - 2026-03-08
 
 ### Added
@@ -34,7 +59,7 @@
 ## [1.5.1] - 2026-03-07
 
 ### Added
-- 新增 `scripts/v4_3_session_hygiene.py`，用于首次上线、协议变更或脏上下文后，一次性清理 `supervisor group/main + worker group` 会话。
+- 新增 `scripts/v431_single_group_hygiene.py`，用于首次上线、协议变更或脏上下文后，一次性清理 `supervisor group/main + worker group` 会话。
 - 新增 [V4.3.1 新机器快速启动 SOP](skills/openclaw-feishu-multi-agent-deploy/references/v4-3-1-quick-start.md)，统一 `init-db -> hygiene -> WARMUP -> canary` 的最小闭环。
 
 ### Changed
@@ -83,7 +108,7 @@
   - 群里禁止泄漏 `ACK_READY / REPLY_SKIP / COMPLETE_PACKET`
   - `V4.3.1` 的可见消息固定为 6 类
   - `TG-20260307-029` 作为真实通过样板
-- `v4_3_job_registry.py` 同步远端稳定版：
+- `v431_single_group_runtime.py` 同步远端稳定版：
   - `mark-worker-complete` 支持 `account-id/role` 缺省兜底
   - 与现网 SQLite 状态机行为对齐
 
@@ -96,13 +121,13 @@
 
 ### Fixed
 - 修复本地仓库 `V4.3.1` 文档仍保留旧协议（`REPLY_SKIP`、短字段限制、旧可见结论约束）的问题
-- 修复本地 `v4_3_job_registry.py` 与远端真实稳定版不一致，导致完成包可能因参数漂移卡死的问题
+- 修复本地 `v431_single_group_runtime.py` 与远端真实稳定版不一致，导致完成包可能因参数漂移卡死的问题
 
 ## [1.4.0] - 2026-03-07
 
 ### Added
 - 新增 `V4.3.1` 单群生产稳定版文档：`references/codex-prompt-templates-v4.3.1-single-group-production.md`
-- 新增 `V4.3.1` canary：`scripts/check_v4_3_canary.py`
+- 新增 `V4.3.1` canary：`scripts/v431_single_group_canary.py`
 - 新增 `V4.3.1` 交叉验证记录：`references/source-cross-validation-2026-03-07-v4-3-1.md`
 - 新增 `V4.3.1` 实施计划：`docs/plans/2026-03-07-v4-3-1-single-group-production-stability.md`
 - 新增自动化测试，覆盖：
@@ -112,7 +137,7 @@
 
 ### Changed
 - README、SKILL、验收清单统一把单群生产推荐版从 `V4.3` 升级为 `V4.3.1`
-- `v4_3_job_registry.py` 升级为生产稳定版工具，新增：
+- `v431_single_group_runtime.py` 升级为生产稳定版工具，新增：
   - `mark-dispatch`
   - `get-job`
   - `list-queue`
@@ -252,7 +277,7 @@
 ### Added
 - 新增交付级 Skill 文档，覆盖 single-bot / multi-bot、incremental / full_replace、canary 发布与回滚要求。
 - 新增模板集合：部署输入、单/多 bot 路由、brownfield 变更计划、验收检查清单。
-- 新增配置生成脚本 `build_openclaw_feishu_snippets.py`，支持 plugin/core patch 生成。
+- 新增配置生成脚本 `core_feishu_config_builder.py`，支持 plugin/core patch 生成。
 - 新增参考文档：前提条件、升级回归手册、Codex 提示词模板、交叉验证记录、融合说明。
 - 新增 `agents/openai.yaml` 作为 agent 元信息。
 

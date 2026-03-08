@@ -31,7 +31,7 @@ openclaw gateway restart
 ## 3. 初始化数据库与 watchdog
 
 ```bash
-python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_job_registry.py \
+python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v431_single_group_runtime.py \
   --db ~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db \
   init-db
 ```
@@ -45,7 +45,7 @@ python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_job_registry.py \
 首次上线、协议改动后、或从别的环境迁移过来时，先执行：
 
 ```bash
-python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_session_hygiene.py \
+python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v431_single_group_hygiene.py \
   --home ~/.openclaw \
   --group-peer-id oc_f785e73d3c00954d4ccd5d49b63ef919 \
   --include-workers \
@@ -111,7 +111,7 @@ READY_FOR_TEAM_GROUP|agentId=finance_agent
 ## 7. canary 验收
 
 ```bash
-python3 skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_3_canary.py \
+python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v431_single_group_canary.py \
   --db ~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db \
   --job-ref TG-20260307-031 \
   --session-root ~/.openclaw/agents \
@@ -139,7 +139,7 @@ python3 skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_3_canary.py \
 推荐命令：
 
 ```bash
-python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_session_hygiene.py \
+python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v431_single_group_hygiene.py \
   --home ~/.openclaw \
   --group-peer-id oc_f785e73d3c00954d4ccd5d49b63ef919 \
   --include-workers \

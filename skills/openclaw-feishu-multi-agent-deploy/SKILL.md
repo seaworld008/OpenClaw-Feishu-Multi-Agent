@@ -39,12 +39,35 @@ description: Use when delivering production-ready OpenClaw Feishu multi-agent se
 ## V5 Team Orchestrator 默认约束
 
 - 一句话原则：每个群固定 1 个 supervisor，外加 N 个 worker
+- 当前生产推荐：`V5.1 Hardening`
 - 每个群都是一个独立 team unit
 - 每个群固定 `1` 个 supervisor
 - 每个群可配置 `N` 个 worker
+- 当前生产推荐标准：`bot 复用，role 固定`
+- 同一个 bot 可以跨很多群复用，但它在所有群里都保持同一个角色
+- 每个群的角色组合可以不同，只需要在该 `team` 下启用需要的 `workers`
 - `teams` 是 `V5` 的推荐输入模型
+- `workflow.stages` 必须覆盖当前 team 的全部 worker 且不可重复；主管只能在全部 worker 完成后收口
+- 每个 agent 都允许独立定制 `name / description / identity / role / responsibility / systemPrompt`
 - 不再推荐多个群共享同一套全局 `supervisor_agent / ops_agent / finance_agent`
 - `V5` 重点是模板化复制 team，而不是做任意 mesh 式 agent 工作流引擎
+- `V5.1 Hardening` 固定采用 `Deterministic Orchestrator`
+- 一句话原则：`LLM 负责内容，代码负责流程`
+- 主管控制面必须优先使用：
+  - `start-job-with-workflow`
+  - `build-visible-ack`
+  - `get-next-action`
+  - `build-dispatch-payload`
+  - `build-rollup-context`
+  - `build-rollup-visible-message`
+  - `record-visible-message`
+  - `ready-to-rollup`
+- watchdog/reconcile 控制面固定脚本：
+  - `v51_team_orchestrator_reconcile.py`
+  - `resume-job`
+  - `reconcile-dispatch`
+  - `reconcile-rollup`
+- 若 `V5.1 Hardening` 还依赖 `WARMUP` 才能稳定跑主流程，视为部署未完成，而不是正常要求
 
 `V5` runtime 命名约定：
 - hidden main：`agent:<supervisorAgentId>:main`
@@ -65,9 +88,11 @@ description: Use when delivering production-ready OpenClaw Feishu multi-agent se
 - OpenClaw patch
 - summary
 - `v5 runtime manifest`
+- `v5 runtime manifest` 中必须写明 `V5.1 Hardening` 控制面命令
 
 Codex 交付入口：
 - `references/codex-prompt-templates-v5-team-orchestrator.md`
+- `references/input-template-v5-fixed-role-multi-group.json`
 - 这份文档必须保留当前 2 个正式群、3 个正式机器人、长版 systemPrompt 和可直接复制的 Codex 指令，不要退化成抽象骨架
 - `references/codex-prompt-templates-v4.3.1-single-group-production-C1.0.md`
 - `V4.3.1-C1.0` 属于客户定制保留件，不是新的主线版本；后续清理旧资料时不得删除
@@ -115,7 +140,7 @@ Codex 交付入口：
 - 优先输出最小 patch（不要覆盖整份配置）
 - 可用脚本：
 ```bash
-python3 scripts/build_openclaw_feishu_snippets.py \
+python3 scripts/core_feishu_config_builder.py \
   --input references/input-template.json \
   --out references/generated
 ```
@@ -141,7 +166,7 @@ python3 scripts/build_openclaw_feishu_snippets.py \
 - 重启网关
 - 若是 `V4.3.1` 或任何协议字段改动（`systemPrompt / callbackSessionKey / COMPLETE_PACKET / hidden main`），先执行：
 ```bash
-python3 scripts/v4_3_session_hygiene.py \
+python3 scripts/v431_single_group_hygiene.py \
   --home ~/.openclaw \
   --group-peer-id <团队群peerId> \
   --include-workers \
@@ -154,10 +179,10 @@ python3 scripts/v4_3_session_hygiene.py \
 - 记录验证证据（命令输出、关键日志片段）
 - 输出回滚命令
 - 若启用了卡片交互，验证 `card.action.trigger` 事件链路
-- `V3.1` 跨群主管派单场景必须执行 `scripts/check_v3_dispatch_canary.sh`，未通过不得判定验收成功
-- `check_v3_dispatch_canary.sh` 返回 `3` 表示证据不足，不能视为派单成功
+- `V3.1` 跨群主管派单场景必须执行 `scripts/v31_cross_group_canary.py`，未通过不得判定验收成功
+- `v31_cross_group_canary.py` 返回 `3` 表示证据不足，不能视为派单成功
 - 若交付目标是“真实长期上线且用户不手输 taskId”，单群生产推荐直接按 `V4.3.1` 设计：supervisor 自动生成 `jobRef`，并引入外部状态层、一次性初始化、watchdog 与 activeJob/queue 机制
-- `V4.3.1` 验收优先使用 `scripts/check_v4_3_canary.py`
+- `V4.3.1` 验收优先使用 `scripts/v431_single_group_canary.py`
 - `V4.3.1` 与 `V5` 验收证据优先级：`~/.openclaw/agents/*/sessions/*.jsonl` 高于 gateway log
 
 ## 输出要求（给客户/交付文档）
@@ -195,9 +220,18 @@ python3 scripts/v4_3_session_hygiene.py \
 - V4.3.1 若任务长期卡住阻塞后续消息：不要要求用户重发或手工排障；优先执行 `watchdog-tick`，让 stale active job 自动失败并释放队列
 - `V5` 若出现跨群串线：先核对 `teamKey`、hidden main 是否按 team 隔离，以及 runtime manifest 中的 session key / db / watchdog 是否落在当前 team 命名空间
 - `V5` 若新增第 2/10 个群时行为不一致：优先比对 `teams[]` 模板输入与 runtime manifest，而不是直接手改 `openclaw.json`
+- `V5` 若主管群 session 对真实用户消息出现裸 NO_REPLY（直接裸返回 `NO_REPLY`）：先执行 `scripts/v51_team_orchestrator_hygiene.py` 清理当前 team 的 supervisor group/main 与 worker group/main 会话；若仍未建单，立刻执行 `scripts/v51_team_orchestrator_reconcile.py --team-key <teamKey> resume-job`，不要直接让用户连续重发。
+- `V5` 若主管接单/最终收口仍写成普通 assistant 文本：优先回到 `build-visible-ack/build-rollup-visible-message -> message -> record-visible-message` 这条显式路径，不要继续依赖 supervisor 自由发挥可见文案。
+- `V5` worker 若从 main session 被控制面直派：`TASK_DISPATCH` 必须携带显式 `channel/accountId/target`，worker 必须按这三个字段调用 `message`，不要再依赖 session 默认 delivery context。
+- `V5` reconcile/control-plane 直派 worker 前会自动重置当前 `agent:<worker>:main`，避免旧 transcript 把 `TASK_DISPATCH` 拉回过时协议；手工 hygiene 时 `--include-workers` 也必须覆盖 worker `main + group`。
+- `V5` 若 hidden main transcript 里已经出现 `COMPLETE_PACKET`，但 DB 没推进：优先执行 `scripts/v51_team_orchestrator_reconcile.py --team-key <teamKey> resume-job`。当前最高标准实现会优先消费最近有效包，跳过 `pending / placeholder / sent / <pending...>` 这类占位包，并在只剩无效包时重派当前 worker。
+- `V5` 若 hidden main 的最新 `COMPLETE_PACKET` 仍带占位 `messageId`，但 waiting worker 的 `main` transcript 已经出现两个真实 `message` toolResult：必须优先从 worker transcript 恢复 `progressMessageId / finalMessageId` 并推进流程，不能直接删 worker 会话重派。
+- `V5` 若当前 waiting worker 的新 `main` 会话对 `TASK_DISPATCH` 连续裸回 `NO_REPLY`：`resume-job` 必须在单次执行里做有限次内联重派；不能只重派一次就退出等待下一轮 timer。
+- `V5` hidden main 包消费后若 stage 已推进，旧 stage 的 `COMPLETE_PACKET` 必须被忽略，不能在下一 stage 被重新判成 invalid packet 并触发误重派。
+- `V5` worker 回 `COMPLETE_PACKET` 时，必须等两次 message toolResult 都返回真实 `messageId` 后，才允许发送 `status=completed`；禁止使用 `pending`、`sent`、`<pending_from_tool_1>`、`msg_*_placeholder` 等占位值。
 - macOS 客户不要套用 `systemctl --user`；应使用 `launchctl bootstrap/print` 与 `templates/launchd/v4-3-watchdog.plist`
 - Windows 客户不要默认承诺原生 service 版；应优先交付 `WSL2`，并引用 `references/windows-wsl2-deployment-notes.md`
-- V4.3.1 若需要证明“真的稳定”，不要只看群聊观感；必须同时核对 SQLite `jobs/job_participants` 与 `check_v4_3_canary.py`
+- V4.3.1 若需要证明“真的稳定”，不要只看群聊观感；必须同时核对 SQLite `jobs/job_participants` 与 `v431_single_group_canary.py`
 - V4.3.1 若群里仍泄漏 `ACK_READY / REPLY_SKIP / COMPLETE_PACKET`：优先检查 worker 的 callback 是否仍打到主管群会话；生产版必须统一回到 `agent:supervisor_agent:main`，内部协议最终只输出 `NO_REPLY`
 - V4.3.1 若主管收不到最终完成包：优先检查 `mark-worker-complete` 是否仍强依赖 `--account-id/--role`；当前稳定版应允许这两个参数兜底，不应因字段漂移卡死
 - V4.3.1 若演示效果不足：不要把 worker 结论压成一句话；群里的运营/财务结论允许多行完整输出，只对 `COMPLETE_PACKET` 做长度约束
@@ -231,9 +265,10 @@ python3 scripts/v4_3_session_hygiene.py \
   - `references/source-cross-validation-2026-03-07-v4-3-1.md`
   - `references/source-cross-validation-2026-03-07-platforms.md`
 - 辅助脚本：
-  - `scripts/check_v3_dispatch_canary.sh`
-- `scripts/check_v4_3_canary.py`
-- `scripts/v4_3_session_hygiene.py`
+  - `scripts/v31_cross_group_canary.py`
+- `scripts/v431_single_group_canary.py`
+- `scripts/v431_single_group_hygiene.py`
 - `templates/systemd/v5-team-watchdog.service`
 - `templates/systemd/v5-team-watchdog.timer`
 - `templates/launchd/v5-team-watchdog.plist`
+- `scripts/v51_team_orchestrator_reconcile.py`

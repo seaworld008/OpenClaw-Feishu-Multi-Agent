@@ -27,7 +27,7 @@
 
 ## 对 skill 的直接影响
 
-1. `V4.3.1` 的核心协议、SQLite 状态层、`check_v4_3_canary.py`、`WARMUP`、群内 6 类可见消息规则，不需要按平台分叉。
+1. `V4.3.1` 的核心协议、SQLite 状态层、`v431_single_group_canary.py`、`WARMUP`、群内 6 类可见消息规则，不需要按平台分叉。
 2. 平台差异主要集中在：
    - service manager
    - watchdog 挂载方式

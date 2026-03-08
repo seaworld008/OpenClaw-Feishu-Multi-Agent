@@ -54,6 +54,28 @@ feishu:
       dmPolicy: "pairing"
       allowFrom: []
 
+recommended_v5_fixed_role_accounts:
+  enabled: true
+  supervisor: "aoteman"
+  ops: "xiaolongxia"
+  finance: "yiran_yibao"
+
+team_role_combination_template:
+  note: "同一个 bot 可以跨很多群复用，但 role 不变；每个群的角色组合可以不同。"
+  examples:
+    - team_key: "full_team_demo"
+      group_peer_id: "oc_replace_full_team_group"
+      entry_account_id: "aoteman"
+      roles: ["supervisor", "ops", "finance"]
+    - team_key: "ops_only_demo"
+      group_peer_id: "oc_replace_ops_only_group"
+      entry_account_id: "aoteman"
+      roles: ["supervisor", "ops"]
+    - team_key: "finance_only_demo"
+      group_peer_id: "oc_replace_finance_only_group"
+      entry_account_id: "aoteman"
+      roles: ["supervisor", "finance"]
+
   # 群策略：可选按群覆盖 requireMention
   group_overrides:
     - chatId: "oc_group_a"
@@ -107,7 +129,7 @@ tooling:
 
 runtime_hygiene:
   enabled: true
-  script: "skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_session_hygiene.py"
+  script: "skills/openclaw-feishu-multi-agent-deploy/scripts/v431_single_group_hygiene.py"
   include_workers: true
   delete_transcripts: true
   required_after_changes:

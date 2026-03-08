@@ -2,7 +2,7 @@
 """Build OpenClaw Feishu config snippets from deployment input JSON.
 
 Usage:
-  python3 scripts/build_openclaw_feishu_snippets.py \
+  python3 scripts/core_feishu_config_builder.py \
     --input references/input-template.json \
     --out references/generated
 """
@@ -126,14 +126,29 @@ def build_team_role_key(team_key: str, agent: Dict[str, Any], default_role_key: 
     return slugify(candidate)
 
 
+def build_agent_identity(agent: Dict[str, Any]) -> Dict[str, Any] | None:
+    raw = agent.get("identity")
+    if not isinstance(raw, dict):
+        return None
+    identity = {
+        key: value
+        for key, value in raw.items()
+        if key in {"name", "theme", "emoji", "avatar"} and value
+    }
+    return identity or None
+
+
 def build_team_agent_record(team_key: str, agent: Dict[str, Any], default_role_key: str) -> Dict[str, Any]:
     role_key = build_team_role_key(team_key, agent, default_role_key)
+    identity = build_agent_identity(agent)
     record: Dict[str, Any] = {
         "id": agent["agentId"],
-        "name": agent.get("name") or agent.get("role") or agent["agentId"],
+        "name": agent.get("name") or (identity or {}).get("name") or agent.get("role") or agent["agentId"],
         "workspace": agent.get("workspace") or f"~/.openclaw/teams/{team_key}/workspaces/{role_key}",
         "agentDir": agent.get("agentDir") or f"~/.openclaw/teams/{team_key}/agents/{role_key}/agent",
     }
+    if identity:
+        record["identity"] = identity
     if agent.get("mentionPatterns"):
         record["groupChat"] = {"mentionPatterns": list(agent["mentionPatterns"])}
     return record
@@ -230,13 +245,26 @@ def validate_teams(teams: Any, account_ids: set[str]) -> List[Dict[str, Any]]:
         if not isinstance(stages, list) or not stages:
             raise ValueError(f"teams[{idx}].workflow.stages must be a non-empty array")
         valid_stage_agent_ids = {str(worker["agentId"]) for worker in normalized_workers}
+        stage_agent_ids: List[str] = []
         for stage_idx, stage in enumerate(stages):
             if not isinstance(stage, dict) or not stage.get("agentId"):
                 raise ValueError(f"teams[{idx}].workflow.stages[{stage_idx}] requires agentId")
-            if stage["agentId"] not in valid_stage_agent_ids:
+            stage_agent_id = str(stage["agentId"])
+            if stage_agent_id not in valid_stage_agent_ids:
                 raise ValueError(
                     f"teams[{idx}].workflow.stages[{stage_idx}].agentId must reference a worker in the same team"
                 )
+            if stage_agent_id in stage_agent_ids:
+                raise ValueError(
+                    f"teams[{idx}].workflow.stages contains duplicate agentId: {stage_agent_id}"
+                )
+            stage_agent_ids.append(stage_agent_id)
+        missing_stage_agents = sorted(valid_stage_agent_ids - set(stage_agent_ids))
+        if missing_stage_agents:
+            raise ValueError(
+                f"teams[{idx}].workflow.stages must include every worker agentId exactly once; "
+                f"missing: {', '.join(missing_stage_agents)}"
+            )
 
         validated.append(team)
 
@@ -291,6 +319,8 @@ def build_v5_runtime_manifest(data: Dict[str, Any]) -> Dict[str, Any]:
                     "agentId": worker_agent_id,
                     "accountId": worker["accountId"],
                     "name": worker_record["name"],
+                    "description": worker.get("description"),
+                    "identity": worker_record.get("identity"),
                     "role": worker.get("role"),
                     "responsibility": worker.get("responsibility"),
                     "visibility": worker.get("visibility", "visible"),
@@ -315,6 +345,8 @@ def build_v5_runtime_manifest(data: Dict[str, Any]) -> Dict[str, Any]:
                     "agentId": supervisor_record["id"],
                     "accountId": supervisor_account_id,
                     "name": supervisor_record["name"],
+                    "description": supervisor.get("description"),
+                    "identity": supervisor_record.get("identity"),
                     "role": supervisor.get("role"),
                     "responsibility": supervisor.get("responsibility"),
                     "mentionPatterns": list(supervisor.get("mentionPatterns") or []),
@@ -327,8 +359,29 @@ def build_v5_runtime_manifest(data: Dict[str, Any]) -> Dict[str, Any]:
                 "workers": worker_records,
                 "workflow": team["workflow"],
                 "runtime": {
+                    "orchestratorVersion": "V5.1 Hardening",
                     "dbPath": f"~/.openclaw/teams/{team_key}/state/team_jobs.db",
                     "hiddenMainSessionKey": hidden_main,
+                    "entryAccountId": group["entryAccountId"],
+                    "entryChannel": PLUGIN_CHANNEL,
+                    "entryTarget": f"chat:{peer_id}",
+                    "controlPlane": {
+                        "registryScript": "skills/openclaw-feishu-multi-agent-deploy/scripts/v51_team_orchestrator_runtime.py",
+                        "reconcileScript": "skills/openclaw-feishu-multi-agent-deploy/scripts/v51_team_orchestrator_reconcile.py",
+                        "commands": {
+                            "startJob": "start-job-with-workflow",
+                            "nextAction": "get-next-action",
+                            "buildDispatchPayload": "build-dispatch-payload",
+                            "buildVisibleAck": "build-visible-ack",
+                            "buildRollupContext": "build-rollup-context",
+                            "buildRollupVisibleMessage": "build-rollup-visible-message",
+                            "recordVisibleMessage": "record-visible-message",
+                            "readyToRollup": "ready-to-rollup",
+                            "reconcileDispatch": "reconcile-dispatch",
+                            "reconcileRollup": "reconcile-rollup",
+                            "resumeJob": "resume-job",
+                        },
+                    },
                     "sessionKeys": {
                         "supervisorGroup": f"agent:{supervisor_record['id']}:{PLUGIN_CHANNEL}:group:{peer_id}",
                         "supervisorMain": hidden_main,
@@ -347,7 +400,8 @@ def build_v5_runtime_manifest(data: Dict[str, Any]) -> Dict[str, Any]:
         )
 
     return {
-        "versionLine": "V5 Team Orchestrator",
+        "versionLine": "V5 Team Orchestrator / V5.1 Hardening",
+        "orchestratorVersion": "V5.1 Hardening",
         "teamCount": len(manifest_teams),
         "teams": manifest_teams,
     }
@@ -715,12 +769,12 @@ def write_summary(
         f.write("\n".join(lines) + "\n")
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Build OpenClaw Feishu config snippets")
     parser.add_argument("--input", required=True, help="Input JSON file")
     parser.add_argument("--out", default="references/generated", help="Output directory")
     parser.add_argument("--mode", choices=["plugin", "core", "auto"], default="auto")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     input_path = pathlib.Path(args.input).expanduser().resolve()
     out_dir = pathlib.Path(args.out).expanduser().resolve()
@@ -753,7 +807,8 @@ def main() -> None:
     print(str(summary_file))
     if runtime_manifest_file is not None:
         print(str(runtime_manifest_file))
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

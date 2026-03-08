@@ -9,12 +9,14 @@
   <array>
     <string>/usr/bin/env</string>
     <string>python3</string>
-    <string>__REGISTRY_SCRIPT__</string>
-    <string>--db</string>
-    <string>__DB_PATH__</string>
-    <string>watchdog-tick</string>
-    <string>--group-peer-id</string>
-    <string>__TEAM_GROUP_PEER_ID__</string>
+    <string>__RECONCILE_SCRIPT__</string>
+    <string>--manifest</string>
+    <string>__MANIFEST_PATH__</string>
+    <string>--team-key</string>
+    <string>__TEAM_KEY__</string>
+    <string>--openclaw-home</string>
+    <string>__OPENCLAW_HOME__</string>
+    <string>resume-job</string>
     <string>--stale-seconds</string>
     <string>__STALE_SECONDS__</string>
   </array>
