@@ -4,10 +4,11 @@
 
 ## 当前版本
 
-- `v1.6.0`（2026-03-08）
+- `v1.6.1`（2026-03-08）
 - 默认技术路线：官方插件 `@openclaw/feishu`
 - 兼容路线：legacy `chat-feishu`
 - 当前主线版本：`V3.1` 跨群生产、`V4.3.1` 单群生产、`V5 Team Orchestrator` 多群模板化生产
+- 当前 `V5` 的推荐生产形态：`V5.1 Hardening`
 - 客户定制保留件：`V4.3.1-C1.0`（与 `V4.3.1` 同协议，保留客户专属群与机器人配置）
 
 ## 仓库结构
@@ -33,6 +34,7 @@ README.md
 - 配置生成脚本（从输入 JSON 生成 patch + 验证摘要）
 - 前置条件、验收清单、回滚流程、升级回归手册
 - `V5 Team Orchestrator`：多个飞书群，每群 `1` 个主管 + `N` 个 worker，可模板化扩展角色、职能与提示词
+- `V5.1 Hardening`：在 `V5` 上把流程推进下沉到确定性控制面，`LLM 负责内容，代码负责流程`
 - 直接给 Codex 使用的完整交付模板、真实双群示例和 `v5 runtime manifest`
 
 ## 平台兼容矩阵
@@ -63,11 +65,12 @@ cd skills/openclaw-feishu-multi-agent-deploy
 - `references/input-template-plugin.json`（plugin 完整示例）
 - `references/input-template-legacy-chat-feishu.json`（legacy 兼容）
 - `references/input-template-v5-team-orchestrator.json`（`V5 Team Orchestrator` 多群模板化示例）
+- `references/input-template-v5-fixed-role-multi-group.json`（固定 bot-role 映射、群级角色组合自由的正式推荐模板）
 
 3. 生成 patch
 
 ```bash
-python3 scripts/build_openclaw_feishu_snippets.py \
+python3 scripts/core_feishu_config_builder.py \
   --input references/input-template.json \
   --out references/generated
 ```
@@ -84,11 +87,28 @@ openclaw agents list --bindings
 
 如果你的目标是“多个飞书群，每个群内都是多个 agent，且每个群都能自定义角色、职能与提示词”，优先按 `V5 Team Orchestrator` 建模：
 
+当前生产推荐直接采用 `V5.1 Hardening`：
+- 不再让 supervisor prompt 自己判断下一步
+- 必须使用 `start-job-with-workflow`
+- 必须使用 `build-visible-ack`
+- 必须使用 `get-next-action`
+- 必须使用 `build-dispatch-payload`
+- 最终收口前必须使用 `build-rollup-context` 和 `build-rollup-visible-message`
+- 群里主管可见消息发出后，必须执行 `record-visible-message`
+- timer 必须运行 `v51_team_orchestrator_reconcile.py resume-job`
+- 不把 `WARMUP` 当成常规运行依赖
+- 若主管群 session 对真实用户消息直接裸返回 `NO_REPLY`，先执行 `v51_team_orchestrator_hygiene.py` 清理 team 会话；若仍未建单，交给 `v51_team_orchestrator_reconcile.py` 从 transcript 补建单与补派发
+- 若当前 waiting worker 的新 `main` 会话对 `TASK_DISPATCH` 裸回 `NO_REPLY`，`resume-job` 必须在单次执行里做有限次内联重派，而不是只重派一次后等待下一轮 timer
+
 1. 输入模板：
 - [V5 Team Orchestrator 输入模板](skills/openclaw-feishu-multi-agent-deploy/references/input-template-v5-team-orchestrator.json)
+- [V5 固定角色多群模板](skills/openclaw-feishu-multi-agent-deploy/references/input-template-v5-fixed-role-multi-group.json)
 
 2. 交付文档：
 - [V5 Team Orchestrator 交付模板](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v5-team-orchestrator.md)
+- [客户首次使用信息清单](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用信息清单.md)
+- [客户首次使用-Codex提示词](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用-Codex提示词.md)
+- [客户首次使用真实案例](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用真实案例.md)
 
 3. 去敏配置快照：
 - [V5 Team Orchestrator JSONC 参考快照](skills/openclaw-feishu-multi-agent-deploy/templates/openclaw-v5-team-orchestrator.example.jsonc)
@@ -97,6 +117,7 @@ openclaw agents list --bindings
 - `templates/systemd/v5-team-watchdog.service`
 - `templates/systemd/v5-team-watchdog.timer`
 - `templates/launchd/v5-team-watchdog.plist`
+- `skills/openclaw-feishu-multi-agent-deploy/scripts/v51_team_orchestrator_reconcile.py`
 
 5. 生成器额外产物：
 - `openclaw-feishu-plugin-v5-runtime-<timestamp>.json`
@@ -111,8 +132,80 @@ openclaw agents list --bindings
 设计原则：
 - 每个群都是一个独立 `team unit`
 - `One Team = 1 Supervisor + N Workers`
+- 当前生产推荐标准：`bot 复用，role 固定`
+- 同一个 bot 可以跨很多群复用，但它在所有群里都保持同一个角色
+- 每个群的角色组合可以不同，只需要在该 `team` 下启用需要的 `workers`
 - `teamKey` 驱动 agentId / workspace / memory / watchdog 命名
+- `workflow.stages` 必须把当前 team 的每个 worker 恰好声明一次；主管最终收口前必须等所有已登记 worker 完成
+- 每个 agent 都允许单独定制 `name / description / identity / role / responsibility / systemPrompt`
 - 不再推荐多个群共享同一套全局 `supervisor_agent / ops_agent / finance_agent`
+- `V5.1 Hardening` 采用 `Deterministic Orchestrator`：`watchdog-tick -> v51_team_orchestrator_reconcile.py resume-job -> start-job-with-workflow -> build-visible-ack -> record-visible-message -> get-next-action -> build-dispatch-payload -> reset waiting worker main session -> mark-dispatch/mark-worker-complete -> build-rollup-context -> build-rollup-visible-message -> record-visible-message -> close-job`
+- `resume-job` 必须优先消费 hidden main transcript 中最近的有效 `COMPLETE_PACKET`；若最新包是 `pending / placeholder / sent / <pending...>` 之类占位值，必须忽略并继续向后找最近有效包；若当前只剩无效包，则强制重派当前 worker
+- 若 hidden main 里的 `COMPLETE_PACKET` 仍是占位 messageId，但当前 waiting worker 的 `main` transcript 已经拿到了两个真实 `message` toolResult，`resume-job` 必须先从 worker transcript 恢复真实 `progressMessageId / finalMessageId`，再推进下一 stage / rollup，不能直接删会话重派
+- `resume-job` 在当前 stage 还未完成时，必须忽略已消费旧 stage 的 hidden main 包；旧包不能在下一 stage 被重新当成 invalid packet 触发误重派
+- 一句话原则：`LLM 负责内容，代码负责流程`
+
+推荐固定映射：
+- `aoteman -> supervisor`
+- `xiaolongxia -> ops`
+- `yiran_yibao -> finance`
+
+## 默认专家库 / Default Expert Catalog
+
+适用原则：
+- 下面这 30 个默认专家按职能分类，可跨行业复用
+- 专家名称使用英文，便于直接复用到 `agentId / role / prompt seed`
+- 专家描述使用中文，便于交付时快速理解和改写
+
+### 管理与协调 / Management & Orchestration
+- `TeamOrchestrator`：负责任务接单、拆解、调度、统一收口，适合作为多专家团队主管。
+- `ProjectCoordinator`：负责里程碑、依赖关系、执行节奏和跨角色协同推进。
+- `DecisionAdvisor`：负责方案比较、优先级判断和关键决策建议输出。
+
+### 增长与营销 / Growth & Marketing
+- `GrowthStrategist`：负责增长目标拆解、渠道策略、拉新与转化路径设计。
+- `CampaignPlanner`：负责活动方案、传播节奏、内容日历和落地动作安排。
+- `BrandCopyLead`：负责品牌表达、核心卖点提炼、传播话术和文案方向。
+
+### 销售与商务 / Sales & Business
+- `SalesCloser`：负责商机推进、成交路径设计、异议处理和成单建议。
+- `AccountPlanner`：负责客户分层、机会盘点、跟进节奏和客户经营计划。
+- `PartnershipManager`：负责渠道合作、商务拓展、联合方案与资源置换设计。
+
+### 财务与风控 / Finance & Risk
+- `FinancialController`：负责预算控制、毛利测算、ROI 校验和财务红线管理。
+- `BudgetPlanner`：负责成本分配、投入节奏、预算方案和资源使用建议。
+- `RiskOfficer`：负责识别经营、履约、现金流和合规风险，并给出防控措施。
+
+### 产品与项目 / Product & Delivery
+- `ProductLead`：负责需求澄清、方案定义、优先级判断和产品路径规划。
+- `ProductAnalyst`：负责用户问题分析、需求洞察、功能拆解和价值判断。
+- `DeliveryManager`：负责交付计划、推进节奏、风险提醒和结果验收对齐。
+
+### 运营与履约 / Operations & Fulfillment
+- `OperationsManager`：负责日常运营策略、执行节奏、资源协调和流程落地。
+- `FulfillmentManager`：负责履约链路、库存协同、交付质量和异常处理。
+- `SOPDesigner`：负责标准流程设计、执行规范、检查清单和流程优化建议。
+
+### 客户成功与服务 / Customer Success & Service
+- `CustomerSuccessLead`：负责客户目标对齐、续约策略、满意度提升和长期经营。
+- `ServiceQualityManager`：负责服务标准、质量巡检、反馈闭环和服务改进。
+- `RetentionSpecialist`：负责留存策略、流失预警、召回动作和客户活跃提升。
+
+### 数据与分析 / Data & Analytics
+- `DataAnalyst`：负责数据整理、指标拆解、趋势分析和关键结论输出。
+- `RevenueAnalyst`：负责收入结构分析、利润表现、价格影响和增长机会识别。
+- `InsightResearcher`：负责调研信息汇总、洞察提炼、问题定位和决策输入。
+
+### 人力与组织 / HR & Organization
+- `TalentPartner`：负责人岗匹配、组织支持、人才盘点和关键岗位建议。
+- `RecruiterLead`：负责招聘策略、岗位画像、候选人筛选和招聘节奏设计。
+- `OrgDevelopmentManager`：负责组织协同、机制优化、绩效节奏和团队发展建议。
+
+### 法务与合规 / Legal & Compliance
+- `ComplianceCounsel`：负责合规审查、制度边界识别和风险提示，不替代正式法律意见。
+- `ContractManager`：负责合同条款梳理、履约约束识别和关键条款风险提醒。
+- `PolicyAdvisor`：负责政策理解、监管变化跟踪和业务规则适配建议。
 
 runtime 命名约定：
 - hidden main：`agent:<supervisorAgentId>:main`
@@ -127,6 +220,7 @@ runtime 命名约定：
 Codex 交付入口：
 - [V5 Team Orchestrator 交付模板](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v5-team-orchestrator.md)
 - 这份文档已经写入当前 2 个正式群、3 个正式机器人、可直接复制给 Codex 的长版提示词和运行命令
+- 其中 `V5.1 Hardening` 的控制面命令必须明确出现：`start-job-with-workflow`、`build-visible-ack`、`get-next-action`、`build-dispatch-payload`、`build-rollup-context`、`build-rollup-visible-message`、`record-visible-message`，以及 `v51_team_orchestrator_reconcile.py` 的 `resume-job / reconcile-dispatch / reconcile-rollup`
 
 ## V4.3.1 快速启动
 
@@ -145,13 +239,13 @@ Codex 交付入口：
 其中最关键的两个命令是：
 
 ```bash
-python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_job_registry.py \
+python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v431_single_group_runtime.py \
   --db ~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db \
   init-db
 ```
 
 ```bash
-python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_session_hygiene.py \
+python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v431_single_group_hygiene.py \
   --home ~/.openclaw \
   --group-peer-id oc_f785e73d3c00954d4ccd5d49b63ef919 \
   --include-workers \
@@ -160,7 +254,7 @@ python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_session_hygiene.p
 
 作用：
 1. `init-db`：初始化 SQLite 状态层
-2. `v4_3_session_hygiene.py`：在首次上线、协议变更或脏上下文后，一次性清理 `supervisor group/main + worker group` 会话，避免旧会话污染新任务
+2. `v431_single_group_hygiene.py`：在首次上线、协议变更或脏上下文后，一次性清理 `supervisor group/main + worker group` 会话，避免旧会话污染新任务
 
 ## V4.3.1 跨平台部署路线
 

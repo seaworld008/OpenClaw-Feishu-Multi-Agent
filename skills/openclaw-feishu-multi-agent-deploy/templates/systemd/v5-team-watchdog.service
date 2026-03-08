@@ -4,6 +4,6 @@ After=network.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/env python3 __REGISTRY_SCRIPT__ --db __DB_PATH__ watchdog-tick --group-peer-id __TEAM_GROUP_PEER_ID__ --stale-seconds __STALE_SECONDS__
+ExecStart=/usr/bin/env python3 __RECONCILE_SCRIPT__ --manifest __MANIFEST_PATH__ --team-key __TEAM_KEY__ --openclaw-home __OPENCLAW_HOME__ resume-job --stale-seconds __STALE_SECONDS__
 WorkingDirectory=__TEAM_WORKDIR__
 Environment=OPENCLAW_SUPERVISOR_AGENT_ID=__SUPERVISOR_AGENT_ID__

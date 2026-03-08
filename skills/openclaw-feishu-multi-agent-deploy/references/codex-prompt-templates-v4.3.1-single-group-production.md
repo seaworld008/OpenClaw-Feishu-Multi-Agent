@@ -113,7 +113,7 @@
 | `Windows 原生` | 非默认路线 | 需单独评估 | 不默认承诺等价支持 |
 
 平台原则：
-1. `WARMUP`、`check_v4_3_canary.py`、SQLite 状态层、群内 6 类可见消息规则在三条推荐路线中保持一致。
+1. `WARMUP`、`v431_single_group_canary.py`、SQLite 状态层、群内 6 类可见消息规则在三条推荐路线中保持一致。
 2. 平台差异只体现在 watchdog 托管、service manager 命令和运维 SOP。
 3. Windows 客户默认按 `WSL2` 交付；如果客户坚持原生 Windows，需要额外记录偏差。
 
@@ -122,7 +122,7 @@
 先初始化 SQLite：
 
 ```bash
-python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_job_registry.py \
+python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v431_single_group_runtime.py \
   --db ~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db \
   init-db
 ```
@@ -130,7 +130,7 @@ python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_job_registry.py \
 再执行一次会话卫生：
 
 ```bash
-python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_session_hygiene.py \
+python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v431_single_group_hygiene.py \
   --home ~/.openclaw \
   --group-peer-id oc_f785e73d3c00954d4ccd5d49b63ef919 \
   --include-workers \
@@ -139,7 +139,7 @@ python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_session_hygiene.p
 
 说明：
 1. `init-db` 负责初始化状态层，不会切断旧 team session。
-2. `v4_3_session_hygiene.py` 负责清理 `supervisor group/main + worker group` 会话，适用于首次上线、协议变更、脏上下文恢复。
+2. `v431_single_group_hygiene.py` 负责清理 `supervisor group/main + worker group` 会话，适用于首次上线、协议变更、脏上下文恢复。
 3. 正确顺序必须是：`init-db -> hygiene -> WARMUP -> validate/restart -> canary`。
 
 ## 生产架构
@@ -212,7 +212,7 @@ READY_FOR_TEAM_GROUP|agentId=finance_agent
 - 这一步的目的是创建 worker 的 team session
 - 日常使用不需要重复做
 - 只有在清理 team session、重建环境、迁移群之后才需要重新初始化
-- 如果刚执行过 `v4_3_session_hygiene.py`，必须重新做一次 `WARMUP`
+- 如果刚执行过 `v431_single_group_hygiene.py`，必须重新做一次 `WARMUP`
 
 ## SQLite 状态层
 
@@ -228,16 +228,16 @@ READY_FOR_TEAM_GROUP|agentId=finance_agent
 - `job_events`
 
 当前脚本：
-- `scripts/v4_3_job_registry.py`
+- `scripts/v431_single_group_runtime.py`
 
 关键命令：
 
 ```bash
-python3 scripts/v4_3_job_registry.py --db ~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db init-db
-python3 scripts/v4_3_job_registry.py --db ~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db begin-turn --group-peer-id oc_f785e73d3c00954d4ccd5d49b63ef919 --stale-seconds 180
-python3 scripts/v4_3_job_registry.py --db ~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db get-active --group-peer-id oc_f785e73d3c00954d4ccd5d49b63ef919
-python3 scripts/v4_3_job_registry.py --db ~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db list-queue --group-peer-id oc_f785e73d3c00954d4ccd5d49b63ef919
-python3 scripts/v4_3_job_registry.py --db ~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db watchdog-tick --group-peer-id oc_f785e73d3c00954d4ccd5d49b63ef919 --stale-seconds 180
+python3 scripts/v431_single_group_runtime.py --db ~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db init-db
+python3 scripts/v431_single_group_runtime.py --db ~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db begin-turn --group-peer-id oc_f785e73d3c00954d4ccd5d49b63ef919 --stale-seconds 180
+python3 scripts/v431_single_group_runtime.py --db ~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db get-active --group-peer-id oc_f785e73d3c00954d4ccd5d49b63ef919
+python3 scripts/v431_single_group_runtime.py --db ~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db list-queue --group-peer-id oc_f785e73d3c00954d4ccd5d49b63ef919
+python3 scripts/v431_single_group_runtime.py --db ~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db watchdog-tick --group-peer-id oc_f785e73d3c00954d4ccd5d49b63ef919 --stale-seconds 180
 ```
 
 ## OpenClaw 配置侧建议
@@ -414,9 +414,9 @@ COMPLETE_PACKET|jobRef=<jobRef>|agent=<ops_agent或finance_agent>|progressMessag
 
 固定流程：
 A. 用户首轮任务
-A1. exec：python3 .openclaw/v4_3_job_registry.py --db .openclaw/team_jobs.db begin-turn --group-peer-id oc_f785e73d3c00954d4ccd5d49b63ef919 --stale-seconds 180
+A1. exec：python3 .openclaw/v431_single_group_runtime.py --db .openclaw/team_jobs.db begin-turn --group-peer-id oc_f785e73d3c00954d4ccd5d49b63ef919 --stale-seconds 180
 A2. begin-turn 结果分支：
-- 若 active=null：下一条 assistant 只 exec：python3 .openclaw/v4_3_job_registry.py --db .openclaw/team_jobs.db start-job --group-peer-id oc_f785e73d3c00954d4ccd5d49b63ef919 --requested-by SeaWorld --title "<根据用户任务提炼的简短标题>"
+- 若 active=null：下一条 assistant 只 exec：python3 .openclaw/v431_single_group_runtime.py --db .openclaw/team_jobs.db start-job --group-peer-id oc_f785e73d3c00954d4ccd5d49b63ef919 --requested-by SeaWorld --title "<根据用户任务提炼的简短标题>"
 - 若 active 不为 null 且 readyToRollup=true：直接处理收口，禁止再派新任务。
 - 若 active 不为 null 且 participantCount>0 且 completedParticipantCount<2：
   * 若当前消息是补充说明：执行 append-note 后只输出 NO_REPLY。
@@ -427,10 +427,10 @@ A3. 当你拿到一个需要执行的 active jobRef 后：
   【主管已接单｜<jobRef>】任务已受理，正在分配给运营与财务，请稍候查看执行进度。
 - 收到 message 的 toolResult 后，sessions_send 到 ops（timeoutSeconds=0）：
   TASK_DISPATCH|jobRef=<jobRef>|role=ops|title=<title>|goal=<goal>|constraints=<constraints>|deliver=进度,结论,完成包|callbackSessionKey=agent:supervisor_agent:main|mustSend=progress,final,callback
-- exec：python3 .openclaw/v4_3_job_registry.py --db .openclaw/team_jobs.db mark-dispatch --job-ref <jobRef> --agent-id ops_agent --account-id xiaolongxia --role 运营执行 --status accepted --dispatch-run-id <runId> --dispatch-status <status>
+- exec：python3 .openclaw/v431_single_group_runtime.py --db .openclaw/team_jobs.db mark-dispatch --job-ref <jobRef> --agent-id ops_agent --account-id xiaolongxia --role 运营执行 --status accepted --dispatch-run-id <runId> --dispatch-status <status>
 - 然后 sessions_send 到 finance（timeoutSeconds=0）：
   TASK_DISPATCH|jobRef=<jobRef>|role=finance|title=<title>|goal=<goal>|constraints=<constraints>|deliver=进度,结论,完成包|callbackSessionKey=agent:supervisor_agent:main|mustSend=progress,final,callback
-- exec：python3 .openclaw/v4_3_job_registry.py --db .openclaw/team_jobs.db mark-dispatch --job-ref <jobRef> --agent-id finance_agent --account-id yiran_yibao --role 财务执行 --status accepted --dispatch-run-id <runId> --dispatch-status <status>
+- exec：python3 .openclaw/v431_single_group_runtime.py --db .openclaw/team_jobs.db mark-dispatch --job-ref <jobRef> --agent-id finance_agent --account-id yiran_yibao --role 财务执行 --status accepted --dispatch-run-id <runId> --dispatch-status <status>
 - 完成后只输出 NO_REPLY。
 
 B. 收到 inter_session
@@ -439,13 +439,13 @@ B. 收到 inter_session
 - COMPLETE_PACKET 只有在同时包含 jobRef、agent、progressMessageId、finalMessageId 时才有效。
 
 C. 对有效 COMPLETE_PACKET：
-- 若 agent=ops_agent：exec python3 .openclaw/v4_3_job_registry.py --db .openclaw/team_jobs.db mark-worker-complete --job-ref <jobRef> --agent-id ops_agent --account-id xiaolongxia --role 运营执行 --progress-message-id <progressMessageId> --final-message-id <finalMessageId> --summary "<summary>" --details "<details>" --risks "<risks>" --dependencies "<dependencies>" --conflicts "<conflicts>"
-- 若 agent=finance_agent：exec python3 .openclaw/v4_3_job_registry.py --db .openclaw/team_jobs.db mark-worker-complete --job-ref <jobRef> --agent-id finance_agent --account-id yiran_yibao --role 财务执行 --progress-message-id <progressMessageId> --final-message-id <finalMessageId> --summary "<summary>" --details "<details>" --risks "<risks>" --dependencies "<dependencies>" --conflicts "<conflicts>"
-- 然后 exec：python3 .openclaw/v4_3_job_registry.py --db .openclaw/team_jobs.db ready-to-rollup --job-ref <jobRef>
+- 若 agent=ops_agent：exec python3 .openclaw/v431_single_group_runtime.py --db .openclaw/team_jobs.db mark-worker-complete --job-ref <jobRef> --agent-id ops_agent --account-id xiaolongxia --role 运营执行 --progress-message-id <progressMessageId> --final-message-id <finalMessageId> --summary "<summary>" --details "<details>" --risks "<risks>" --dependencies "<dependencies>" --conflicts "<conflicts>"
+- 若 agent=finance_agent：exec python3 .openclaw/v431_single_group_runtime.py --db .openclaw/team_jobs.db mark-worker-complete --job-ref <jobRef> --agent-id finance_agent --account-id yiran_yibao --role 财务执行 --progress-message-id <progressMessageId> --final-message-id <finalMessageId> --summary "<summary>" --details "<details>" --risks "<risks>" --dependencies "<dependencies>" --conflicts "<conflicts>"
+- 然后 exec：python3 .openclaw/v431_single_group_runtime.py --db .openclaw/team_jobs.db ready-to-rollup --job-ref <jobRef>
 - 若未 ready：只输出 NO_REPLY。
-- 若 ready：exec：python3 .openclaw/v4_3_job_registry.py --db .openclaw/team_jobs.db get-job --job-ref <jobRef>
+- 若 ready：exec：python3 .openclaw/v431_single_group_runtime.py --db .openclaw/team_jobs.db get-job --job-ref <jobRef>
 - 用 message(action=send, channel=feishu, accountId=aoteman, target=chat:oc_f785e73d3c00954d4ccd5d49b63ef919) 发最终统一收口。
-- exec：python3 .openclaw/v4_3_job_registry.py --db .openclaw/team_jobs.db close-job --job-ref <jobRef> --status done
+- exec：python3 .openclaw/v431_single_group_runtime.py --db .openclaw/team_jobs.db close-job --job-ref <jobRef> --status done
 - 最后一条只输出 NO_REPLY。
 
 最终收口必须包含：最终执行方案、责任分工、明日三件事、风险预案、可立即执行动作。
@@ -625,7 +625,7 @@ launchctl print gui/$(id -u)/bot.molt.v4-3-watchdog
 ## canary 验收
 
 ```bash
-python3 skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_3_canary.py \
+python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v431_single_group_canary.py \
   --db ~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db \
   --job-ref TG-20260307-031 \
   --session-root ~/.openclaw/agents \
@@ -730,7 +730,7 @@ V4_3_CANARY_OK: jobRef=TG-20260307-031 title=3天限时促销 status=done ops_pr
 8) 必须输出 group session reset 策略，避免旧 transcript 长期污染。
 9) 若目标平台是 macOS，输出 launchd 安装命令；若目标平台是 wsl2，输出 systemd --user 安装命令；不要给 Windows 原生 service 方案。
 10) 上线步骤里显式加入一次性 WARMUP 前置，不要把它写成每次任务都要做。
-11) 上线步骤里显式加入 `v4_3_session_hygiene.py`，顺序必须是：备份 -> init-db -> hygiene -> WARMUP -> validate -> restart -> canary。
+11) 上线步骤里显式加入 `v431_single_group_hygiene.py`，顺序必须是：备份 -> init-db -> hygiene -> WARMUP -> validate -> restart -> canary。
 12) supervisor 必须把 `Chat history since last reply` 当作不可信补充上下文；历史里即使出现 `WARMUP`，也不能把本轮正式任务误判成初始化消息。
 13) 输出完整命令：
    - 备份
@@ -755,7 +755,7 @@ V4_3_CANARY_OK: jobRef=TG-20260307-031 title=3天限时促销 status=done ops_pr
 先执行会话卫生：
 
 ```bash
-python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_session_hygiene.py \
+python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v431_single_group_hygiene.py \
   --home ~/.openclaw \
   --group-peer-id oc_f785e73d3c00954d4ccd5d49b63ef919 \
   --include-workers \
@@ -819,7 +819,7 @@ python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_session_hygiene.p
 在 OpenClaw 主机执行：
 
 ```bash
-python3 skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_3_canary.py \
+python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v431_single_group_canary.py \
   --db ~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db \
   --job-ref <刚才生成的 TG-...> \
   --session-root ~/.openclaw/agents \
@@ -844,7 +844,7 @@ python3 skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_3_canary.py \
 
 1. 先用 `V4.3.1`，不要再从 `V4.3` 半成品起步
 2. 部署后做一次 `WARMUP`
-3. 立即跑一次 `check_v4_3_canary.py`
+3. 立即跑一次 `v431_single_group_canary.py`
 4. 通过后再给真实用户使用
 
 一句话：

@@ -237,7 +237,7 @@ TASK_ID="demo-v3-001"
 # 现在去主管群发送 demo-v3-001 指令
 sleep 120
 
-bash skills/openclaw-feishu-multi-agent-deploy/scripts/check_v3_dispatch_canary.sh \
+python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v31_cross_group_canary.py \
   --log "$LOG" \
   --start-line "$START_LINE" \
   --task-id "$TASK_ID" \

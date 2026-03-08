@@ -37,7 +37,7 @@
 ### Task 2: 升级 SQLite registry 为生产稳定版
 
 **Files:**
-- Modify: `skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_job_registry.py`
+- Modify: `skills/openclaw-feishu-multi-agent-deploy/scripts/v431_single_group_runtime.py`
 - Modify: `skills/openclaw-feishu-multi-agent-deploy/templates/v4-3-job-registry.example.sql`
 - Test: `tests/test_openclaw_feishu_multi_agent_skill.py`
 
@@ -69,7 +69,7 @@
 ### Task 3: 增加 V4.3.1 验收与初始化脚本
 
 **Files:**
-- Create: `skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_3_canary.py`
+- Create: `skills/openclaw-feishu-multi-agent-deploy/scripts/v431_single_group_canary.py`
 - Modify: `skills/openclaw-feishu-multi-agent-deploy/templates/verification-checklist.md`
 - Modify: `tests/test_openclaw_feishu_multi_agent_skill.py`
 

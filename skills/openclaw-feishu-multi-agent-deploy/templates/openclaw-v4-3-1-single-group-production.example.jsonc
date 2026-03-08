@@ -7,9 +7,9 @@
   // 2) 避免只看文档模板时漏掉隐藏控制会话、reset、sessions 等关键项。
   //
   // 仍需配合以下内容一起交付：
-  // - scripts/v4_3_job_registry.py
-  // - scripts/v4_3_session_hygiene.py
-  // - scripts/check_v4_3_canary.py
+  // - scripts/v431_single_group_runtime.py
+  // - scripts/v431_single_group_hygiene.py
+  // - scripts/v431_single_group_canary.py
   // - supervisor / ops / finance 的 workspace 身份文件与生产 prompt
   //
   // 生产约束：

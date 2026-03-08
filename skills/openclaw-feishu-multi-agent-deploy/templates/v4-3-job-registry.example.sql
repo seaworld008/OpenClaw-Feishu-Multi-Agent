@@ -6,6 +6,11 @@ CREATE TABLE IF NOT EXISTS jobs (
   title TEXT NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('active', 'queued', 'done', 'failed', 'cancelled')),
   queue_position INTEGER,
+  workflow_json TEXT,
+  orchestrator_version TEXT,
+  current_stage_index INTEGER,
+  waiting_for_agent_id TEXT,
+  next_action TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   closed_at TEXT

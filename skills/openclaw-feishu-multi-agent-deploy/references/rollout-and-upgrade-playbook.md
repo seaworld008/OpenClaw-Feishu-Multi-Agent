@@ -7,7 +7,7 @@
 4. 重启网关
 5. 若目标为 `V4.3.1`，先执行一次会话卫生：
 ```bash
-python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_session_hygiene.py \
+python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v431_single_group_hygiene.py \
   --home ~/.openclaw \
   --group-peer-id <团队群peerId> \
   --include-workers \
@@ -29,7 +29,7 @@ cp ~/.openclaw/openclaw.json ~/.openclaw/openclaw.json.bak.$TS
 
 ### 会话卫生说明
 - 只改普通 bindings / account secret 时，通常不需要清 session。
-- 只要修改了以下任一项，就要先跑 `v4_3_session_hygiene.py`：
+- 只要修改了以下任一项，就要先跑 `v431_single_group_hygiene.py`：
   - `supervisor/ops/finance` 的 `systemPrompt`
   - `callbackSessionKey`
   - `COMPLETE_PACKET` 字段

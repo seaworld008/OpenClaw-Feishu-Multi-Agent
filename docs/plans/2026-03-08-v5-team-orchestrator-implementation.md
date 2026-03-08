@@ -4,7 +4,7 @@
 
 **Goal:** 为仓库新增 `V5 Team Orchestrator` 生产级实现：支持用 `teams` 模型声明多个飞书群、每群一个 supervisor 和 N 个 worker，生成对应的 OpenClaw Feishu patch、team runtime manifest、完整文档、真实双群示例和可直接给 Codex 使用的长版提示词模板。
 
-**Architecture:** 在现有 `build_openclaw_feishu_snippets.py` 基础上增加 `teams` 解析分支，保持对旧 `routes` 输入兼容。除 OpenClaw patch 外，还要输出 team runtime manifest，把 `workflow / visibility / responsibility / hidden main / db / watchdog` 全部显式化，供 Codex 和运维脚本使用。文档层新增 `V5` 交付手册与 JSONC 快照，README / SKILL / 测试同步升级，再进入远端现网迁移。
+**Architecture:** 在现有 `core_feishu_config_builder.py` 基础上增加 `teams` 解析分支，保持对旧 `routes` 输入兼容。除 OpenClaw patch 外，还要输出 team runtime manifest，把 `workflow / visibility / responsibility / hidden main / db / watchdog` 全部显式化，供 Codex 和运维脚本使用。文档层新增 `V5` 交付手册与 JSONC 快照，README / SKILL / 测试同步升级，再进入远端现网迁移。
 
 **Tech Stack:** Python 3、`unittest`、JSON/JSONC 模板、Markdown 文档
 
@@ -51,7 +51,7 @@ python3 -m unittest tests.test_openclaw_feishu_multi_agent_skill.V5Documentation
 ### Task 2: 为构建脚本增加 `teams` 生产模型与 team manifest 输出
 
 **Files:**
-- Modify: `skills/openclaw-feishu-multi-agent-deploy/scripts/build_openclaw_feishu_snippets.py`
+- Modify: `skills/openclaw-feishu-multi-agent-deploy/scripts/core_feishu_config_builder.py`
 - Modify: `tests/test_openclaw_feishu_multi_agent_skill.py`
 - Create: `skills/openclaw-feishu-multi-agent-deploy/references/input-template-v5-team-orchestrator.json`
 - Create: `skills/openclaw-feishu-multi-agent-deploy/templates/openclaw-v5-team-orchestrator.example.jsonc`
@@ -134,8 +134,8 @@ python3 -m unittest tests.test_openclaw_feishu_multi_agent_skill.V5TemplateTests
 ### Task 4: 升级 canary / hygiene / summary 到 team 生产视角
 
 **Files:**
-- Modify: `skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_3_canary.py`
-- Modify: `skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_session_hygiene.py`
+- Modify: `skills/openclaw-feishu-multi-agent-deploy/scripts/v51_team_orchestrator_canary.py`
+- Modify: `skills/openclaw-feishu-multi-agent-deploy/scripts/v51_team_orchestrator_hygiene.py`
 - Modify: `skills/openclaw-feishu-multi-agent-deploy/templates/deployment-inputs.example.yaml`
 - Modify: `tests/test_openclaw_feishu_multi_agent_skill.py`
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate V4.3/V4.3.1/V5 team production runs using SQLite state and session logs."""
+"""Shared canary helpers for V3.1, V4.3.1, and V5.1 entrypoints."""
 
 from __future__ import annotations
 
@@ -7,15 +7,35 @@ import argparse
 import json
 import re
 import sqlite3
-import sys
 from pathlib import Path
 
 
 LEAK_TOKENS = ("ACK_READY", "REPLY_SKIP", "COMPLETE_PACKET", "WORKFLOW_INCOMPLETE")
+DEFAULT_DISPATCH_PATTERNS = (
+    "sessions_send",
+    "tool.*sessions_send",
+    "dispatch.*session",
+    "send.*session",
+)
 
 
 def emit(text: str) -> None:
     print(text)
+
+
+def normalize_agents(raw: str) -> list[str]:
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def iter_session_text_files(root: Path, agent_id: str):
+    session_dir = root / agent_id / "sessions"
+    if not session_dir.exists():
+        return
+    for path in session_dir.glob("*.jsonl"):
+        try:
+            yield path, path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
 
 
 def load_db(db_path: Path) -> sqlite3.Connection:
@@ -25,34 +45,16 @@ def load_db(db_path: Path) -> sqlite3.Connection:
 
 
 def session_contains(root: Path, agent_id: str, token: str) -> bool:
-    session_dir = root / agent_id / "sessions"
-    if not session_dir.exists():
-        return False
-    for path in session_dir.glob("*.jsonl"):
-        try:
-            text = path.read_text(encoding="utf-8", errors="ignore")
-        except OSError:
-            continue
+    for _, text in iter_session_text_files(root, agent_id):
         if token in text:
             return True
     return False
 
 
-def normalize_agents(raw: str) -> list[str]:
-    return [item.strip() for item in raw.split(",") if item.strip()]
-
-
 def find_protocol_leaks(root: Path, job_ref: str, supervisor_agent: str, required_agents: list[str]) -> list[str]:
     leaks: list[str] = []
     for agent_id in (supervisor_agent, *required_agents):
-        session_dir = root / agent_id / "sessions"
-        if not session_dir.exists():
-            continue
-        for path in session_dir.glob("*.jsonl"):
-            try:
-                text = path.read_text(encoding="utf-8", errors="ignore")
-            except OSError:
-                continue
+        for path, text in iter_session_text_files(root, agent_id):
             if job_ref not in text:
                 continue
             for line in text.splitlines():
@@ -75,16 +77,9 @@ def find_protocol_leaks(root: Path, job_ref: str, supervisor_agent: str, require
 
 
 def find_supervisor_rollup_message(root: Path, supervisor_agent: str, job_ref: str, group_peer_id: str) -> str | None:
-    session_dir = root / supervisor_agent / "sessions"
-    if not session_dir.exists():
-        return None
-    message_id_re = re.compile(r'messageId[=": ]+([A-Za-z0-9_\\-]+)')
+    message_id_re = re.compile(r'messageId[=": ]+([A-Za-z0-9_\-]+)')
     target_token = f"chat:{group_peer_id}"
-    for path in session_dir.glob("*.jsonl"):
-        try:
-            text = path.read_text(encoding="utf-8", errors="ignore")
-        except OSError:
-            continue
+    for _, text in iter_session_text_files(root, supervisor_agent):
         if job_ref not in text or target_token not in text:
             continue
         match = message_id_re.search(text)
@@ -93,7 +88,68 @@ def find_supervisor_rollup_message(root: Path, supervisor_agent: str, job_ref: s
     return None
 
 
-def main() -> int:
+def read_log_window(log_path: Path, start_line: int) -> str:
+    lines = log_path.read_text(encoding="utf-8", errors="ignore").splitlines()
+    return "\n".join(lines[start_line:])
+
+
+def dispatch_trace_present(log_window: str, agent_id: str) -> bool:
+    token = f"session=agent:{agent_id}:"
+    return token in log_window
+
+
+def build_dispatch_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--log", required=True)
+    parser.add_argument("--start-line", required=True, type=int)
+    parser.add_argument("--agents", default="sales_agent,ops_agent,finance_agent")
+    parser.add_argument("--task-id", default="")
+    parser.add_argument("--dispatch-pattern", action="append", default=[])
+    return parser
+
+
+def main_dispatch_canary(argv: list[str] | None = None) -> int:
+    parser = build_dispatch_parser()
+    args = parser.parse_args(argv)
+
+    log_path = Path(args.log)
+    if not log_path.exists():
+        emit(f"日志文件不存在: {log_path}")
+        return 1
+    if args.start_line < 0:
+        emit("start-line 必须是正整数")
+        return 1
+
+    log_window = read_log_window(log_path, args.start_line)
+    agents = normalize_agents(args.agents)
+    missing: list[str] = []
+    for agent_id in agents:
+        if dispatch_trace_present(log_window, agent_id):
+            emit(f"OK: found dispatch trace for {agent_id}")
+        else:
+            emit(f"MISS: no dispatch trace for {agent_id}")
+            missing.append(agent_id)
+
+    if missing:
+        emit("DISPATCH_INCOMPLETE: missing agents => " + " ".join(missing))
+        return 2
+
+    if args.task_id and args.task_id not in log_window:
+        emit(f"DISPATCH_UNVERIFIED: task id not found in log window => {args.task_id}")
+        return 3
+
+    dispatch_patterns = [*DEFAULT_DISPATCH_PATTERNS, *[pattern for pattern in args.dispatch_pattern if pattern]]
+    for pattern in dispatch_patterns:
+        if re.search(pattern, log_window):
+            emit(f"OK: found dispatch evidence pattern => {pattern}")
+            emit("DISPATCH_OK: all target agent session traces found")
+            return 0
+
+    emit("DISPATCH_UNVERIFIED: no dispatch evidence pattern matched")
+    return 3
+
+
+def build_sqlite_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--db", required=True)
     parser.add_argument("--job-ref", required=True)
@@ -104,7 +160,13 @@ def main() -> int:
     parser.add_argument("--team-key")
     parser.add_argument("--success-token", default="V4_3_CANARY_OK")
     parser.add_argument("--require-supervisor-target-chat", action="store_true")
-    args = parser.parse_args()
+    return parser
+
+
+def main_sqlite_canary(argv: list[str] | None = None) -> int:
+    parser = build_sqlite_parser()
+    args = parser.parse_args(argv)
+
     required_agents = normalize_agents(args.worker_agents)
     if not required_agents:
         emit("WORKER_AGENTS_EMPTY")
@@ -177,7 +239,6 @@ def main() -> int:
         if leaks:
             emit("VISIBLE_PROTOCOL_LEAK: " + " | ".join(leaks[:5]))
             return 3
-        supervisor_rollup_message_id = None
         if args.require_supervisor_target_chat:
             supervisor_rollup_message_id = find_supervisor_rollup_message(
                 root,
@@ -191,10 +252,9 @@ def main() -> int:
                     f"agent={args.supervisor_agent} group={job['group_peer_id']} job={args.job_ref}"
                 )
                 return 3
-    else:
-        if args.require_supervisor_target_chat:
-            emit("SUPERVISOR_TARGET_CHECK_REQUIRES_VISIBLE_MESSAGES")
-            return 2
+    elif args.require_supervisor_target_chat:
+        emit("SUPERVISOR_TARGET_CHECK_REQUIRES_VISIBLE_MESSAGES")
+        return 2
 
     result_fields = [
         args.success_token + ":",
@@ -207,7 +267,7 @@ def main() -> int:
     for agent_id in required_agents:
         result_fields.append(f"{agent_id}_progress={participants[agent_id]['progress_message_id']}")
         result_fields.append(f"{agent_id}_final={participants[agent_id]['final_message_id']}")
-    if args.require_supervisor_target_chat:
+    if args.require_supervisor_target_chat and args.session_root:
         supervisor_rollup_message_id = find_supervisor_rollup_message(
             Path(args.session_root),
             args.supervisor_agent,
@@ -221,4 +281,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main_sqlite_canary())

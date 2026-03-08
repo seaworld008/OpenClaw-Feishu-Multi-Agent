@@ -51,6 +51,7 @@ def target_keys(
     keys.append((supervisor_agent, f"agent:{supervisor_agent}:main"))
     if include_workers:
         for agent_id in worker_agents:
+            keys.append((agent_id, f"agent:{agent_id}:main"))
             keys.append((agent_id, f"agent:{agent_id}:{channel}:group:{group_peer_id}"))
     return keys
 
@@ -59,30 +60,16 @@ def normalize_worker_agents(raw: str) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--home", default="~/.openclaw")
-    parser.add_argument("--group-peer-id", required=True)
-    parser.add_argument("--channel", default="feishu")
-    parser.add_argument("--team-key")
-    parser.add_argument("--supervisor-agent", default="supervisor_agent")
-    parser.add_argument("--include-workers", action="store_true")
-    parser.add_argument("--worker-agents", default="ops_agent,finance_agent")
-    parser.add_argument("--delete-transcripts", action="store_true")
-    parser.add_argument("--dry-run", action="store_true")
-    args = parser.parse_args()
-
-    openclaw_home = Path(args.home).expanduser()
-    worker_agents = normalize_worker_agents(args.worker_agents)
+def remove_session_keys(
+    openclaw_home: Path,
+    keys: list[tuple[str, str]],
+    *,
+    delete_transcripts: bool = False,
+    dry_run: bool = False,
+) -> list[dict]:
     results: list[dict] = []
 
-    for agent_id, session_key in target_keys(
-        args.group_peer_id,
-        include_workers=args.include_workers,
-        worker_agents=worker_agents,
-        channel=args.channel,
-        supervisor_agent=args.supervisor_agent,
-    ):
+    for agent_id, session_key in keys:
         session_dir = openclaw_home / "agents" / agent_id / "sessions"
         index_path = session_dir / "sessions.json"
         if not index_path.exists():
@@ -111,24 +98,55 @@ def main() -> int:
         result = {
             "agentId": agent_id,
             "sessionKey": session_key,
-            "status": "removed" if not args.dry_run else "would_remove",
+            "status": "removed" if not dry_run else "would_remove",
             "sessionId": session_id_for(entry),
         }
 
         if transcript_path is not None:
             result["transcript"] = str(transcript_path)
-            if args.delete_transcripts and transcript_path.exists():
-                result["transcriptStatus"] = "deleted" if not args.dry_run else "would_delete"
-            elif args.delete_transcripts:
+            if delete_transcripts and transcript_path.exists():
+                result["transcriptStatus"] = "deleted" if not dry_run else "would_delete"
+            elif delete_transcripts:
                 result["transcriptStatus"] = "missing"
 
-        if not args.dry_run:
+        if not dry_run:
             index_payload.pop(session_key, None)
             dump_sessions_index(index_path, index_payload)
-            if args.delete_transcripts and transcript_path is not None and transcript_path.exists():
+            if delete_transcripts and transcript_path is not None and transcript_path.exists():
                 transcript_path.unlink()
 
         results.append(result)
+
+    return results
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--home", default="~/.openclaw")
+    parser.add_argument("--group-peer-id", required=True)
+    parser.add_argument("--channel", default="feishu")
+    parser.add_argument("--team-key")
+    parser.add_argument("--supervisor-agent", default="supervisor_agent")
+    parser.add_argument("--include-workers", action="store_true")
+    parser.add_argument("--worker-agents", default="ops_agent,finance_agent")
+    parser.add_argument("--delete-transcripts", action="store_true")
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args()
+
+    openclaw_home = Path(args.home).expanduser()
+    worker_agents = normalize_worker_agents(args.worker_agents)
+    results = remove_session_keys(
+        openclaw_home,
+        target_keys(
+            args.group_peer_id,
+            include_workers=args.include_workers,
+            worker_agents=worker_agents,
+            channel=args.channel,
+            supervisor_agent=args.supervisor_agent,
+        ),
+        delete_transcripts=args.delete_transcripts,
+        dry_run=args.dry_run,
+    )
 
     print(
         json.dumps(

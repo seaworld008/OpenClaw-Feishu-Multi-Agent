@@ -72,6 +72,6 @@ Assert README, SKILL, V4.3.1 docs, launchd template, and WSL2 notes all exist an
 **Step 2: Run verification**
 Run:
 - `python3 -m unittest tests/test_openclaw_feishu_multi_agent_skill.py`
-- `python3 -m py_compile skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_job_registry.py skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_3_canary.py`
+- `python3 -m py_compile skills/openclaw-feishu-multi-agent-deploy/scripts/v431_single_group_runtime.py skills/openclaw-feishu-multi-agent-deploy/scripts/v431_single_group_canary.py`
 - `git diff --check`
 Expected: all pass.

@@ -105,7 +105,7 @@ systemctl --user is-active v4-3-watchdog.timer || true
 
 仍按 Linux 路线执行：
 - 一次性 `WARMUP`
-- `check_v4_3_canary.py`
+- `v431_single_group_canary.py`
 - SQLite `jobs / job_participants / job_events`
 - 群内 6 类可见消息校验
 
