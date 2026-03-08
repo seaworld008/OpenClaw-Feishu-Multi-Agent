@@ -1,0 +1,221 @@
+{
+  // V4.3.1 单群生产稳定版去敏配置快照。
+  // 这份文件基于已跑通的真实 openclaw.json 结构整理，但已去掉敏感值。
+  //
+  // 它的用途是：
+  // 1) 给交付同学一个“能对照抄字段”的 openclaw.json 参考；
+  // 2) 避免只看文档模板时漏掉隐藏控制会话、reset、sessions 等关键项。
+  //
+  // 仍需配合以下内容一起交付：
+  // - scripts/v4_3_job_registry.py
+  // - scripts/v4_3_session_hygiene.py
+  // - scripts/check_v4_3_canary.py
+  // - supervisor / ops / finance 的 workspace 身份文件与生产 prompt
+  //
+  // 生产约束：
+  // - hidden main session 固定为：agent:supervisor_agent:main
+  // - 首次上线、协议变更或脏上下文恢复后，要先执行会话卫生与一次性 WARMUP
+
+  "meta": {
+    "lastTouchedVersion": "2026.3.x"
+  },
+
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "sub2api/gpt-5.3-codex",
+        "fallbacks": ["sub2api/gpt-5.2-codex"]
+      },
+      "workspace": "~/.openclaw/workspace",
+      "maxConcurrent": 4,
+      "subagents": {
+        "maxConcurrent": 8
+      },
+      "sandbox": {
+        "sessionToolsVisibility": "all"
+      }
+    },
+    "list": [
+      {
+        "id": "main",
+        "default": true,
+        "name": "OpenClaw",
+        "workspace": "~/.openclaw/workspace",
+        "agentDir": "~/.openclaw/agents/main/agent"
+      },
+      {
+        "id": "supervisor_agent",
+        "name": "主管总控",
+        "workspace": "~/.openclaw/workspace-supervisor_agent",
+        "agentDir": "~/.openclaw/agents/supervisor_agent/agent",
+        "groupChat": {
+          "mentionPatterns": ["@主管机器人", "主管机器人", "奥特曼"]
+        }
+      },
+      {
+        "id": "ops_agent",
+        "name": "运营执行",
+        "workspace": "~/.openclaw/workspace-ops_agent",
+        "agentDir": "~/.openclaw/agents/ops_agent/agent"
+      },
+      {
+        "id": "finance_agent",
+        "name": "财务执行",
+        "workspace": "~/.openclaw/workspace-finance_agent",
+        "agentDir": "~/.openclaw/agents/finance_agent/agent"
+      }
+    ]
+  },
+
+  "tools": {
+    "profile": "full",
+    "allow": [
+      "group:fs",
+      "group:runtime",
+      "group:web",
+      "group:automation",
+      "group:ui",
+      "group:messaging",
+      "group:sessions"
+    ],
+    "deny": [],
+    "agentToAgent": {
+      "enabled": true,
+      "allow": ["supervisor_agent", "ops_agent", "finance_agent"]
+    },
+    "sessions": {
+      "visibility": "all"
+    }
+  },
+
+  "session": {
+    "sendPolicy": {
+      "default": "allow"
+    },
+    "resetByType": {
+      "group": {
+        "mode": "idle",
+        "idleMinutes": 1440
+      }
+    },
+    "resetTriggers": ["/reset", "/new"],
+    "agentToAgent": {
+      "maxPingPongTurns": 0
+    }
+  },
+
+  "bindings": [
+    {
+      "agentId": "supervisor_agent",
+      "match": {
+        "channel": "feishu",
+        "accountId": "marketing-bot",
+        "peer": {
+          "kind": "group",
+          "id": "oc_team_group_peer_id"
+        }
+      }
+    },
+    {
+      "agentId": "ops_agent",
+      "match": {
+        "channel": "feishu",
+        "accountId": "ops-bot",
+        "peer": {
+          "kind": "group",
+          "id": "oc_team_group_peer_id"
+        }
+      }
+    },
+    {
+      "agentId": "finance_agent",
+      "match": {
+        "channel": "feishu",
+        "accountId": "finance-bot",
+        "peer": {
+          "kind": "group",
+          "id": "oc_team_group_peer_id"
+        }
+      }
+    },
+    {
+      "agentId": "supervisor_agent",
+      "match": {
+        "channel": "feishu",
+        "accountId": "marketing-bot"
+      }
+    },
+    {
+      "agentId": "ops_agent",
+      "match": {
+        "channel": "feishu",
+        "accountId": "ops-bot"
+      }
+    },
+    {
+      "agentId": "finance_agent",
+      "match": {
+        "channel": "feishu",
+        "accountId": "finance-bot"
+      }
+    }
+  ],
+
+  "messages": {
+    "ackReactionScope": "group-mentions",
+    "groupChat": {
+      "mentionPatterns": ["@主管机器人", "主管机器人", "奥特曼"]
+    }
+  },
+
+  "channels": {
+    "feishu": {
+      "enabled": true,
+      "domain": "feishu",
+      "requireMention": true,
+      "defaultAccount": "marketing-bot",
+      "accounts": {
+        "marketing-bot": {
+          "appId": "cli_marketing_xxx",
+          "appSecret": "marketing_secret_xxx",
+          "encryptKey": "",
+          "verificationToken": "",
+          "requireMention": true,
+          "groups": {
+            "oc_team_group_peer_id": {
+              // 真实生产环境里，这里通常放长版 supervisor 群级 systemPrompt。
+              // 文档参考：
+              // references/codex-prompt-templates-v4.3.1-single-group-production.md
+              "systemPrompt": "你是主管 Agent。群里只允许两类可见消息：接单、最终统一收口。被 @ 且是正式任务时，第一条 assistant 消息必须包含真实 toolCall。jobRef 只能来自 registry toolResult；callbackSessionKey 固定 agent:supervisor_agent:main；内部协议最终只输出 NO_REPLY。"
+            }
+          }
+        },
+        "ops-bot": {
+          "appId": "cli_ops_xxx",
+          "appSecret": "ops_secret_xxx",
+          "encryptKey": "",
+          "verificationToken": "",
+          "requireMention": true,
+          "groups": {
+            "oc_team_group_peer_id": {
+              "systemPrompt": "你是运营执行 Agent。收到 TASK_DISPATCH 后必须：message 发进度 -> message 发完整结论 -> sessions_send COMPLETE_PACKET 到 callbackSessionKey -> 最后 NO_REPLY。禁止 ACK、禁止占位消息、禁止 [[reply_to_current]]。"
+            }
+          }
+        },
+        "finance-bot": {
+          "appId": "cli_finance_xxx",
+          "appSecret": "finance_secret_xxx",
+          "encryptKey": "",
+          "verificationToken": "",
+          "requireMention": true,
+          "groups": {
+            "oc_team_group_peer_id": {
+              "systemPrompt": "你是财务执行 Agent。收到 TASK_DISPATCH 后必须：message 发进度 -> message 发完整结论 -> sessions_send COMPLETE_PACKET 到 callbackSessionKey -> 最后 NO_REPLY。禁止 ACK、禁止占位消息、禁止 [[reply_to_current]]。"
+            }
+          }
+        }
+      },
+      "allowMentionlessInMultiBotGroup": false
+    }
+  }
+}

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run OpenClaw V5 team watchdog (__TEAM_KEY__) every minute
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+Persistent=true
+Unit=v5-team-__TEAM_KEY__.service
+
+[Install]
+WantedBy=timers.target

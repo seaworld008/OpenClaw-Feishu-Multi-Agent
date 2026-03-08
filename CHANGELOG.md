@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.6.0] - 2026-03-08
+
+### Added
+- 新增 `V5 Team Orchestrator` 的生产级双群基线文档与模板，正式固化：
+  - 内部团队群 `oc_f785e73d3c00954d4ccd5d49b63ef919`
+  - 外部团队群 `oc_7121d87961740dbd72bd8e50e48ba5e3`
+  - 三个正式机器人 `aoteman` / `xiaolongxia` / `yiran_yibao`
+- 新增 `v5 runtime manifest` 作为标准交付物，用于 team 级 hidden main、watchdog、session hygiene 和 canary 落地。
+
+### Changed
+- README、SKILL、`deployment-inputs.example.yaml`、`V5` 交付模板统一升级到 `V5 Team Orchestrator` 主线口径：
+  - 当前主线版本收敛为 `V3.1`、`V4.3.1`、`V5`
+  - `V5` 明确采用 `One Team = 1 Supervisor + N Workers`
+  - 生成器输出 patch + summary + runtime manifest
+- `V5` 文档与 JSONC 快照对齐当前脚本产物，补齐 hidden main、teamKey、双群与 Codex 真实交付入口。
+
+### Fixed
+- 修复 `V5` 文档仍停留在骨架、缺少真实双群信息和运行时产物说明的问题。
+- 修复 README 版本号与 `VERSION` 文件不一致的问题。
+
+## [1.5.2] - 2026-03-07
+
+### Added
+- 新增 `templates/openclaw-v4-3-1-single-group-production.example.jsonc`，提供 `V4.3.1` 单群生产稳定版的去敏 `openclaw.jsonc` 参考快照。
+
+### Changed
+- README 在 `V4.3.1` 章节补充 JSONC 配置快照入口，便于直接对照字段结构。
+
+### Fixed
+- 修复仓库只有长文档和局部 route 示例、缺少一份完整去敏 `openclaw.json` 参考快照的问题。
+
 ## [1.5.1] - 2026-03-07
 
 ### Added

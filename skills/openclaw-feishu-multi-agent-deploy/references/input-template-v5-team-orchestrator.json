@@ -1,0 +1,171 @@
+{
+  "mode": "plugin",
+  "connectionMode": "websocket",
+  "domain": "feishu",
+  "defaultAccount": "aoteman",
+  "messages": {
+    "ackReactionScope": "group-mentions",
+    "groupChat": {
+      "mentionPatterns": ["@奥特曼", "奥特曼", "主管机器人"]
+    }
+  },
+  "accounts": [
+    {
+      "accountId": "aoteman",
+      "appId": "cli_a923c749bab6dcba",
+      "appSecret": "TWpD207Ri2g1Qqmw4R5YhfkPRhOokCGX"
+    },
+    {
+      "accountId": "xiaolongxia",
+      "appId": "cli_a9f1849b67f9dcc2",
+      "appSecret": "g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr"
+    },
+    {
+      "accountId": "yiran_yibao",
+      "appId": "cli_a923c71498b8dcc9",
+      "appSecret": "swscrlPKYCwAehOyyoLrlesLTsuYY6nl"
+    }
+  ],
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "sub2api/gpt-5.3-codex",
+        "fallbacks": ["sub2api/gpt-5.2-codex"]
+      },
+      "workspace": "~/.openclaw/workspace",
+      "maxConcurrent": 4,
+      "subagents": {
+        "maxConcurrent": 8
+      },
+      "sandbox": {
+        "sessionToolsVisibility": "all"
+      }
+    }
+  },
+  "agentToAgent": {
+    "enabled": true
+  },
+  "tools": {
+    "allow": [
+      "group:fs",
+      "group:runtime",
+      "group:web",
+      "group:messaging",
+      "group:sessions"
+    ],
+    "sessions": {
+      "visibility": "all"
+    }
+  },
+  "session": {
+    "sendPolicy": {
+      "default": "allow"
+    },
+    "resetByType": {
+      "group": {
+        "mode": "idle",
+        "idleMinutes": 1440
+      }
+    },
+    "resetTriggers": ["/reset", "/new"],
+    "agentToAgent": {
+      "maxPingPongTurns": 0
+    }
+  },
+  "teams": [
+    {
+      "teamKey": "internal_main",
+      "displayName": "内部生产团队群",
+      "group": {
+        "peerId": "oc_f785e73d3c00954d4ccd5d49b63ef919",
+        "entryAccountId": "aoteman",
+        "requireMention": true
+      },
+      "supervisor": {
+        "agentId": "supervisor_internal_main",
+        "roleKey": "supervisor",
+        "name": "奥特曼",
+        "role": "主管总控",
+        "responsibility": "接单、拆解、调度、统一收口",
+        "mentionPatterns": ["@奥特曼", "奥特曼", "主管机器人"],
+        "systemPrompt": "你是内部团队主管 Agent，运行 V5 Team Orchestrator。群里只允许两类可见消息：主管接单、主管最终统一收口。被 @ 且不是 WARMUP/闲聊时，第一条 assistant 消息必须包含真实 toolCall。固定流程：begin-turn -> start-job/append-note -> 发接单消息 -> 按 workflow.stages 严格串行派发 -> hidden main 收 COMPLETE_PACKET -> 最终收口 -> close-job done。hidden main 固定为 agent:supervisor_internal_main:main。内部协议回合最后只允许输出 NO_REPLY。"
+      },
+      "workers": [
+        {
+          "agentId": "ops_internal_main",
+          "roleKey": "ops",
+          "accountId": "xiaolongxia",
+          "name": "小龙虾找妈妈",
+          "role": "运营专家",
+          "responsibility": "活动打法、节奏、执行动作",
+          "visibility": "visible",
+          "systemPrompt": "你是内部团队运营专家。收到 TASK_DISPATCH 后必须严格执行：message 发【运营进度】 -> 读取真实 progressMessageId -> message 发【运营结论】 -> 读取真实 finalMessageId -> sessions_send COMPLETE_PACKET 到 agent:supervisor_internal_main:main -> 最后 NO_REPLY。禁止 ACK、禁止伪造 messageId、禁止 [[reply_to_current]]。"
+        },
+        {
+          "agentId": "finance_internal_main",
+          "roleKey": "finance",
+          "accountId": "yiran_yibao",
+          "name": "易燃易爆",
+          "role": "财务专家",
+          "responsibility": "预算、毛利、ROI 与风险",
+          "visibility": "visible",
+          "systemPrompt": "你是内部团队财务专家。收到 TASK_DISPATCH 后必须严格执行：message 发【财务进度】 -> 读取真实 progressMessageId -> message 发【财务结论】 -> 读取真实 finalMessageId -> sessions_send COMPLETE_PACKET 到 agent:supervisor_internal_main:main -> 最后 NO_REPLY。禁止 ACK、禁止伪造 messageId、禁止 [[reply_to_current]]。"
+        }
+      ],
+      "workflow": {
+        "mode": "serial",
+        "stages": [
+          {"agentId": "ops_internal_main"},
+          {"agentId": "finance_internal_main"}
+        ]
+      }
+    },
+    {
+      "teamKey": "external_main",
+      "displayName": "外部生产团队群",
+      "group": {
+        "peerId": "oc_7121d87961740dbd72bd8e50e48ba5e3",
+        "entryAccountId": "aoteman",
+        "requireMention": true
+      },
+      "supervisor": {
+        "agentId": "supervisor_external_main",
+        "roleKey": "supervisor",
+        "name": "奥特曼",
+        "role": "主管总控",
+        "responsibility": "接单、拆解、调度、统一收口",
+        "mentionPatterns": ["@奥特曼", "奥特曼", "主管机器人"],
+        "systemPrompt": "你是外部团队主管 Agent，运行 V5 Team Orchestrator。群里只允许两类可见消息：主管接单、主管最终统一收口。被 @ 且不是 WARMUP/闲聊时，第一条 assistant 消息必须包含真实 toolCall。固定流程：begin-turn -> start-job/append-note -> 发接单消息 -> 按 workflow.stages 严格串行派发 -> hidden main 收 COMPLETE_PACKET -> 最终收口 -> close-job done。hidden main 固定为 agent:supervisor_external_main:main。内部协议回合最后只允许输出 NO_REPLY。"
+      },
+      "workers": [
+        {
+          "agentId": "ops_external_main",
+          "roleKey": "ops",
+          "accountId": "xiaolongxia",
+          "name": "小龙虾找妈妈",
+          "role": "运营专家",
+          "responsibility": "活动打法、节奏、执行动作",
+          "visibility": "visible",
+          "systemPrompt": "你是外部团队运营专家。收到 TASK_DISPATCH 后必须严格执行：message 发【运营进度】 -> 读取真实 progressMessageId -> message 发【运营结论】 -> 读取真实 finalMessageId -> sessions_send COMPLETE_PACKET 到 agent:supervisor_external_main:main -> 最后 NO_REPLY。禁止 ACK、禁止伪造 messageId、禁止 [[reply_to_current]]。"
+        },
+        {
+          "agentId": "finance_external_main",
+          "roleKey": "finance",
+          "accountId": "yiran_yibao",
+          "name": "易燃易爆",
+          "role": "财务专家",
+          "responsibility": "预算、毛利、ROI 与风险",
+          "visibility": "visible",
+          "systemPrompt": "你是外部团队财务专家。收到 TASK_DISPATCH 后必须严格执行：message 发【财务进度】 -> 读取真实 progressMessageId -> message 发【财务结论】 -> 读取真实 finalMessageId -> sessions_send COMPLETE_PACKET 到 agent:supervisor_external_main:main -> 最后 NO_REPLY。禁止 ACK、禁止伪造 messageId、禁止 [[reply_to_current]]。"
+        }
+      ],
+      "workflow": {
+        "mode": "serial",
+        "stages": [
+          {"agentId": "ops_external_main"},
+          {"agentId": "finance_external_main"}
+        ]
+      }
+    }
+  ]
+}

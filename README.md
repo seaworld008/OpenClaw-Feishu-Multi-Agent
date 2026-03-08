@@ -4,11 +4,11 @@
 
 ## 当前版本
 
-- `v1.5.1`（2026-03-07）
+- `v1.6.0`（2026-03-08）
 - 默认技术路线：官方插件 `@openclaw/feishu`
 - 兼容路线：legacy `chat-feishu`
-- 单群演示推荐版：`V4.2.1`
-- 单群生产推荐版：`V4.3.1`
+- 当前主线版本：`V3.1` 跨群生产、`V4.3.1` 单群生产、`V5 Team Orchestrator` 多群模板化生产
+- 客户定制保留件：`V4.3.1-C1.0`（与 `V4.3.1` 同协议，保留客户专属群与机器人配置）
 
 ## 仓库结构
 
@@ -32,6 +32,8 @@ README.md
 - Brownfield 增量改造（incremental）与灰度放量（canary）
 - 配置生成脚本（从输入 JSON 生成 patch + 验证摘要）
 - 前置条件、验收清单、回滚流程、升级回归手册
+- `V5 Team Orchestrator`：多个飞书群，每群 `1` 个主管 + `N` 个 worker，可模板化扩展角色、职能与提示词
+- 直接给 Codex 使用的完整交付模板、真实双群示例和 `v5 runtime manifest`
 
 ## 平台兼容矩阵
 
@@ -60,6 +62,7 @@ cd skills/openclaw-feishu-multi-agent-deploy
 - `references/input-template.json`（默认 plugin）
 - `references/input-template-plugin.json`（plugin 完整示例）
 - `references/input-template-legacy-chat-feishu.json`（legacy 兼容）
+- `references/input-template-v5-team-orchestrator.json`（`V5 Team Orchestrator` 多群模板化示例）
 
 3. 生成 patch
 
@@ -77,6 +80,54 @@ openclaw gateway restart
 openclaw agents list --bindings
 ```
 
+## V5 Team Orchestrator 快速入口
+
+如果你的目标是“多个飞书群，每个群内都是多个 agent，且每个群都能自定义角色、职能与提示词”，优先按 `V5 Team Orchestrator` 建模：
+
+1. 输入模板：
+- [V5 Team Orchestrator 输入模板](skills/openclaw-feishu-multi-agent-deploy/references/input-template-v5-team-orchestrator.json)
+
+2. 交付文档：
+- [V5 Team Orchestrator 交付模板](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v5-team-orchestrator.md)
+
+3. 去敏配置快照：
+- [V5 Team Orchestrator JSONC 参考快照](skills/openclaw-feishu-multi-agent-deploy/templates/openclaw-v5-team-orchestrator.example.jsonc)
+
+4. runtime 模板：
+- `templates/systemd/v5-team-watchdog.service`
+- `templates/systemd/v5-team-watchdog.timer`
+- `templates/launchd/v5-team-watchdog.plist`
+
+5. 生成器额外产物：
+- `openclaw-feishu-plugin-v5-runtime-<timestamp>.json`
+- 该文件就是 `v5 runtime manifest`，用于 Codex、watchdog、session hygiene、canary 和回滚脚本按 `teamKey` 取值
+
+当前正式双群基线：
+- 内部团队群：`oc_f785e73d3c00954d4ccd5d49b63ef919`
+- 外部团队群：`oc_7121d87961740dbd72bd8e50e48ba5e3`
+- 三个正式机器人：`aoteman` / `xiaolongxia` / `yiran_yibao`
+- 当前 `V5` 正式 teamKey：`internal_main` / `external_main`
+
+设计原则：
+- 每个群都是一个独立 `team unit`
+- `One Team = 1 Supervisor + N Workers`
+- `teamKey` 驱动 agentId / workspace / memory / watchdog 命名
+- 不再推荐多个群共享同一套全局 `supervisor_agent / ops_agent / finance_agent`
+
+runtime 命名约定：
+- hidden main：`agent:<supervisorAgentId>:main`
+- SQLite：`~/.openclaw/teams/<teamKey>/state/team_jobs.db`
+- systemd：`v5-team-<teamKey>.service` / `v5-team-<teamKey>.timer`
+- launchd：`bot.molt.v5-team-<teamKey>`
+
+当前双群对应 hidden main：
+- `agent:supervisor_internal_main:main`
+- `agent:supervisor_external_main:main`
+
+Codex 交付入口：
+- [V5 Team Orchestrator 交付模板](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v5-team-orchestrator.md)
+- 这份文档已经写入当前 2 个正式群、3 个正式机器人、可直接复制给 Codex 的长版提示词和运行命令
+
 ## V4.3.1 快速启动
 
 如果你的目标是“在一台新机器上快速拉起单群生产稳定版”，直接按这两个入口执行：
@@ -86,6 +137,10 @@ openclaw agents list --bindings
 
 2. Codex 真实交付模板：
 - [V4.3.1 单群生产稳定版模板](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.3.1-single-group-production.md)
+- [V4.3.1-C1.0 客户定制模板](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.3.1-single-group-production-C1.0.md)
+
+3. 去敏配置快照：
+- [V4.3.1 单群生产配置快照](skills/openclaw-feishu-multi-agent-deploy/templates/openclaw-v4-3-1-single-group-production.example.jsonc)
 
 其中最关键的两个命令是：
 
@@ -243,6 +298,19 @@ peer: oc_1a3c32a99d6a8120f9ca7c4343263b24 -> agentId: finance_agent，accountId:
 
 说明：未开启该权限时，请保持 `requireMention=true`。
 
+#### 2.1) 外部群补充说明（很容易误判）
+
+如果目标群是飞书外部群，优先检查的不是额外 `scope`，而是应用是否已开启“对外共享/允许外部用户使用”并完成审批。
+外部群能力不应通过在 `scopes` 里继续追加猜测性的权限来排障；生产上应先确认：
+
+- 应用已经开启对外共享，且当前版本已重新发布并审批生效
+- 机器人可以被搜索并成功加入外部群
+- 外部群中的 `@机器人` 消息能真实进入事件订阅与 gateway 日志
+
+注意：
+- “群里是否出现已查看/已读标志”不是 OpenClaw 飞书通道的验收标准，尤其不适合作为外部群权限是否正常的唯一依据
+- 外部群验收应以 `openclaw logs --follow`、真实 `messageId`、以及 canary 结果为准
+
 #### 3) 文档/知识（按需）
 - `docs:document.content:read`
 - `sheets:spreadsheet`
@@ -310,6 +378,7 @@ peer: oc_1a3c32a99d6a8120f9ca7c4343263b24 -> agentId: finance_agent，accountId:
 说明：
 - 多维表格权限在部分租户控制台会显示为 `base:*` 命名；若你的控制台没有 `bitable:*`，按页面提示替换为对应的 `base:*` 等价权限即可。
 - 如果你不需要“免 @ 群触发”，可去掉 `im:message.group_msg` 并保持 `requireMention=true`。
+- 如果目标是飞书外部群，不需要在这份 JSON 里额外追加“外部群专用 scope”；应改查应用是否已开启对外共享并审批通过。
 
 ### 六、ID 对照表（避免把名字当 ID）
 
@@ -421,7 +490,7 @@ routes:
 - 在管理群增加 `bot_supervisor`
 - 主管 Agent 通过 `agentToAgent` 分派给销售/运营/财务子 Agent
 
-## V1 使用 Codex 的实战案例（安装到上线）
+## 使用 Codex 的实战案例（安装到上线）
 
 下面这套话术可直接复制给 Codex，后续新增 agent 或新增机器人只需按“扩展表”增加行。
 
@@ -548,577 +617,34 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
 - 每条 binding 至少做一次实测（群+私聊）
 - 留存回滚命令和验证证据（日志/截图/命令输出）
 
-## 版本地图与推荐选型
-
-这一套仓库现在建议按 8 个版本理解，不要再把所有配置混在一起看。
-
-### 版本总览
-
-| 版本 | 模式 | 核心能力 | 适合场景 | 成本/复杂度 | 当前建议 |
-|---|---|---|---|---|---|
-| `V1` | 基础多群路由 | 一群一 Bot / 一群一 Agent，按群稳定分工 | 第一次上线、多群分工、先求稳 | 低 | 推荐作为起步版 |
-| `V2` | 自动跨群收口 | 新增主管群，只做跨群汇总与收口 | 管理层汇总、经营复盘、低风险升级 | 低到中 | 推荐用于 brownfield 第一阶段升级 |
-| `V3.1` | 主管派单 + 三群执行 + 自动收口 | 真派单、真执行、真收口，可审计验收 | 正式生产交付、客户 PoC、经营执行闭环 | 中到高 | 跨群生产最推荐 |
-| `V4` | 单群团队模式 | 3 个机器人在同一群，主管主入口，执行角色协作 | 老板群、作战室、客户演示 | 中 | 单群演示推荐 |
-| `V4.1` | 单群团队模式增强版 | 主管主导协商 + 执行角色有限互审 | 高级演示、单群指挥中心、未来团队模式 | 高 | 仍可用 |
-| `V4.2` | 单群团队模式最佳实践版 | send-first probe + 展示层/控制面分离 | 真实单群交付、高级演示、未来团队模式 | 高 | 仍可用 |
-| `V4.2.1` | 单群团队可见协作版 | send-first probe + worker 显式群发摘要 + 最终收口 | 客户现场演示、老板群、可见团队协作交付 | 高 | 单群当前最推荐 |
-| `V4.3` | 单群生产基础版 | 自动 `jobRef` + 单群活跃任务队列 + 外部状态层 + 可见协作 | 客户长期上线前的基础蓝图 | 高 | 仍可用 |
-| `V4.3.1` | 单群生产稳定版 | `V4.3` + 一次性初始化 + watchdog + canary + 队列恢复 | 客户长期上线、多人多任务、真实经营协同 | 高 | 单群生产最推荐 |
-
-### 最推荐的配置怎么选
-
-1. 如果你现在刚开始做客户交付，先上 `V1`。
-2. 如果你已经有 3 个业务群，想先给老板一个“自动收口”的效果，上 `V2`。
-3. 如果你要做真正能执行的跨群团队，直接上 `V3.1`。这是当前跨群生产最推荐版本。
-4. 如果你要做“一个群里像一人公司一样协作”的效果，选 `V4`。
-5. 如果你要做单群里的主管编排、执行角色有限互审、看起来更像未来团队 Agent 形态，选 `V4.1`。
-6. 如果你还要兼顾“真实可交付”与“群里看起来像团队在协作”，优先选 `V4.2.1`。
-7. 如果你要给客户长期上线，不想要求用户手输 `taskId`，并且要解决多轮消息和多任务串线，直接规划 `V4.3.1`。
-
-一句话结论：
-- 跨群正式交付：`V3.1` 最推荐
-- 单群高级演示：`V4.2.1` 最推荐
-- 单群生产上线：`V4.3.1` 最推荐
-- 最低风险起步：`V1`
-
-## 各版本详细说明
-
-### V1：基础多群多角色路由
-
-`V1` 就是 README 里你前面已经在用的这套基础配置，正式定义为：
-
-- 销售群 -> 销售 Bot -> `sales_agent`
-- 运营群 -> 运营 Bot -> `ops_agent`
-- 财务群 -> 财务 Bot -> `finance_agent`
-
-作用：
-- 让每个群只处理自己职责范围内的问题
-- 每个 Agent 角色边界清晰
-- 路由简单、稳定、最好排障
-
-能力边界：
-- 能分工
-- 能稳定响应
-- 不能自动跨群汇总
-- 不能主管派单
-
-最适合：
-- 第一次上线
-- 客户先验证“多角色分工”
-- 对稳定性要求最高，不着急做复杂协同
-
-你的当前真实 `V1` 路由就是：
-
-```yaml
-routes:
-  - { peerKind: "group", peerId: "oc_ffab0130d2cfb80f70c150918b4d4e87", accountId: "aoteman",     agentId: "sales_agent" }
-  - { peerKind: "group", peerId: "oc_da719e85a3f75d9a6050343924d9aa62", accountId: "xiaolongxia", agentId: "ops_agent" }
-  - { peerKind: "group", peerId: "oc_1a3c32a99d6a8120f9ca7c4343263b24", accountId: "yiran_yibao", agentId: "finance_agent" }
-```
-
-### V2：主管群自动跨群收口
-
-`V2` 是在 `V1` 基础上最自然的一次升级：
-
-- 保留 3 个业务群不动
-- 新增一个主管群
-- 新增 `supervisor_agent`
-- 主管群只做“跨群自动收口”
-
-作用：
-- 让管理层直接在主管群看到销售/运营/财务的统一结论
-- 不打断业务群原有工作方式
-- 非常适合 brownfield 最小增量升级
-
-能力边界：
-- 能自动汇总
-- 能输出统一执行稿
-- 还不是完整的“主管派单 -> 执行 -> 回收”闭环
-
-最适合：
-- 管理层看板
-- 周报/日报汇总
-- 客户先看“AI 团队收口能力”
-
-文档入口：
-- [飞书多 Agent 自动跨群收口交付蓝图（V2.1 Pro）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates.md)
-
-### V3.1：主管派单 + 三群执行 + 自动收口
-
-`V3.1` 是当前跨群版本里最完整、最可交付的一版：
-
-- 主管群接任务
-- 主管 Agent 拆任务
-- 派给销售 / 运营 / 财务三个业务群执行
-- 再自动拉回结果统一收口
-
-作用：
-- 从“自动汇总”升级为“真实执行闭环”
-- 更像一个真正能干活的跨群 Agent 团队
-
-能力：
-- 真派单
-- 真执行
-- 真收口
-- 有 `dispatchEvidence`
-- 有 canary 门禁
-- 有回滚与验收流程
-
-最适合：
-- 正式客户交付
-- 经营任务闭环
-- 需要可审计、可回滚、可复盘
-
-文档入口：
-- [飞书多 Agent 主管派单与自动跨群收口交付蓝图（V3.1）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v3.1.md)
-
-### V4：单群高级 Agent 团队模式
-
-`V4` 把协作方式从“跨群”切换成“单群”：
-
-- 3 个机器人都在同一个群
-- 用户默认只 `@主管机器人`
-- 主管拆任务并派给同群执行角色
-- 最终统一收口
-
-作用：
-- 对外看起来像一个群里的 AI 小团队
-- 更适合演示、作战室、老板群
-
-能力边界：
-- 有主管
-- 有执行角色
-- 有派单和收口
-- 不强调执行角色之间的互审协商
-
-最适合：
-- 客户演示
-- 内部老板群
-- 单群作战室
-
-文档入口：
-- [飞书单群高级 Agent 团队交付蓝图（V4）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4-single-group-team.md)
-
-### V4.1：单群团队模式增强版
-
-`V4.1` 是 `V4` 的增强版，适合你需要“主管主导协商 + 执行角色有限互审”的单群模式：
-
-- 主管仍是唯一主入口
-- 执行角色仍按边界执行
-- 在必要时允许有限互审
-- 互审最多 1 轮，最终必须回主管
-
-作用：
-- 让单群模式更接近真实管理团队的决策流
-- 更像未来团队 Agent 的编排模式
-
-能力：
-- 主管主导协商
-- 执行角色有限互审
-- 单群统一收口
-- 更强的状态机门控和验收证据
-
-最适合：
-- 高级客户演示
-- 单群指挥中心
-- 想突出“未来团队 Agent”卖点
-
-文档入口：
-- [飞书单群高级 Agent 团队交付蓝图（V4.1）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.1-single-group-team.md)
-
-### V4.2：单群团队最佳实践版
-
-`V4.2` 是在 `V4.1` 基础上继续收敛后的单群最佳实践版本：
-
-- 控制面默认采用 send-first probe
-- `sessions_list` 不再作为唯一存在性判断
-- `sessions_spawn` 只做兜底，并显式承认 Feishu 下可能不可用
-- ACK 阶段建议短超时，详细执行阶段建议 `timeoutSeconds=0` fire-and-forget
-- 二次收口优先看 `sessions_history` 与 worker session jsonl
-- 主管触发建议同时配置 `messages.groupChat.mentionPatterns` 与 `agents.list[].groupChat.mentionPatterns`
-- 公开群里的主动 @ 与机器人讨论只作为展示层
-- 正确性仍然只依赖 `dispatchEvidence` / `reviewEvidence`
-
-作用：
-- 既保留“群里像团队在讨论”的观感
-- 又不牺牲真实派单、真实执行、真实验收
-
-最适合：
-- 真实单群交付
-- 高级客户演示
-- 想兼顾“能跑”和“好看”的最佳案例
-
-文档入口：
-- [飞书单群高级 Agent 团队交付蓝图（V4.2）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.2-single-group-team.md)
-
-### V4.2.1：单群团队可见协作版
-
-`V4.2.1` 是在 `V4.2` 跑通控制面的基础上，继续把“群里真的看到其他机器人发言”做成正式交付标准的一版：
-
-- 保留 `V4.2` 的 send-first probe、ACK 双阶段派单、`sessions_history` 二次收口
-- 不再依赖隐式 announce 作为展示层主路径
-- worker 在收到详细任务后，必须显式调用 `message` 工具往团队群发 1 条短摘要
-- 详细结果仍然回主管，主管最后统一收口
-- 验收不再只看 `dispatchEvidence`，还要看 worker 的真实 `messageId`
-
-作用：
-- 客户演示时，群里真的能看到运营/财务机器人在执行
-- 不牺牲控制面正确性
-- 更适合老板群、作战室、单群高级团队演示
-
-最适合：
-- 需要现场演示“多个机器人像团队一样工作”
-- 需要把“群里可见协作”也做成验收项
-
-文档入口：
-- [飞书单群高级 Agent 团队交付蓝图（V4.2.1）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.2.1-single-group-team.md)
-
-### V4.3：单群生产版
-
-`V4.3` 是在 `V4.2.1` 演示版成功经验上的生产化升级：
-
-- 用户不再手工输入 `taskId`
-- supervisor 自动生成内部 `jobRef`
-- 单个团队群默认只允许 1 个 activeJob
-- 新任务入队，补充说明归并到当前 activeJob
-- worker 继续在群里显式发“进度摘要 + 结论摘要”
-- supervisor 最终不再只靠 transcript，而是基于状态表统一收口
-
-作用：
-- 解决真实客户长期使用时“不会写 taskId”“多人同时发消息”“旧上下文污染新任务”的问题
-- 保留单群可见协作观感
-- 把排障、审计、回滚能力提升到生产可交付级别
-
-推荐实现：
-- 默认状态层：SQLite
-- 可选业务可视化镜像：飞书多维表格
-
-最适合：
-- 客户正式上线
-- 单群老板群/作战室长期运行
-- 一个群里需要多人、多轮、多任务自然协作
-
-文档入口：
-- [飞书单群高级 Agent 团队交付蓝图（V4.3 生产版）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.3-single-group-production.md)
-- [V4.3 SQLite 任务状态表示例](skills/openclaw-feishu-multi-agent-deploy/templates/v4-3-job-registry.example.sql)
-
-### V4.3.1：单群生产稳定版
-
-`V4.3.1` 是在 `V4.3` 基础上补齐生产稳定件的一版：
-
-- 一次性 `WARMUP` 初始化 worker team session
-- `watchdog-tick` 自动处理 stale active job
-- `check_v4_3_canary.py` 统一验证 SQLite + session jsonl + 可见群消息
-- 明确固定群内顺序：主管接单 -> worker 进度/结论 -> 主管最终收口
-- worker 只允许 1 条进度摘要 + 1 条结论摘要，不再发“任务已接收/等待具体内容”
-- 内部协议统一走隐藏控制会话 `agent:supervisor_agent:main`，群里不再泄漏 `ACK_READY / REPLY_SKIP / COMPLETE_PACKET`
-- 运营与财务的结论摘要允许多行完整输出，不再被压成一句话
-
-最适合：
-- 客户真实上线
-- 单群长期运行
-- 多人、多轮、多任务自然输入
-
-文档入口：
-- [飞书单群高级 Agent 团队交付蓝图（V4.3.1 生产稳定版）](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.3.1-single-group-production.md)
-- [V4.3 SQLite 任务状态表示例](skills/openclaw-feishu-multi-agent-deploy/templates/v4-3-job-registry.example.sql)
-- [V4.3 job registry 脚本](skills/openclaw-feishu-multi-agent-deploy/scripts/v4_3_job_registry.py)
-- [V4.3 canary 脚本](skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_3_canary.py)
-- [V4.3 watchdog systemd 模板](skills/openclaw-feishu-multi-agent-deploy/templates/systemd/v4-3-watchdog.service)
-- [V4.3 watchdog launchd 模板](skills/openclaw-feishu-multi-agent-deploy/templates/launchd/v4-3-watchdog.plist)
-- [Windows / WSL2 部署说明](skills/openclaw-feishu-multi-agent-deploy/references/windows-wsl2-deployment-notes.md)
-- [WSL2 systemd 示例](skills/openclaw-feishu-multi-agent-deploy/templates/windows/wsl.conf.example)
-
-## 推荐阅读顺序
-
-1. 先读：`references/prerequisites-checklist.md`
-2. 再做：`templates/deployment-inputs.example.yaml`
-3. 如果要最低风险上线，先按 `V1`
-4. 如果要管理层自动汇总，读 `V2`
-5. 如果要正式跨群交付，直接读 `V3.1`
-6. 如果要单群高级演示，读 `V4`、`V4.1`、`V4.2`，正式交付优先 `V4.2.1`
-7. 如果要单群正式上线，继续读 `V4.3.1`
-8. 上线前看：`templates/brownfield-change-plan.example.md`
-9. 上线后看：`templates/verification-checklist.md`
-10. 升级回归看：`references/rollout-and-upgrade-playbook.md`
-11. 如果客户是 macOS，看 `templates/launchd/v4-3-watchdog.plist`
-12. 如果客户是 Windows，看 `references/windows-wsl2-deployment-notes.md`
-
-## 最佳实践来源
-
-- OpenClaw 官方文档与 Release（已在 `references/source-cross-validation-2026-03-05.md` 记录）
-- V4.2 单群团队补充交叉验证（见 `references/source-cross-validation-2026-03-06.md`）
-- V4.2.1 真实跑通样板：`team-v4-2-015`（运营/财务真实群发 messageId 后主管最终收口）
-- V4.3 单群生产版交叉验证（见 `references/source-cross-validation-2026-03-07.md`）
-- V4.3.1 生产稳定版：增加一次性初始化、watchdog、SQLite canary
-- V4.3.1 真实跑通样板：`TG-20260307-031`，最终状态 `done`，`check_v4_3_canary.py` 返回 `V4_3_CANARY_OK`
-- 跨平台交叉验证：`references/source-cross-validation-2026-03-07-platforms.md`
-- 飞书开放平台官方文档（事件订阅、消息事件、鉴权）
-
-## 交叉验证更新（2026-03-05）
-
-本仓库步骤和提示词已按官方来源再次核对，关键结论如下：
-
-1. OpenClaw 主仓库最新主分支提交时间为 `2026-03-05`，最新 release 仍为 `v2026.3.2`（`2026-03-03` 发布）。  
-2. 飞书推荐路线仍是官方插件 `@openclaw/feishu`，并使用 `match.channel = "feishu"`。  
-3. 群 ID 获取仍以 `openclaw logs --follow` 读取入站 `chat_id / peer.id` 为最稳妥方案。  
-4. 路由匹配继续遵循“更具体优先 + 第一个命中生效”原则，`bindings` 顺序必须严格控制。  
-5. 多账号场景需显式维护 `channels.feishu.defaultAccount`，避免出站账号漂移。  
-6. 免 `@` 场景依然需要配套飞书权限 `im:message.group_msg`，默认建议保持 `requireMention=true`。
-
-### V2 Agent 系统提示词最佳实践（自动跨群收口起步版）
-
-建议每个 Agent 都有“角色边界 + 输出格式 + 风险约束”，避免跨职责回答和风格漂移。
-
-```yaml
-agents:
-  - id: "sales_agent"
-    role: "销售咨询"
-    systemPrompt: >
-      你是销售 Agent。目标是识别客户需求并给出可执行方案。
-      回答必须包含：需求摘要、推荐方案、报价/资源前提、下一步动作。
-      未确认的信息不得承诺（折扣、交付周期、定制开发）。
-      信息不足时先提出最多 3 个澄清问题。
-  - id: "ops_agent"
-    role: "运营执行"
-    systemPrompt: >
-      你是运营 Agent。目标是把业务目标拆解为可执行任务。
-      回答必须包含：任务清单、负责人建议、截止时间、依赖项、风险项。
-      默认给出周计划和当日待办。
-      涉及跨部门协同时先给待确认清单，不擅自下结论。
-  - id: "finance_agent"
-    role: "财务分析"
-    systemPrompt: >
-      你是财务 Agent。目标是预算、成本、回款、利润分析与预警。
-      回答必须包含：关键指标表（当前值/目标值/差异/建议）。
-      金额相关需标注口径与时间范围。
-      涉及税务或合规争议时明确“需人工复核”，不输出最终法律结论。
-```
-
-### V1 真实部署任务提示词（基础多群路由，推荐长期复用）
-
-```text
-请使用 openclaw-feishu-multi-agent-deploy skill，按官方最新规范完成飞书多 Agent 部署。
-
-目标：
-- 在现网（brownfield）中做 incremental 最小变更。
-- 使用官方 feishu 插件（match.channel=feishu）。
-- 支持后续新增机器人/新增 agent/新增群时可直接扩展。
-
-输入：
-- accountMappings:
-  - accountId: "aoteman"
-    appId: "cli_a923c749bab6dcba"
-    appSecret: "TWpD207Ri2g1Qqmw4R5YhfkPRhOokCGX"
-    encryptKey: "..."
-    verificationToken: "..."
-  - accountId: "xiaolongxia"
-    appId: "cli_a9f1849b67f9dcc2"
-    appSecret: "g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr"
-    encryptKey: "..."
-    verificationToken: "..."
-  - accountId: "yiran_yibao"
-    appId: "cli_a923c71498b8dcc9"
-    appSecret: "swscrlPKYCwAehOyyoLrlesLTsuYY6nl"
-    encryptKey: "..."
-    verificationToken: "..."
-- agents:
-  - { id: "sales_agent", role: "销售咨询", systemPrompt: "你是销售 Agent。输出需求摘要、推荐方案、前提约束和下一步动作；信息不足先问3个澄清问题；不得承诺未确认折扣和交付。" }
-  - { id: "ops_agent", role: "运营执行", systemPrompt: "你是运营 Agent。把目标拆成任务清单并给负责人建议、时间节点、依赖和风险；默认给周计划与当日待办；跨部门事项先列待确认项。" }
-  - { id: "finance_agent", role: "财务分析", systemPrompt: "你是财务 Agent。输出关键指标表（当前值/目标值/差异/建议）；标注口径与周期；税务合规问题必须提示人工复核。" }
-- routes:
-  - { peerKind: "group", peerId: "oc_ffab0130d2cfb80f70c150918b4d4e87", accountId: "aoteman", agentId: "sales_agent" }
-  - { peerKind: "group", peerId: "oc_da719e85a3f75d9a6050343924d9aa62", accountId: "xiaolongxia", agentId: "ops_agent" }
-  - { peerKind: "group", peerId: "oc_1a3c32a99d6a8120f9ca7c4343263b24", accountId: "yiran_yibao", agentId: "finance_agent" }
-
-约束：
-1) 先读取并审计 ~/.openclaw/openclaw.json。
-2) 输出 to_add / to_update / to_keep_unchanged。
-3) 只修改 channels.feishu、bindings、agents.list（必要新增）和 tools.agentToAgent（仅我要求时启用）。
-4) 按“peer+accountId 精确 > accountId > channel兜底”排序 bindings。
-5) 校验每个 peerId、accountId、agentId 必须真实存在，不得猜测。
-6) 输出完整操作命令：
-   - 备份
-   - openclaw config validate
-   - openclaw gateway restart
-   - openclaw agents list --bindings
-   - canary 验证
-   - 回滚
-7) 输出验收报告模板（群路由正确性、角色行为一致性、误触发检查、日志证据）。
-8) 若 `systemPrompt` 为空，按上述角色模板自动补齐后再生成 patch。
-```
-
-## 样板测试案例（客户演示版）
-
-目标：在 15 分钟内演示“销售-运营-财务”多 Agent 团队协作能力，而不是单点聊天回复能力。
-
-### 演示前准备（5 分钟）
-
-1. 三个群都发一条“准备就绪”消息，确认机器人在线。  
-2. 打开日志窗口：`openclaw logs --follow`，用于展示路由命中证据。  
-3. 确认 3 条精确路由都已生效：`openclaw agents list --bindings`。  
-
-### 演示主场景（48 小时促销协同）
-
-场景统一背景：
-`客户A计划48小时内上线促销活动，目标新增付费客户80个，预算上限20万。`
-
-1) 在销售群发：
-
-```text
-客户A计划4月做促销，目标新增付费客户80个，预算上限20万。
-请给出：
-1. 客户分层与主推方案
-2. 预计转化路径（线索->商机->签约）
-3. 对运营和财务的协同需求清单
-```
-
-2) 在运营群发：
-
-```text
-基于销售群给的需求，请输出48小时可执行的运营排期：
-1. Day1/Day2任务清单
-2. 每项任务负责人建议
-3. 依赖关系和风险预警
-4. 资源不足时的优先级取舍方案
-```
-
-3) 在财务群发：
-
-```text
-基于销售目标和运营计划，做一个简版财务测算：
-1. 成本拆分（固定/可变）
-2. 收益与毛利率测算
-3. 回款周期风险
-4. 可执行的预算红线（哪些不能超）
-```
-
-4) 在任一群发收口指令（建议财务群或管理群）：
-
-```text
-请基于销售、运营、财务三方结论，输出最终执行版方案：
-1. 一页总结
-2. 决策建议（Go / No-Go）
-3. 明日必须执行的3件事
-4. 风险与应对
-```
-
-### 演示评分表（给客户看“比单机器人更强”）
-
-每项 0-2 分，总分 10 分：
-
-1. 路由准确：消息命中正确群对应 agent。  
-2. 角色稳定：销售/运营/财务各司其职，不串角色。  
-3. 输出可执行：有清单、时间、负责人建议、指标。  
-4. 协同质量：三方结论可合并为统一执行方案。  
-5. 风险意识：主动提示预算、资源、回款、合规风险。  
-
-参考标准：
-- `8-10` 分：可作为客户正式 PoC 演示结果。  
-- `6-7` 分：可用，但需优化 systemPrompt 或路由。  
-- `<=5` 分：建议先修复后再演示。  
-
-### 常见演示失败点
-
-1. 没开日志，无法证明“多路由命中”。  
-2. 三个群提问内容差异太小，看不出角色边界。  
-3. 只演示“能回复”，没有“可执行结果与收口”。  
-4. 未限制免 @ 触发，导致群内噪音干扰演示。  
-5. V3 缺少 `tools.allow=group:sessions`，主管只会“写派单卡”不会真实派发。  
-6. V3 未放行 `tools.sessions.visibility` 或 `session.sendPolicy`，会话派发被拦截。  
-7. V4/V4.1/V4.2 首轮未先 warm-up worker，会出现 `DISPATCH_INCOMPLETE + warmup_required`。
-8. 只看网关日志不看 `session jsonl`，容易误判单群派单是否真的发生。
-9. V4/V4.1/V4.2 若返回 `tool_call_required`，说明本轮没有任何真实工具调用，应先查 supervisor prompt 和配置是否已生效。
-10. V4/V4.1/V4.2 若日志出现 `thread=true` / `subagent_spawning hooks`，说明当前 Feishu 不支持这条 `sessions_spawn` 自动补会话路径，应改为人工 warm-up。
-11. V4/V4.1/V4.2 不应把公开群里的 `@其他机器人` 作为控制面正确性依赖，最佳实践是 `sessions_send` 做控制面、公开 @ 做展示层。
-12. V4.2 若出现 `SEND_PATH_AVAILABLE_BUT_LIST_MISS`，说明真实 send 路径已可用，但 `sessions_list` 不能再作为唯一会话存在性判断。
-13. V4.2 若出现 `TIMEOUT_BUT_WORKER_DELIVERED`，说明 worker 已执行但 supervisor 还没完成二次收口，应优先做 timeout 二次判定或 ACK 派单。
-14. V4.2 若出现 `TRIGGER_MISS_ON_MENTION_OR_FORMAT_WRAP`，说明被 `@` 后仍没进工具链，应同时补 `messages.groupChat.mentionPatterns`、`agents.list[].groupChat.mentionPatterns`，并兼容 `PLAIN_TEXT` / 代码块包裹文本。
-15. V4.2 若 ACK 能成功但详细任务常超时，优先改为“ACK `timeoutSeconds=15` + 详细任务 `timeoutSeconds=0` + `sessions_history` 追收正文结果”。
-16. V4.2 若你已经升级了 prompt / mention / tools，但主管仍明显表现出旧行为，优先怀疑 stale group session。官方群文档说明群级 system prompt 只在新 group session 第一轮进入上下文；此时应先单独发送 `/reset`，或由运维清理该 group 的 supervisor session 映射后重启 gateway，再用新 `taskId` 复测。
-17. V4.2 若 fresh session 已创建，但主管第一轮仍持续 `tool_call_required/no_tool_call`，检查 `supervisor_agent` 的 workspace 是否还保留默认 `BOOTSTRAP.md` 与空白 `IDENTITY.md` / `USER.md` 模板。单群团队模式的生产 workspace 应直接定义为“主管团队 Agent”，不要保留首次引导残留。
-18. V4.2 若 `sessions_send` 报 `No session found`，优先检查主管是否用了错误的 `sessionKey`。飞书群聊应使用官方完整格式：`agent:<agentId>:feishu:group:<peerId>`；不要使用 `feishu:chat:...` 或自造短键。
-19. V4.2.1 若控制面已成功但群里仍看不到其他机器人发言，不要继续依赖隐式 announce；应改为 worker 在详细任务阶段显式调用 `message` 工具，并校验真实 `messageId`。
-20. V4.2.1 若 worker 已生成“进度摘要”文本但群里没有出站消息，优先检查 `message` 工具参数：`channel=feishu`、正确 `accountId`、`target=chat:<peerId>`。
-21. 真实生产环境不建议要求用户手工输入 `taskId`；更稳的方案是由 supervisor 自动生成内部 `jobRef`，并把它落到外部状态层。
-22. 单群长期运行不应只靠 transcript。若客户要长期上线，至少增加“一个活跃任务 + 队列 + 状态表”三件套，优先按 `V4.3` 设计。
-23. `V4.3` 推荐把 SQLite 作为默认状态层，飞书多维表格作为业务可视化镜像，而不是一开始就让多维表格承担唯一状态源。
-
-V3 建议加一道自动门禁（2 分钟窗口）：
-```bash
-LOG="/tmp/openclaw/openclaw-$(date +%F).log"
-START_LINE=$(wc -l < "$LOG")
-# 在主管群发送 V3 测试指令
-sleep 120
-bash skills/openclaw-feishu-multi-agent-deploy/scripts/check_v3_dispatch_canary.sh \
-  --log "$LOG" \
-  --start-line "$START_LINE" \
-  --task-id "demo-v3-001" \
-  --agents "sales_agent,ops_agent,finance_agent"
-```
-
-返回码说明：
-- `0`：派单证据完整
-- `2`：缺少目标会话轨迹
-- `3`：有会话轨迹但证据不足，需继续查 `sessions_send` 原始日志
-
-V4/V4.1 单群团队建议改用专用门禁：
-```bash
-LOG="/tmp/openclaw/openclaw-$(date +%F).log"
-START_LINE=$(wc -l < "$LOG")
-# 先在团队群 warm-up worker，再发送 V4 / V4.1 测试指令
-sleep 120
-bash skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_1_team_canary.sh \
-  --task-id "team-v4-1-001" \
-  --session-root "${HOME}/.openclaw/agents" \
-  --log "$LOG" \
-  --start-line "$START_LINE" \
-  --required-agents "ops_agent,finance_agent" \
-  --optional-agents "sales_agent"
-```
-
-V4.2 / V4.2.1 单群最佳实践建议改用新门禁：
-```bash
-LOG="/tmp/openclaw/openclaw-$(date +%F).log"
-START_LINE=$(wc -l < "$LOG")
-# 先在团队群 warm-up worker，再发送 V4.2 / V4.2.1 测试指令
-sleep 120
-bash skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_2_team_canary.sh \
-  --task-id "team-v4-2-001" \
-  --session-root "${HOME}/.openclaw/agents" \
-  --log "$LOG" \
-  --start-line "$START_LINE" \
-  --required-agents "ops_agent,finance_agent" \
-  --optional-agents "sales_agent"
-
-# 如果是 V4.2.1 的“群内可见协作”交付，追加：
-bash skills/openclaw-feishu-multi-agent-deploy/scripts/check_v4_2_team_canary.sh \
-  --task-id "team-v4-2-015" \
-  --session-root "${HOME}/.openclaw/agents" \
-  --log "$LOG" \
-  --start-line "$START_LINE" \
-  --required-agents "ops_agent,finance_agent" \
-  --require-visible-messages
-```
-
-V4/V4.1/V4.2/V4.2.1 验收补充：
-- 先看 `~/.openclaw/agents/*/sessions/*.jsonl`
-- 再看 gateway log
-- 若主管返回 `warmup_required`，先补 worker warm-up 再复测
-- 若主管返回 `tool_call_required`，先检查 supervisor prompt、gateway restart、工具调用轨迹
-- 若日志出现 `thread=true` / `subagent_spawning hooks`，不要继续重试 `sessions_spawn`
-- V4/V4.1/V4.2 默认应采用 send-first probe，不要只依赖 `sessions_list`
-- 若返回 `SEND_PATH_AVAILABLE_BUT_LIST_MISS`，优先检查 `dispatchEvidence`、固定 sessionKey 的 `sendStatus=ok`、worker session jsonl
-- 若返回 `TIMEOUT_BUT_WORKER_DELIVERED`，优先检查 worker session jsonl、二次收口逻辑，以及是否应采用 ACK -> 正文 的双阶段派单
-- 若返回 `TRIGGER_MISS_ON_MENTION_OR_FORMAT_WRAP`，优先检查 `messages.groupChat.mentionPatterns`、supervisor `groupChat.mentionPatterns` 与输入包裹兼容
-- 单群生产推荐把详细执行任务改为 `timeoutSeconds=0`，再用 `sessions_history` / worker session jsonl 做二次收口
-- 若刚升级过 V4.2 配置，先 fresh session 再测：优先单独发送 `/reset`，不要直接沿用旧团队群会话
-- 若 fresh session 已生效但仍无工具调用，继续排查 workspace 初始化状态：`BOOTSTRAP.md` 应移除，`IDENTITY.md` / `USER.md` / `SOUL.md` 应完成生产化
-- 若 `sessions_send` 返回 `No session found`，先核对使用的是不是 `agent:ops_agent:feishu:group:<peerId>` / `agent:finance_agent:feishu:group:<peerId>`
-- 若是 `V4.2.1`，还要确认 worker session 中存在真实 `messageId`，并且群里能看到两条短摘要
-- 若是 `V4.3` / `V4.3.1`，还要确认用户可不输入 `taskId`、supervisor 自动生成 `jobRef`、同群只能有一个 activeJob、第二个任务会进入队列或被识别为补充说明
-- 若是 `V4.3.1`，还要确认部署阶段已完成一次性 `WARMUP`，并执行 `check_v4_3_canary.py`
+## 主线版本与阅读顺序
+
+仓库主线已经收敛为 3 条：
+
+| 主线版本 | 定位 | 适合场景 | 核心入口 |
+|---|---|---|---|
+| `V3.1` | 跨群生产主线 | 主管群派单，销售/运营/财务分群执行并自动收口 | `references/codex-prompt-templates-v3.1.md` |
+| `V4.3.1` | 单群生产主线 | 一个群内主管 + worker 长期稳定运行 | `references/codex-prompt-templates-v4.3.1-single-group-production.md` |
+| `V5 Team Orchestrator` | 多群模板化主线 | 多个群并行、每群独立 team unit、可复制到 2/10 个团队 | `references/codex-prompt-templates-v5-team-orchestrator.md` |
+
+选择建议：
+1. 业务天然分群，且需要主管跨群调度，选 `V3.1`。
+2. 业务集中在一个群内，且要求真实长期上线，选 `V4.3.1`。
+3. 客户要多个团队群独立运行，并且后面还会持续扩群，直接上 `V5 Team Orchestrator`。
+
+推荐阅读顺序：
+1. `references/prerequisites-checklist.md`
+2. `templates/deployment-inputs.example.yaml`
+3. `references/codex-prompt-templates-v3.1.md` 或 `references/codex-prompt-templates-v4.3.1-single-group-production.md`
+4. 如果目标是多群模板化，再读 `references/codex-prompt-templates-v5-team-orchestrator.md`
+5. `templates/verification-checklist.md`
+6. `references/rollout-and-upgrade-playbook.md`
+
+当前保留的最佳实践来源：
+- OpenClaw 官方文档与 Release 交叉验证：`references/source-cross-validation-2026-03-04.md`
+- OpenClaw / 飞书平台能力复核：`references/source-cross-validation-2026-03-05.md`
+- `V4.3.1` 单群生产稳定版交叉验证：`references/source-cross-validation-2026-03-07-v4-3-1.md`
+- `V4.3.1` 跨平台交叉验证：`references/source-cross-validation-2026-03-07-platforms.md`
 
 ## 维护约定
 

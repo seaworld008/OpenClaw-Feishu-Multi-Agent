@@ -1,0 +1,227 @@
+{
+  // V5 Team Orchestrator 去敏配置快照。
+  // 当前正式 team：
+  // - internal_main -> oc_f785e73d3c00954d4ccd5d49b63ef919
+  // - external_main -> oc_7121d87961740dbd72bd8e50e48ba5e3
+  //
+  // hidden main:
+  // - agent:supervisor_internal_main:main
+  // - agent:supervisor_external_main:main
+  //
+  // 这份 JSONC 对应 build_openclaw_feishu_snippets.py 基于 V5 输入模板生成的 patch；
+  // 运行时额外信息请查看 v5 runtime manifest。
+
+  "channels": {
+    "feishu": {
+      "enabled": true,
+      "connectionMode": "websocket",
+      "accounts": {
+        "aoteman": {
+          "appId": "cli_a923c749bab6dcba",
+          "appSecret": "TWpD207Ri2g1Qqmw4R5YhfkPRhOokCGX",
+          "groups": {
+            "oc_f785e73d3c00954d4ccd5d49b63ef919": {
+              "systemPrompt": "你是内部团队主管 Agent，运行 V5 Team Orchestrator。固定按 workflow.stages 严格串行派发，hidden main=agent:supervisor_internal_main:main。"
+            },
+            "oc_7121d87961740dbd72bd8e50e48ba5e3": {
+              "systemPrompt": "你是外部团队主管 Agent，运行 V5 Team Orchestrator。固定按 workflow.stages 严格串行派发，hidden main=agent:supervisor_external_main:main。"
+            }
+          }
+        },
+        "xiaolongxia": {
+          "appId": "cli_a9f1849b67f9dcc2",
+          "appSecret": "g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr",
+          "groups": {
+            "oc_f785e73d3c00954d4ccd5d49b63ef919": {
+              "systemPrompt": "你是内部团队运营专家。必须 message(progress) -> message(final) -> sessions_send(COMPLETE_PACKET) -> NO_REPLY。"
+            },
+            "oc_7121d87961740dbd72bd8e50e48ba5e3": {
+              "systemPrompt": "你是外部团队运营专家。必须 message(progress) -> message(final) -> sessions_send(COMPLETE_PACKET) -> NO_REPLY。"
+            }
+          }
+        },
+        "yiran_yibao": {
+          "appId": "cli_a923c71498b8dcc9",
+          "appSecret": "swscrlPKYCwAehOyyoLrlesLTsuYY6nl",
+          "groups": {
+            "oc_f785e73d3c00954d4ccd5d49b63ef919": {
+              "systemPrompt": "你是内部团队财务专家。必须 message(progress) -> message(final) -> sessions_send(COMPLETE_PACKET) -> NO_REPLY。"
+            },
+            "oc_7121d87961740dbd72bd8e50e48ba5e3": {
+              "systemPrompt": "你是外部团队财务专家。必须 message(progress) -> message(final) -> sessions_send(COMPLETE_PACKET) -> NO_REPLY。"
+            }
+          }
+        }
+      },
+      "domain": "feishu",
+      "defaultAccount": "aoteman",
+      "groups": {
+        "oc_f785e73d3c00954d4ccd5d49b63ef919": {
+          "requireMention": true
+        },
+        "oc_7121d87961740dbd72bd8e50e48ba5e3": {
+          "requireMention": true
+        }
+      }
+    }
+  },
+
+  "bindings": [
+    {
+      "agentId": "supervisor_internal_main",
+      "match": {
+        "channel": "feishu",
+        "accountId": "aoteman",
+        "peer": {"kind": "group", "id": "oc_f785e73d3c00954d4ccd5d49b63ef919"}
+      }
+    },
+    {
+      "agentId": "ops_internal_main",
+      "match": {
+        "channel": "feishu",
+        "accountId": "xiaolongxia",
+        "peer": {"kind": "group", "id": "oc_f785e73d3c00954d4ccd5d49b63ef919"}
+      }
+    },
+    {
+      "agentId": "finance_internal_main",
+      "match": {
+        "channel": "feishu",
+        "accountId": "yiran_yibao",
+        "peer": {"kind": "group", "id": "oc_f785e73d3c00954d4ccd5d49b63ef919"}
+      }
+    },
+    {
+      "agentId": "supervisor_external_main",
+      "match": {
+        "channel": "feishu",
+        "accountId": "aoteman",
+        "peer": {"kind": "group", "id": "oc_7121d87961740dbd72bd8e50e48ba5e3"}
+      }
+    },
+    {
+      "agentId": "ops_external_main",
+      "match": {
+        "channel": "feishu",
+        "accountId": "xiaolongxia",
+        "peer": {"kind": "group", "id": "oc_7121d87961740dbd72bd8e50e48ba5e3"}
+      }
+    },
+    {
+      "agentId": "finance_external_main",
+      "match": {
+        "channel": "feishu",
+        "accountId": "yiran_yibao",
+        "peer": {"kind": "group", "id": "oc_7121d87961740dbd72bd8e50e48ba5e3"}
+      }
+    }
+  ],
+
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "sub2api/gpt-5.3-codex",
+        "fallbacks": ["sub2api/gpt-5.2-codex"]
+      },
+      "workspace": "~/.openclaw/workspace",
+      "maxConcurrent": 4,
+      "subagents": {
+        "maxConcurrent": 8
+      },
+      "sandbox": {
+        "sessionToolsVisibility": "all"
+      }
+    },
+    "list": [
+      {
+        "id": "supervisor_internal_main",
+        "name": "奥特曼",
+        "workspace": "~/.openclaw/teams/internal_main/workspaces/supervisor",
+        "agentDir": "~/.openclaw/teams/internal_main/agents/supervisor/agent",
+        "groupChat": {
+          "mentionPatterns": ["@奥特曼", "奥特曼", "主管机器人"]
+        }
+      },
+      {
+        "id": "ops_internal_main",
+        "name": "小龙虾找妈妈",
+        "workspace": "~/.openclaw/teams/internal_main/workspaces/ops",
+        "agentDir": "~/.openclaw/teams/internal_main/agents/ops/agent"
+      },
+      {
+        "id": "finance_internal_main",
+        "name": "易燃易爆",
+        "workspace": "~/.openclaw/teams/internal_main/workspaces/finance",
+        "agentDir": "~/.openclaw/teams/internal_main/agents/finance/agent"
+      },
+      {
+        "id": "supervisor_external_main",
+        "name": "奥特曼",
+        "workspace": "~/.openclaw/teams/external_main/workspaces/supervisor",
+        "agentDir": "~/.openclaw/teams/external_main/agents/supervisor/agent",
+        "groupChat": {
+          "mentionPatterns": ["@奥特曼", "奥特曼", "主管机器人"]
+        }
+      },
+      {
+        "id": "ops_external_main",
+        "name": "小龙虾找妈妈",
+        "workspace": "~/.openclaw/teams/external_main/workspaces/ops",
+        "agentDir": "~/.openclaw/teams/external_main/agents/ops/agent"
+      },
+      {
+        "id": "finance_external_main",
+        "name": "易燃易爆",
+        "workspace": "~/.openclaw/teams/external_main/workspaces/finance",
+        "agentDir": "~/.openclaw/teams/external_main/agents/finance/agent"
+      }
+    ]
+  },
+
+  "tools": {
+    "agentToAgent": {
+      "enabled": true,
+      "allow": [
+        "supervisor_internal_main",
+        "ops_internal_main",
+        "finance_internal_main",
+        "supervisor_external_main",
+        "ops_external_main",
+        "finance_external_main"
+      ]
+    },
+    "allow": [
+      "group:fs",
+      "group:runtime",
+      "group:web",
+      "group:messaging",
+      "group:sessions"
+    ],
+    "sessions": {
+      "visibility": "all"
+    }
+  },
+
+  "session": {
+    "sendPolicy": {
+      "default": "allow"
+    },
+    "resetByType": {
+      "group": {
+        "mode": "idle",
+        "idleMinutes": 1440
+      }
+    },
+    "resetTriggers": ["/reset", "/new"],
+    "agentToAgent": {
+      "maxPingPongTurns": 0
+    }
+  },
+
+  "messages": {
+    "ackReactionScope": "group-mentions",
+    "groupChat": {
+      "mentionPatterns": ["@奥特曼", "奥特曼", "主管机器人"]
+    }
+  }
+}

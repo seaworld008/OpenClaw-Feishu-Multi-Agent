@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reset V4.3.1 Feishu single-group sessions after protocol changes or stuck runs."""
+"""Reset V4.3.1/V5 team sessions after protocol changes or stuck runs."""
 
 from __future__ import annotations
 
@@ -40,9 +40,15 @@ def session_file_for(base_dir: Path, entry) -> Path | None:
     return base_dir / f"{session_id}.jsonl"
 
 
-def target_keys(group_peer_id: str, include_workers: bool, worker_agents: list[str], channel: str) -> list[tuple[str, str]]:
-    keys = [("supervisor_agent", f"agent:supervisor_agent:{channel}:group:{group_peer_id}")]
-    keys.append(("supervisor_agent", "agent:supervisor_agent:main"))
+def target_keys(
+    group_peer_id: str,
+    include_workers: bool,
+    worker_agents: list[str],
+    channel: str,
+    supervisor_agent: str,
+) -> list[tuple[str, str]]:
+    keys = [(supervisor_agent, f"agent:{supervisor_agent}:{channel}:group:{group_peer_id}")]
+    keys.append((supervisor_agent, f"agent:{supervisor_agent}:main"))
     if include_workers:
         for agent_id in worker_agents:
             keys.append((agent_id, f"agent:{agent_id}:{channel}:group:{group_peer_id}"))
@@ -58,6 +64,8 @@ def main() -> int:
     parser.add_argument("--home", default="~/.openclaw")
     parser.add_argument("--group-peer-id", required=True)
     parser.add_argument("--channel", default="feishu")
+    parser.add_argument("--team-key")
+    parser.add_argument("--supervisor-agent", default="supervisor_agent")
     parser.add_argument("--include-workers", action="store_true")
     parser.add_argument("--worker-agents", default="ops_agent,finance_agent")
     parser.add_argument("--delete-transcripts", action="store_true")
@@ -73,6 +81,7 @@ def main() -> int:
         include_workers=args.include_workers,
         worker_agents=worker_agents,
         channel=args.channel,
+        supervisor_agent=args.supervisor_agent,
     ):
         session_dir = openclaw_home / "agents" / agent_id / "sessions"
         index_path = session_dir / "sessions.json"
@@ -125,8 +134,10 @@ def main() -> int:
         json.dumps(
             {
                 "home": str(openclaw_home),
+                "teamKey": args.team_key,
                 "groupPeerId": args.group_peer_id,
                 "channel": args.channel,
+                "supervisorAgent": args.supervisor_agent,
                 "includeWorkers": args.include_workers,
                 "results": results,
             },

@@ -8,6 +8,7 @@ description: Use when delivering production-ready OpenClaw Feishu multi-agent se
 ## 目标
 把 OpenClaw + 飞书多 Agent 配置从“能跑”提升到“可交付”：
 - 可配置：单机器人/多机器人、多角色分工
+- 可模板化：每个群可定义 `teams`，按 `1` 个 supervisor + `N` 个 worker 自动展开
 - 可落地：前提条件清晰、一次配置可执行
 - 可升级：兼容 OpenClaw 持续迭代，能做升级后回归
 - 可回滚：所有生产改动都有备份和回滚路径
@@ -31,8 +32,45 @@ description: Use when delivering production-ready OpenClaw Feishu multi-agent se
 ## 何时使用
 - 客户要求在飞书里搭建多 Agent 团队（各司其职）
 - 需要把不同群/私聊稳定路由到不同 Agent
+- 需要把多个群模板化扩展成独立 team units，而不是共享一套全局 agent
 - 需要在已上线环境做增量改造（Brownfield）
 - 需要升级 OpenClaw/插件后做兼容修复
+
+## V5 Team Orchestrator 默认约束
+
+- 一句话原则：每个群固定 1 个 supervisor，外加 N 个 worker
+- 每个群都是一个独立 team unit
+- 每个群固定 `1` 个 supervisor
+- 每个群可配置 `N` 个 worker
+- `teams` 是 `V5` 的推荐输入模型
+- 不再推荐多个群共享同一套全局 `supervisor_agent / ops_agent / finance_agent`
+- `V5` 重点是模板化复制 team，而不是做任意 mesh 式 agent 工作流引擎
+
+`V5` runtime 命名约定：
+- hidden main：`agent:<supervisorAgentId>:main`
+- SQLite：`~/.openclaw/teams/<teamKey>/state/team_jobs.db`
+- systemd：`v5-team-<teamKey>.service` / `v5-team-<teamKey>.timer`
+- launchd：`bot.molt.v5-team-<teamKey>`
+
+当前正式双群基线：
+- 内部团队群：`oc_f785e73d3c00954d4ccd5d49b63ef919`
+- 外部团队群：`oc_7121d87961740dbd72bd8e50e48ba5e3`
+- 当前正式 team units：`internal_main` / `external_main`
+- 三个正式机器人：`aoteman` / `xiaolongxia` / `yiran_yibao`
+- 当前 hidden main：
+  - `agent:supervisor_internal_main:main`
+  - `agent:supervisor_external_main:main`
+
+`V5` 交付时默认要同时产出：
+- OpenClaw patch
+- summary
+- `v5 runtime manifest`
+
+Codex 交付入口：
+- `references/codex-prompt-templates-v5-team-orchestrator.md`
+- 这份文档必须保留当前 2 个正式群、3 个正式机器人、长版 systemPrompt 和可直接复制的 Codex 指令，不要退化成抽象骨架
+- `references/codex-prompt-templates-v4.3.1-single-group-production-C1.0.md`
+- `V4.3.1-C1.0` 属于客户定制保留件，不是新的主线版本；后续清理旧资料时不得删除
 
 ## 必读资源（按顺序）
 1. `references/prerequisites-checklist.md`
@@ -70,6 +108,7 @@ description: Use when delivering production-ready OpenClaw Feishu multi-agent se
 3. 收集输入
 - 使用 `templates/deployment-inputs.example.yaml`
 - 确认 `agents`、`accounts`、`routes` 完整
+- 若交付目标是 `V5 Team Orchestrator`，优先改用 `teams` 模型：每个群定义 `supervisor`、`workers`、`workflow`
 - 群/私聊 ID（`peer.id`）必须真实可用
 
 4. 生成配置
@@ -115,14 +154,11 @@ python3 scripts/v4_3_session_hygiene.py \
 - 记录验证证据（命令输出、关键日志片段）
 - 输出回滚命令
 - 若启用了卡片交互，验证 `card.action.trigger` 事件链路
-- V3 主管派单场景必须执行 `scripts/check_v3_dispatch_canary.sh`，未通过不得判定验收成功
+- `V3.1` 跨群主管派单场景必须执行 `scripts/check_v3_dispatch_canary.sh`，未通过不得判定验收成功
 - `check_v3_dispatch_canary.sh` 返回 `3` 表示证据不足，不能视为派单成功
-- V4/V4.1 单群团队场景必须优先执行 worker warm-up，再跑 `scripts/check_v4_1_team_canary.sh`
-- V4/V4.2 单群最佳实践场景优先使用 `scripts/check_v4_2_team_canary.sh`
-- 若交付要求“群里必须看见 worker 发言”，单群演示推荐使用 `V4.2.1`，并在 canary 中追加 `--require-visible-messages`
 - 若交付目标是“真实长期上线且用户不手输 taskId”，单群生产推荐直接按 `V4.3.1` 设计：supervisor 自动生成 `jobRef`，并引入外部状态层、一次性初始化、watchdog 与 activeJob/queue 机制
 - `V4.3.1` 验收优先使用 `scripts/check_v4_3_canary.py`
-- V4/V4.1/V4.2 验收证据优先级：`~/.openclaw/agents/*/sessions/*.jsonl` 高于 gateway log
+- `V4.3.1` 与 `V5` 验收证据优先级：`~/.openclaw/agents/*/sessions/*.jsonl` 高于 gateway log
 
 ## 输出要求（给客户/交付文档）
 必须包含：
@@ -150,25 +186,15 @@ python3 scripts/v4_3_session_hygiene.py \
 - 主管只“写派单文本”不真实派发：查 `tools.allow` 是否缺少 `group:sessions`
 - 主管看不到目标群会话：查 `tools.sessions.visibility` 和目标群是否 warm-up 过
 - 主管派发被策略拦截：查 `session.sendPolicy` 是否默认放行
-- V4/V4.1/V4.2 主管返回 `DISPATCH_INCOMPLETE` 但正文声称“已安排”：查 supervisor prompt 是否缺少状态机式硬门控
-- V4/V4.1/V4.2 新群首轮无 worker 会话：先对 worker 执行 warm-up，再复测
-- V4/V4.1/V4.2 返回 `tool_call_required`：说明 supervisor 本轮没有任何真实工具调用，先查 prompt 是否已更新并确认重启已生效
-- V4/V4.1/V4.2 若日志出现 `thread=true` / `subagent_spawning hooks`：说明当前 Feishu 渠道不支持这条 `sessions_spawn` 自动补会话路径，应改为人工 warm-up
-- V4/V4.1/V4.2 单群团队推荐采用 send-first probe：优先验证真实 `sessions_send`，不要只依赖 `sessions_list`
-- V4.2 若出现 `SEND_PATH_AVAILABLE_BUT_LIST_MISS`：说明固定 sessionKey 的 send 路径已可用，但 `sessions_list` 不能再作为唯一存在性判断
-- V4.2 若出现 `TIMEOUT_BUT_WORKER_DELIVERED`：说明 worker 已执行但 supervisor 仍以 timeout 未收口，应优先补 timeout 二次判定或 ACK 双阶段派单
-- V4.2 若 ACK 成功但详细任务持续超时：优先改为 `ACK timeoutSeconds=15 + 详细任务 timeoutSeconds=0 + sessions_history 二次收口`
-- V4.2 若出现 `TRIGGER_MISS_ON_MENTION_OR_FORMAT_WRAP`：说明被提及后仍没进入工具链，应优先同时补 `messages.groupChat.mentionPatterns`、`agents.list[].groupChat.mentionPatterns` 与 `PLAIN_TEXT` / 代码块包裹兼容
-- V4.2 若配置已经升级但 supervisor 仍表现出旧行为：优先怀疑 stale group session。群级 system prompt 只在新 group session 第一轮生效，应先单独发送 `/reset`，或由运维清理该 group 的 supervisor session 映射并重启 gateway，再用新 `taskId` 复测
-- V4.2 若 fresh session 已创建但 supervisor 仍持续 `tool_call_required/no_tool_call`：继续检查 `supervisor_agent` workspace 是否残留默认 `BOOTSTRAP.md` 与空白身份模板；生产单群团队 Agent 不应保留首次引导工作区残留
-- V4.2 若 `sessions_send` 报 `No session found`：先查 sessionKey 是否写错。飞书群聊必须使用官方完整键 `agent:<agentId>:feishu:group:<peerId>`，不要使用 `feishu:chat:...` 或其他自造格式
-- V4.2.1 若控制面已经跑通但群里看不到其他机器人发言：不要继续依赖隐式 announce。应在 worker 详细任务中显式调用 `message` 工具，用各自 `accountId` 往团队群发送短摘要，并在 worker session 中保留真实 `messageId`
-- V4.2.1 若 worker 已生成摘要文本但 gateway 没有对应 `dispatch complete`：优先检查 `message` 工具的 `channel/account/target` 是否正确，尤其是 `target=chat:<peerId>`
-- V4.3 若客户环境仍要求用户手工输入 `taskId`：优先判断这是不是把测试手段误当成产品方案；生产建议改为 supervisor 自动生成内部 `jobRef`
-- V4.3 若单群连续收到多个独立任务：不要继续只靠 transcript 自然上下文；应引入外部状态层，显式维护 `active / queued / done / failed`
-- V4.3 若用户补充说明被错误识别成新任务：先补“消息分类”规则，再补状态层，不要继续堆 prompt 文案
+- `V4.3.1` 或 `V5` 主管返回 `DISPATCH_INCOMPLETE` 但正文声称“已安排”：查 supervisor prompt 是否缺少状态机式硬门控
+- `V4.3.1` 或 `V5` 新群首轮无 worker 会话：先对 worker 执行 warm-up，再复测
+- `V4.3.1` 或 `V5` 返回 `tool_call_required`：说明 supervisor 本轮没有任何真实工具调用，先查 prompt 是否已更新并确认重启已生效
+- `V4.3.1` 或 `V5` 若日志出现 `thread=true` / `subagent_spawning hooks`：说明当前 Feishu 渠道不支持这条自动补会话路径，应改为人工 warm-up
+- `V4.3.1` 或 `V5` 若 `sessions_send` 报 `No session found`：先查 sessionKey 是否写错。飞书群聊必须使用官方完整键 `agent:<agentId>:feishu:group:<peerId>`，不要使用 `feishu:chat:...` 或其他自造格式
 - V4.3.1 若 worker 频繁卡在旧行为：优先怀疑旧 team session 沿用了旧 prompt；应关闭当前 active job，清空三方 team session，并重新执行一次性 `WARMUP`
 - V4.3.1 若任务长期卡住阻塞后续消息：不要要求用户重发或手工排障；优先执行 `watchdog-tick`，让 stale active job 自动失败并释放队列
+- `V5` 若出现跨群串线：先核对 `teamKey`、hidden main 是否按 team 隔离，以及 runtime manifest 中的 session key / db / watchdog 是否落在当前 team 命名空间
+- `V5` 若新增第 2/10 个群时行为不一致：优先比对 `teams[]` 模板输入与 runtime manifest，而不是直接手改 `openclaw.json`
 - macOS 客户不要套用 `systemctl --user`；应使用 `launchctl bootstrap/print` 与 `templates/launchd/v4-3-watchdog.plist`
 - Windows 客户不要默认承诺原生 service 版；应优先交付 `WSL2`，并引用 `references/windows-wsl2-deployment-notes.md`
 - V4.3.1 若需要证明“真的稳定”，不要只看群聊观感；必须同时核对 SQLite `jobs/job_participants` 与 `check_v4_3_canary.py`
@@ -194,22 +220,20 @@ python3 scripts/v4_3_session_hygiene.py \
   - `references/input-template.json`
   - `references/input-template-plugin.json`
   - `references/input-template-legacy-chat-feishu.json`
+  - `references/input-template-v5-team-orchestrator.json`
 - 运行手册：
   - `references/rollout-and-upgrade-playbook.md`
-  - `references/source-cross-validation-2026-03-06.md`
-  - `references/codex-prompt-templates.md`
   - `references/codex-prompt-templates-v3.1.md`
-  - `references/codex-prompt-templates-v3.md`
-  - `references/codex-prompt-templates-v4-single-group-team.md`
-  - `references/codex-prompt-templates-v4.1-single-group-team.md`
-  - `references/codex-prompt-templates-v4.2-single-group-team.md`
-  - `references/codex-prompt-templates-v4.2.1-single-group-team.md`
-  - `references/codex-prompt-templates-v4.3-single-group-production.md`
   - `references/codex-prompt-templates-v4.3.1-single-group-production.md`
-  - `references/source-cross-validation-2026-03-07.md`
+  - `references/codex-prompt-templates-v5-team-orchestrator.md`
+  - `references/source-cross-validation-2026-03-04.md`
+  - `references/source-cross-validation-2026-03-05.md`
+  - `references/source-cross-validation-2026-03-07-v4-3-1.md`
+  - `references/source-cross-validation-2026-03-07-platforms.md`
 - 辅助脚本：
   - `scripts/check_v3_dispatch_canary.sh`
-  - `scripts/check_v4_1_team_canary.sh`
-  - `scripts/check_v4_2_team_canary.sh`
 - `scripts/check_v4_3_canary.py`
 - `scripts/v4_3_session_hygiene.py`
+- `templates/systemd/v5-team-watchdog.service`
+- `templates/systemd/v5-team-watchdog.timer`
+- `templates/launchd/v5-team-watchdog.plist`

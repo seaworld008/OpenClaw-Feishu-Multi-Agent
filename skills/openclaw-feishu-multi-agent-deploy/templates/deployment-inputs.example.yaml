@@ -116,6 +116,23 @@ runtime_hygiene:
     - "COMPLETE_PACKET schema"
     - "hidden main session consumer"
 
+v5_team_runtime:
+  enabled: false
+  # V5 生产场景下，建议每个 team 都生成并归档一份 runtime manifest。
+  # 示例：references/generated/openclaw-feishu-plugin-v5-runtime-20260308-153000.json
+  runtime_manifest_path: "references/generated/openclaw-feishu-plugin-v5-runtime-<timestamp>.json"
+  team_key: "market_sz"
+  supervisor_agent_id: "supervisor_market_sz"
+  hidden_main_session_key: "agent:supervisor_market_sz:main"
+  db_path: "~/.openclaw/teams/market_sz/state/team_jobs.db"
+  watchdog:
+    systemd_service_template: "skills/openclaw-feishu-multi-agent-deploy/templates/systemd/v5-team-watchdog.service"
+    systemd_timer_template: "skills/openclaw-feishu-multi-agent-deploy/templates/systemd/v5-team-watchdog.timer"
+    launchd_template: "skills/openclaw-feishu-multi-agent-deploy/templates/launchd/v5-team-watchdog.plist"
+    systemd_service_name: "v5-team-market_sz.service"
+    systemd_timer_name: "v5-team-market_sz.timer"
+    launchd_label: "bot.molt.v5-team-market_sz"
+
 permissions:
   minimum:
     - "im:message"

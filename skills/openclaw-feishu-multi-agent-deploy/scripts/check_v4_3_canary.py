@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Validate V4.3/V4.3.1 single-group production runs using SQLite state and session logs."""
+"""Validate V4.3/V4.3.1/V5 team production runs using SQLite state and session logs."""
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import sqlite3
 import sys
 from pathlib import Path
 
 
-REQUIRED_AGENTS = ("ops_agent", "finance_agent")
 LEAK_TOKENS = ("ACK_READY", "REPLY_SKIP", "COMPLETE_PACKET", "WORKFLOW_INCOMPLETE")
 
 
@@ -38,9 +38,13 @@ def session_contains(root: Path, agent_id: str, token: str) -> bool:
     return False
 
 
-def find_protocol_leaks(root: Path, job_ref: str) -> list[str]:
+def normalize_agents(raw: str) -> list[str]:
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def find_protocol_leaks(root: Path, job_ref: str, supervisor_agent: str, required_agents: list[str]) -> list[str]:
     leaks: list[str] = []
-    for agent_id in ("supervisor_agent", *REQUIRED_AGENTS):
+    for agent_id in (supervisor_agent, *required_agents):
         session_dir = root / agent_id / "sessions"
         if not session_dir.exists():
             continue
@@ -70,13 +74,41 @@ def find_protocol_leaks(root: Path, job_ref: str) -> list[str]:
     return leaks
 
 
+def find_supervisor_rollup_message(root: Path, supervisor_agent: str, job_ref: str, group_peer_id: str) -> str | None:
+    session_dir = root / supervisor_agent / "sessions"
+    if not session_dir.exists():
+        return None
+    message_id_re = re.compile(r'messageId[=": ]+([A-Za-z0-9_\\-]+)')
+    target_token = f"chat:{group_peer_id}"
+    for path in session_dir.glob("*.jsonl"):
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        if job_ref not in text or target_token not in text:
+            continue
+        match = message_id_re.search(text)
+        if match:
+            return match.group(1)
+    return None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--db", required=True)
     parser.add_argument("--job-ref", required=True)
     parser.add_argument("--session-root")
     parser.add_argument("--require-visible-messages", action="store_true")
+    parser.add_argument("--worker-agents", default="ops_agent,finance_agent")
+    parser.add_argument("--supervisor-agent", default="supervisor_agent")
+    parser.add_argument("--team-key")
+    parser.add_argument("--success-token", default="V4_3_CANARY_OK")
+    parser.add_argument("--require-supervisor-target-chat", action="store_true")
     args = parser.parse_args()
+    required_agents = normalize_agents(args.worker_agents)
+    if not required_agents:
+        emit("WORKER_AGENTS_EMPTY")
+        return 2
 
     db_path = Path(args.db)
     if not db_path.exists():
@@ -104,13 +136,13 @@ def main() -> int:
         ).fetchall()
     }
 
-    missing_agents = [agent for agent in REQUIRED_AGENTS if agent not in participants]
+    missing_agents = [agent for agent in required_agents if agent not in participants]
     if missing_agents:
         emit(f"PARTICIPANTS_MISSING: {','.join(missing_agents)}")
         return 2
 
     incomplete = []
-    for agent_id in REQUIRED_AGENTS:
+    for agent_id in required_agents:
         row = participants[agent_id]
         if row["status"] != "done":
             incomplete.append(f"{agent_id}:status={row['status']}")
@@ -132,7 +164,7 @@ def main() -> int:
             return 2
         root = Path(args.session_root)
         missing_visibility = []
-        for agent_id in REQUIRED_AGENTS:
+        for agent_id in required_agents:
             row = participants[agent_id]
             if not session_contains(root, agent_id, row["progress_message_id"]):
                 missing_visibility.append(f"{agent_id}:progress")
@@ -141,19 +173,50 @@ def main() -> int:
         if missing_visibility:
             emit("VISIBLE_MESSAGE_MISSING: " + ", ".join(missing_visibility))
             return 3
-        leaks = find_protocol_leaks(root, args.job_ref)
+        leaks = find_protocol_leaks(root, args.job_ref, args.supervisor_agent, required_agents)
         if leaks:
             emit("VISIBLE_PROTOCOL_LEAK: " + " | ".join(leaks[:5]))
             return 3
+        supervisor_rollup_message_id = None
+        if args.require_supervisor_target_chat:
+            supervisor_rollup_message_id = find_supervisor_rollup_message(
+                root,
+                args.supervisor_agent,
+                args.job_ref,
+                str(job["group_peer_id"]),
+            )
+            if supervisor_rollup_message_id is None:
+                emit(
+                    "SUPERVISOR_ROLLUP_TARGET_MISSING: "
+                    f"agent={args.supervisor_agent} group={job['group_peer_id']} job={args.job_ref}"
+                )
+                return 3
+    else:
+        if args.require_supervisor_target_chat:
+            emit("SUPERVISOR_TARGET_CHECK_REQUIRES_VISIBLE_MESSAGES")
+            return 2
 
-    emit(
-        "V4_3_CANARY_OK: "
-        f"jobRef={job['job_ref']} title={job['title']} status={job['status']} "
-        f"ops_progress={participants['ops_agent']['progress_message_id']} "
-        f"ops_final={participants['ops_agent']['final_message_id']} "
-        f"finance_progress={participants['finance_agent']['progress_message_id']} "
-        f"finance_final={participants['finance_agent']['final_message_id']}"
-    )
+    result_fields = [
+        args.success_token + ":",
+        f"jobRef={job['job_ref']}",
+        f"title={job['title']}",
+        f"status={job['status']}",
+    ]
+    if args.team_key:
+        result_fields.append(f"teamKey={args.team_key}")
+    for agent_id in required_agents:
+        result_fields.append(f"{agent_id}_progress={participants[agent_id]['progress_message_id']}")
+        result_fields.append(f"{agent_id}_final={participants[agent_id]['final_message_id']}")
+    if args.require_supervisor_target_chat:
+        supervisor_rollup_message_id = find_supervisor_rollup_message(
+            Path(args.session_root),
+            args.supervisor_agent,
+            args.job_ref,
+            str(job["group_peer_id"]),
+        )
+        if supervisor_rollup_message_id:
+            result_fields.append(f"{args.supervisor_agent}_final={supervisor_rollup_message_id}")
+    emit(" ".join(result_fields))
     return 0
 
 

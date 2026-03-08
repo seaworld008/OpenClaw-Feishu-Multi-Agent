@@ -4,7 +4,7 @@
 
 **Goal:** 把单群生产版从“有状态层蓝图”升级为“可恢复、可初始化、可验收”的 `V4.3.1` 稳定版，并用更新后的 skill 重新配置虚拟机上的 OpenClaw。
 
-**Architecture:** 保留 `V4.3` 的单群单入口、SQLite 状态层和三机器人可见协作，但把稳定性前移到 `job registry + participant state + stale recovery + one-time init + canary`。控制面继续使用 `sessions_send/sessions_history`，展示层继续由 worker 显式 `message` 发群消息。
+**Architecture:** 以 `V4.3.1` 的单群单入口、SQLite 状态层和三机器人可见协作为目标，把稳定性前移到 `job registry + participant state + stale recovery + one-time init + canary`。控制面继续使用 `sessions_send/sessions_history`，展示层继续由 worker 显式 `message` 发群消息。
 
 **Tech Stack:** OpenClaw `@openclaw/feishu`、Feishu 群聊、SQLite、Python 3、shell canary
 
@@ -14,7 +14,7 @@
 
 **Files:**
 - Create: `docs/plans/2026-03-07-v4-3-1-single-group-production-stability.md`
-- Modify: `skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.3-single-group-production.md`
+- Modify: `skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.3.1-single-group-production.md`
 - Modify: `README.md`
 - Modify: `skills/openclaw-feishu-multi-agent-deploy/SKILL.md`
 
@@ -26,7 +26,7 @@
 - worker 仅发“进度/结论”两条群消息
 - supervisor 仅发“接单/收口”两条群消息
 
-**Step 2: 明确 V4.3.1 比 V4.3 新增的稳定件**
+**Step 2: 明确 V4.3.1 稳定件**
 - participant state machine
 - stale recovery / watchdog tick
 - 自动释放队列
@@ -87,12 +87,11 @@
 ### Task 4: 升级 V4.3.1 提示词模板与交付说明
 
 **Files:**
-- Modify: `skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.3-single-group-production.md`
 - Create: `skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.3.1-single-group-production.md`
 - Modify: `CHANGELOG.md`
 - Modify: `VERSION`
 
-**Step 1: 保留 V4.3 作为基础版，新增 V4.3.1 作为稳定版**
+**Step 1: 固化 V4.3.1 作为稳定版**
 
 **Step 2: 写清部署前置**
 - 一次性 WARMUP

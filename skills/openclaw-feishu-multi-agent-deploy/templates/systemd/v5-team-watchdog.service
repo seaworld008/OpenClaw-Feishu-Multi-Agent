@@ -1,0 +1,9 @@
+[Unit]
+Description=OpenClaw V5 team watchdog (__TEAM_KEY__)
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/env python3 __REGISTRY_SCRIPT__ --db __DB_PATH__ watchdog-tick --group-peer-id __TEAM_GROUP_PEER_ID__ --stale-seconds __STALE_SECONDS__
+WorkingDirectory=__TEAM_WORKDIR__
+Environment=OPENCLAW_SUPERVISOR_AGENT_ID=__SUPERVISOR_AGENT_ID__
