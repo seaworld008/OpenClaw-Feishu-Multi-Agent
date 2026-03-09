@@ -1,13 +1,13 @@
 ---
 name: openclaw-feishu-multi-agent-deploy
-description: Use when delivering production-ready OpenClaw Feishu multi-agent setups, including single-bot or multi-bot routing, brownfield incremental rollout, validation, and upgrade-safe configuration.
+description: Use when delivering V5.1 Hardening OpenClaw Feishu team-orchestrator setups from a unified-entry config, including brownfield rollout, validation, and upgrade-safe deployment.
 ---
 
 # Feishu OpenClaw Multi-Agent
 
 ## 目标
 把 OpenClaw + 飞书多 Agent 配置从“能跑”提升到“可交付”：
-- 可配置：单机器人/多机器人、多角色分工
+- 可配置：统一入口 `accounts + roleCatalog + teams`，支持多机器人、多角色分工
 - 可模板化：每个群可定义 `teams`，按 `1` 个 supervisor + `N` 个 worker 自动展开
 - 可落地：前提条件清晰、一次配置可执行
 - 可升级：兼容 OpenClaw 持续迭代，能做升级后回归
@@ -30,7 +30,7 @@ description: Use when delivering production-ready OpenClaw Feishu multi-agent se
 
 ## 何时使用
 - 客户要求在飞书里搭建多 Agent 团队（各司其职）
-- 需要把不同群/私聊稳定路由到不同 Agent
+- 需要把不同群稳定建模成不同 `team units`，并由 builder 自动派生 `bindings`
 - 需要把多个群模板化扩展成独立 team units，而不是共享一套全局 agent
 - 需要在已上线环境做增量改造（Brownfield）
 - 需要升级 OpenClaw/插件后做兼容修复
@@ -101,14 +101,15 @@ Codex 交付入口：
 1. `references/prerequisites-checklist.md`
 2. `templates/deployment-inputs.example.yaml`
 3. `references/openclaw-feishu-multi-agent-notes.md`
-4. `references/source-cross-validation-2026-03-04.md`
+4. `references/rollout-and-upgrade-playbook.md`
 5. `templates/brownfield-change-plan.example.md`
 
 ## 交付模式
 
-### 1) 拓扑模式
-- `single-bot`：一个飞书机器人，多群分流到多个 Agent
-- `multi-bot`：多个飞书机器人（多 `accountId`）分流到多个 Agent
+### 1) 部署拓扑背景（不是第二套配置入口）
+- `single-bot`：一个飞书机器人进入多个群，但主线配置入口仍然是 `accounts + roleCatalog + teams`
+- `multi-bot`：多个飞书机器人（多 `accountId`）协同服务多个 team，但主线配置入口仍然是 `accounts + roleCatalog + teams`
+- 无论采用哪种拓扑，交付时都不应让用户手写另一套 `routes` 入口；`bindings` 继续由 builder 派生
 
 ### 2) 变更模式
 - `incremental`（默认推荐）：生产环境只打最小补丁
@@ -132,8 +133,9 @@ Codex 交付入口：
 
 3. 收集输入
 - 使用 `templates/deployment-inputs.example.yaml`
-- 确认 `agents`、`accounts`、`routes` 完整
-- 若交付目标是 `V5.1 Hardening`，优先改用 `teams` 模型：每个群定义 `supervisor`、`workers`、`workflow`
+- 确认 `accounts`、`roleCatalog`、`teams`、`workflow.stages` 完整
+- 主线 schema 固定按 `accounts + roleCatalog + teams(profileId + override)` 组织
+- 允许 builder 按输入自动派生 `channels.feishu`、`bindings`、必要的 `agents.list` 与 `v51 runtime manifest`
 - 群/私聊 ID（`peer.id`）必须真实可用
 
 4. 生成配置
@@ -148,6 +150,7 @@ python3 scripts/core_feishu_config_builder.py \
 - 注意：输入里的 `agents` 若只是字符串列表，脚本不会生成 `agents.list`，以避免覆盖 brownfield 现网中的详细 agent 配置。
 
 5. 绑定排序（关键）
+- `bindings` 是构建器派生结果，不是主线手工输入；人工只负责核对排序和命中结果
 - 先精确规则（`accountId + peer`）
 - 再 `accountId` 级规则
 - 最后渠道兜底规则（如 `accountId="*"`）
@@ -234,10 +237,9 @@ python3 scripts/v51_team_orchestrator_hygiene.py \
 ## 可直接复用的文件
 - 模板：
   - `templates/deployment-inputs.example.yaml`
-  - `templates/openclaw-single-bot-route.example.jsonc`
-  - `templates/openclaw-multi-bot-route.example.jsonc`
   - `templates/brownfield-change-plan.example.md`
   - `templates/verification-checklist.md`
+  - `templates/openclaw-v51-team-orchestrator.example.jsonc`
   - `templates/systemd/v51-team-watchdog.service`
   - `templates/systemd/v51-team-watchdog.timer`
   - `templates/launchd/v51-team-watchdog.plist`
@@ -248,8 +250,6 @@ python3 scripts/v51_team_orchestrator_hygiene.py \
 - 运行手册：
   - `references/rollout-and-upgrade-playbook.md`
   - `references/codex-prompt-templates-v51-team-orchestrator.md`
-  - `references/source-cross-validation-2026-03-04.md`
-  - `references/source-cross-validation-2026-03-05.md`
 - `templates/systemd/v51-team-watchdog.service`
 - `templates/systemd/v51-team-watchdog.timer`
 - `templates/launchd/v51-team-watchdog.plist`

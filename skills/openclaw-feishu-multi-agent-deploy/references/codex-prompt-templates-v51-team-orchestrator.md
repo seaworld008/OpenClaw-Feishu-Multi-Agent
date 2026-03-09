@@ -129,6 +129,18 @@ supervisor 最终统一收口必须满足：
 
 ```json
 {
+  "accounts": [
+    {
+      "accountId": "aoteman",
+      "appId": "cli_a923c749bab6dcba",
+      "appSecret": "TWpD207Ri2g1Qqmw4R5YhfkPRhOokCGX"
+    },
+    {
+      "accountId": "xiaolongxia",
+      "appId": "cli_a9f1849b67f9dcc2",
+      "appSecret": "g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr"
+    }
+  ],
   "roleCatalog": {
     "supervisor_default": {
       "kind": "supervisor",
@@ -390,7 +402,7 @@ watchdog 模板固定使用：
   - 1 个运营：小龙虾找妈妈 / xiaolongxia
   - 1 个财务：易燃易爆 / yiran_yibao
 - 两个群必须彻底独立：group session、hidden main、workspace、SQLite、watchdog、memory 都不能互相影响
-- 主线 schema 必须使用 roleCatalog + teams(profileId + override)
+- 主线 schema 必须使用 accounts + roleCatalog + teams(profileId + override)
 - 默认执行顺序固定为：
   1. 用户发任务
   2. 主管接单并拆解

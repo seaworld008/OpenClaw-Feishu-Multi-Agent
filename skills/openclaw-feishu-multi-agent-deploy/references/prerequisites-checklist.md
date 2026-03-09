@@ -46,10 +46,21 @@
 - 先验证机器人能被加入外部群，再验证 `@机器人` 消息能进入 gateway
 - 不要把飞书客户端里的“已查看/已读”展示当成唯一验收标准
 
-## 4. 路由素材
-- 每个目标 Agent 的 `agentId`
-- 每个群 `chat_id`（`oc_xxx`）或私聊对象 ID
-- 路由表（哪个 accountId + 哪个群/私聊 → 哪个 agent）
+## 4. 统一入口素材
+- `accounts[]`
+  - 每个机器人都要收集：`accountId`、`appId`、`appSecret`、`encryptKey`、`verificationToken`
+- `roleCatalog`
+  - 每个角色都要明确：`kind`、`accountId`、`visibleLabel`、`role`、`systemPrompt`
+- `teams[]`
+  - 每个 team 都要明确：`teamKey`、`group.peerId`、`group.entryAccountId`、`group.requireMention`
+  - `supervisor.profileId + agentId`
+  - `workers[].profileId + agentId`
+- `workflow.stages`
+  - 必须覆盖当前 team 全部 worker，且每个 worker 恰好声明一次
+- `peerId`
+  - 每个目标群都要拿到真实 `oc_xxx`
+- `bindings`
+  - 由 builder 派生并人工核对，不再作为主线手工收集表
 
 ## 5. 变更管理
 - 已确认变更窗口

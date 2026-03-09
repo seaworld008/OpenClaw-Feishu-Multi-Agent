@@ -19,7 +19,6 @@ openclaw:
   config_path: "~/.openclaw/openclaw.json"
   restart_command: "openclaw gateway restart"
   healthcheck_command: "openclaw gateway status"
-  # service manager 路线：Linux/WSL2 通常走 systemd-user，macOS 走 launchd，Windows 默认走 WSL2
   plugin:
     id: "@openclaw/feishu"
     installed: true
@@ -29,36 +28,72 @@ change:
   change_mode: "incremental" # incremental | full_replace
   rollout_strategy: "canary_then_full" # canary_then_full | direct_full
   backup_required: true
-  canary_group_id: "oc_group_a"
+  canary_group_id: "oc_group_internal"
 
 feishu:
   connectionMode: "websocket" # websocket | webhook
   domain: "feishu" # feishu | lark
-  defaultAccount: "main"
+  defaultAccount: "aoteman"
   bot_group_mention_enabled: true
   card_callbacks_enabled: false
-
-  # 若 connectionMode=webhook 才需要
   webhook:
     callback_url: ""
     verification_token: ""
 
-  account_profiles:
-    - accountId: "main"
-      appId: "cli_xxx"
-      appSecret: "xxx"
-      encryptKey: "xxx"
-      verificationToken: "xxx"
-      requireMention: true
-      groupPolicy: "open"
-      dmPolicy: "pairing"
-      allowFrom: []
+accounts:
+  - accountId: "aoteman"
+    appId: "cli_a923c749bab6dcba"
+    appSecret: "TWpD207Ri2g1Qqmw4R5YhfkPRhOokCGX"
+    encryptKey: "<替换为客户真实值>"
+    verificationToken: "<替换为客户真实值>"
+  - accountId: "xiaolongxia"
+    appId: "cli_a9f1849b67f9dcc2"
+    appSecret: "g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr"
+    encryptKey: "<替换为客户真实值>"
+    verificationToken: "<替换为客户真实值>"
+  - accountId: "yiran_yibao"
+    appId: "cli_a923c71498b8dcc9"
+    appSecret: "swscrlPKYCwAehOyyoLrlesLTsuYY6nl"
+    encryptKey: "<替换为客户真实值>"
+    verificationToken: "<替换为客户真实值>"
 
 recommended_v51_fixed_role_accounts:
   enabled: true
   supervisor: "aoteman"
   ops: "xiaolongxia"
   finance: "yiran_yibao"
+
+roleCatalog:
+  supervisor_default:
+    kind: "supervisor"
+    accountId: "aoteman"
+    roleKey: "supervisor"
+    name: "奥特曼"
+    role: "主管总控"
+    visibleLabel: "主管"
+    responsibility: "接单、拆解、调度、统一收口"
+    mentionPatterns: ["@奥特曼", "奥特曼", "主管机器人"]
+    systemPrompt: "<替换为客户真实 supervisor prompt>"
+  ops_default:
+    kind: "worker"
+    accountId: "xiaolongxia"
+    roleKey: "ops"
+    name: "小龙虾找妈妈"
+    role: "运营专家"
+    visibleLabel: "运营"
+    responsibility: "活动打法、节奏、执行动作"
+    visibility: "visible"
+    systemPrompt: "<替换为客户真实 ops prompt>"
+  finance_default:
+    kind: "worker"
+    accountId: "yiran_yibao"
+    roleKey: "finance"
+    name: "易燃易爆"
+    role: "财务专家"
+    visibleLabel: "财务"
+    responsibility: "预算、毛利、ROI 与风险"
+    visibility: "visible"
+    systemPrompt: "<替换为客户真实 finance prompt>"
 
 team_role_combination_template:
   note: "同一个 bot 可以跨很多群复用，但 role 不变；每个群的角色组合可以不同。"
@@ -76,43 +111,60 @@ team_role_combination_template:
       entry_account_id: "aoteman"
       roles: ["supervisor", "finance"]
 
-  # 群策略：可选按群覆盖 requireMention
-  group_overrides:
-    - chatId: "oc_group_a"
-      requireMention: false
-    - chatId: "oc_group_b"
+teams:
+  - teamKey: "internal_main"
+    displayName: "内部团队群"
+    group:
+      peerId: "oc_group_internal"
+      entryAccountId: "aoteman"
       requireMention: true
+    supervisor:
+      profileId: "supervisor_default"
+      agentId: "supervisor_internal_main"
+    workers:
+      - profileId: "ops_default"
+        agentId: "ops_internal_main"
+      - profileId: "finance_default"
+        agentId: "finance_internal_main"
+    workflow:
+      mode: "serial"
+      stages:
+        - agentId: "ops_internal_main"
+        - agentId: "finance_internal_main"
 
-routing:
-  agents:
-    - id: "work"
-      workspace: "~/.openclaw/workspace-work"
-      agentDir: "~/.openclaw/agents/work/agent"
-      model: "anthropic/claude-sonnet-4-5"
-    - id: "finance"
-      workspace: "~/.openclaw/workspace-finance"
-      agentDir: "~/.openclaw/agents/finance/agent"
-      model: "openai/gpt-4.1"
+  - teamKey: "external_main"
+    displayName: "外部团队群"
+    group:
+      peerId: "oc_group_external"
+      entryAccountId: "aoteman"
+      requireMention: true
+    supervisor:
+      profileId: "supervisor_default"
+      agentId: "supervisor_external_main"
+      overrides:
+        systemPrompt: "<若外部团队主管需要不同上下文，在这里覆盖>"
+    workers:
+      - profileId: "ops_default"
+        agentId: "ops_external_main"
+      - profileId: "finance_default"
+        agentId: "finance_external_main"
+    workflow:
+      mode: "serial"
+      stages:
+        - agentId: "ops_external_main"
+        - agentId: "finance_external_main"
 
-  # match.channel 对官方插件固定为 "feishu"
-  bindings:
-    - agentId: "work"
-      match:
-        channel: "feishu"
-        accountId: "main"
-        peer:
-          kind: "group"
-          id: "oc_group_a"
-    - agentId: "finance"
-      match:
-        channel: "feishu"
-        accountId: "main"
-        peer:
-          kind: "group"
-          id: "oc_group_b"
+builder_review:
+  builder_input_schema: "accounts + roleCatalog + teams(profileId + override)"
+  derived_outputs:
+    - "channels.feishu"
+    - "bindings"
+    - "agents.list（必要新增）"
+    - "v51 runtime manifest"
+  bindings_order_rule: "精确规则优先（peer+account） -> account 精确 -> 兜底"
+  note: "不要手工维护 bindings 作为输入真源；它是 builder 派生产物。"
 
 tooling:
-  # 若当前环境需要会话级排障、transcript 修复或 Brownfield 升级辅助，可按需开启
   tools_allow:
     - "group:fs"
     - "group:runtime"
@@ -121,7 +173,7 @@ tooling:
     - "group:sessions"
   agent_to_agent:
     enabled: true
-    allow: ["work", "finance"]
+    allow: ["supervisor_internal_main", "ops_internal_main", "finance_internal_main"]
   sessions:
     visibility: "all"
   session_send_policy:
@@ -140,20 +192,18 @@ runtime_hygiene:
 
 v51_team_runtime:
   enabled: false
-  # V5.1 生产场景下，建议每个 team 都生成并归档一份 runtime manifest。
-  # 示例：references/generated/openclaw-feishu-plugin-v51-runtime-20260308-153000.json
   runtime_manifest_path: "references/generated/openclaw-feishu-plugin-v51-runtime-<timestamp>.json"
-  team_key: "market_sz"
-  supervisor_agent_id: "supervisor_market_sz"
-  hidden_main_session_key: "agent:supervisor_market_sz:main"
-  db_path: "~/.openclaw/teams/market_sz/state/team_jobs.db"
+  team_key: "internal_main"
+  supervisor_agent_id: "supervisor_internal_main"
+  hidden_main_session_key: "agent:supervisor_internal_main:main"
+  db_path: "~/.openclaw/teams/internal_main/state/team_jobs.db"
   watchdog:
     systemd_service_template: "skills/openclaw-feishu-multi-agent-deploy/templates/systemd/v51-team-watchdog.service"
     systemd_timer_template: "skills/openclaw-feishu-multi-agent-deploy/templates/systemd/v51-team-watchdog.timer"
     launchd_template: "skills/openclaw-feishu-multi-agent-deploy/templates/launchd/v51-team-watchdog.plist"
-    systemd_service_name: "v51-team-market_sz.service"
-    systemd_timer_name: "v51-team-market_sz.timer"
-    launchd_label: "bot.molt.v51-team-market_sz"
+    systemd_service_name: "v51-team-internal_main.service"
+    systemd_timer_name: "v51-team-internal_main.timer"
+    launchd_label: "bot.molt.v51-team-internal_main"
 
 permissions:
   minimum:
@@ -174,6 +224,6 @@ permissions:
 acceptance:
   required:
     - "openclaw config validate 通过"
-    - "canary 群消息命中目标 agent"
+    - "canary 群消息命中目标 team"
     - "无重复触发/无串路由"
     - "回滚命令已验证"

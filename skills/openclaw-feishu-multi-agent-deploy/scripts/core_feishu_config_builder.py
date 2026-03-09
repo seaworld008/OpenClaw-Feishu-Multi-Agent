@@ -15,7 +15,7 @@ import json
 import pathlib
 import re
 from datetime import datetime
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 
 PLUGIN_CHANNEL = "feishu"
@@ -35,18 +35,6 @@ def require(data: Dict[str, Any], key: str) -> Any:
     if key not in data:
         raise ValueError(f"Missing required field: {key}")
     return data[key]
-
-
-def route_sort_key(route: Dict[str, Any]) -> Tuple[int, int, int]:
-    """Sort bindings by specificity: peer > accountId > wildcard/fallback."""
-    peer = route.get("peer") if isinstance(route, dict) else None
-    account_id = route.get("accountId") if isinstance(route, dict) else None
-    has_peer = 0 if isinstance(peer, dict) and peer.get("id") else 1
-    has_specific_account = 0 if account_id and account_id != "*" else 1
-    has_channel = 0 if route.get("channel") else 1
-    return (has_peer, has_specific_account, has_channel)
-
-
 def validate_accounts(accounts: Any) -> List[Dict[str, Any]]:
     if not isinstance(accounts, list) or not accounts:
         raise ValueError("accounts must be a non-empty array")
@@ -121,30 +109,11 @@ def clean_role_label(role: str) -> str:
     return cleaned.strip(" -_/")
 
 
-def default_visible_label(value: Any, kind: str, role: str, agent_id: str) -> str:
+def require_visible_label(value: Any, *, path: str) -> str:
     explicit = str(value or "").strip()
-    if explicit:
-        return explicit
-    hints = (
-        (("运营", "ops", "operation"), "运营"),
-        (("财务", "finance", "fin"), "财务"),
-        (("销售", "sales", "biz"), "销售"),
-        (("客服", "service", "support", "success"), "客服"),
-        (("数据", "data", "analyst"), "数据"),
-        (("人力", "hr", "people"), "人力"),
-        (("法务", "legal", "compliance"), "法务"),
-        (("产品", "product", "pm"), "产品"),
-        (("主管", "supervisor", "orchestrator"), "主管"),
-    )
-    for candidate in (str(role or "").strip(), str(agent_id or "").strip()):
-        lowered = candidate.lower()
-        for markers, label in hints:
-            if any(marker in lowered or marker in candidate for marker in markers):
-                return label
-    cleaned = clean_role_label(role)
-    if cleaned:
-        return cleaned
-    return "主管" if kind == "supervisor" else (str(agent_id or "阶段").strip() or "阶段")
+    if not explicit:
+        raise ValueError(f"{path}.visibleLabel is required")
+    return explicit
 
 
 def merge_identity(base: Any, override: Any) -> Dict[str, Any] | None:
@@ -198,11 +167,9 @@ def validate_role_catalog(role_catalog: Any, account_ids: set[str]) -> Dict[str,
             profile["accountId"] = account_id
         else:
             profile.pop("accountId", None)
-        profile["visibleLabel"] = default_visible_label(
+        profile["visibleLabel"] = require_visible_label(
             profile.get("visibleLabel"),
-            kind,
-            str(profile.get("role") or ""),
-            str(profile.get("agentId") or ""),
+            path=f"roleCatalog.{profile_id}",
         )
         identity = merge_identity(None, profile.get("identity"))
         if identity:
@@ -296,13 +263,10 @@ def resolve_team_role_spec(
     merged["kind"] = kind
     if profile_id:
         merged["profileId"] = profile_id
-    visible_label = default_visible_label(
+    merged["visibleLabel"] = require_visible_label(
         merged.get("visibleLabel"),
-        kind,
-        str(merged.get("role") or ""),
-        agent_id,
+        path=path,
     )
-    merged["visibleLabel"] = visible_label
     identity = merge_identity(None, merged.get("identity"))
     if identity:
         merged["identity"] = identity
@@ -741,113 +705,19 @@ def build_v51_plugin_patch(data: Dict[str, Any], accounts: List[Dict[str, Any]])
         patch["messages"] = messages_patch
 
     return patch
-
-
-def validate_routes(routes: Any) -> List[Dict[str, Any]]:
-    if not isinstance(routes, list) or not routes:
-        raise ValueError("routes must be a non-empty array")
-    out: List[Dict[str, Any]] = []
-    for idx, route in enumerate(routes):
-        if not isinstance(route, dict):
-            raise ValueError(f"routes[{idx}] must be an object")
-        for k in ["agentId", "accountId", "peer"]:
-            if k not in route:
-                raise ValueError(f"routes[{idx}] missing required field: {k}")
-        peer = route.get("peer")
-        if not isinstance(peer, dict):
-            raise ValueError(f"routes[{idx}].peer must be an object")
-        if not peer.get("kind") or not peer.get("id"):
-            raise ValueError(f"routes[{idx}].peer.kind and routes[{idx}].peer.id are required")
-        out.append(route)
-    out.sort(key=route_sort_key)
-    return out
-
-
 def build_plugin_patch(data: Dict[str, Any]) -> Dict[str, Any]:
     accounts = validate_accounts(require(data, "accounts"))
-    if data.get("teams") is not None:
-        return build_v51_plugin_patch(data, accounts)
-
-    routes = validate_routes(require(data, "routes"))
-
-    optional = data.get("optional") if isinstance(data.get("optional"), dict) else {}
-
-    feishu: Dict[str, Any] = {
-        "enabled": True,
-        "connectionMode": data.get("connectionMode", "websocket"),
-        "accounts": {},
-    }
-
-    for key in [
-        "domain",
-        "defaultAccount",
-        "dmPolicy",
-        "allowFrom",
-        "groupPolicy",
-        "groupAllowFrom",
-    ]:
-        if key in data:
-            feishu[key] = data[key]
-
-    if "defaultAccount" not in feishu:
-        feishu["defaultAccount"] = accounts[0]["accountId"]
-
-    for key in ["requireMention", "allowMentionlessInMultiBotGroup", "groupCommandMentionBypass"]:
-        if key in optional:
-            feishu[key] = optional[key]
-
-    if isinstance(optional.get("groups"), dict) and optional["groups"]:
-        feishu["groups"] = optional["groups"]
-
-    for account in accounts:
-        account_id = account["accountId"]
-        feishu["accounts"][account_id] = build_account_cfg(account)
-
-    bindings: List[Dict[str, Any]] = []
-    for route in routes:
-        bindings.append(
-            {
-                "agentId": route["agentId"],
-                "match": {
-                    "channel": route.get("channel") or PLUGIN_CHANNEL,
-                    "accountId": route["accountId"],
-                    "peer": {
-                        "kind": route["peer"]["kind"],
-                        "id": route["peer"]["id"],
-                    },
-                },
-            }
+    if data.get("routes") is not None:
+        raise ValueError(
+            "V5.1 Hardening builder only accepts accounts + roleCatalog + teams; "
+            "legacy routes input is no longer supported"
         )
-
-    patch: Dict[str, Any] = {
-        "channels": {"feishu": feishu},
-        "bindings": bindings,
-    }
-
-    agents_patch = build_agents_patch(data.get("agents"))
-    if agents_patch:
-        patch["agents"] = agents_patch
-
-    tools_patch: Dict[str, Any] = {}
-    if isinstance(data.get("agentToAgent"), dict) and data["agentToAgent"]:
-        tools_patch["agentToAgent"] = data["agentToAgent"]
-    if isinstance(data.get("tools"), dict):
-        tools = data["tools"]
-        if isinstance(tools.get("allow"), list) and tools["allow"]:
-            tools_patch["allow"] = tools["allow"]
-        if isinstance(tools.get("sessions"), dict) and tools["sessions"]:
-            tools_patch["sessions"] = tools["sessions"]
-    if tools_patch:
-        patch["tools"] = tools_patch
-
-    if isinstance(data.get("session"), dict) and data["session"]:
-        patch["session"] = data["session"]
-
-    messages_patch = build_messages_patch(data)
-    if messages_patch:
-        patch["messages"] = messages_patch
-
-    return patch
+    if data.get("teams") is None:
+        raise ValueError(
+            "V5.1 Hardening builder requires teams; use the unified-entry schema "
+            "(accounts + roleCatalog + teams)"
+        )
+    return build_v51_plugin_patch(data, accounts)
 
 
 def write_json(path: pathlib.Path, data: Dict[str, Any]) -> None:

@@ -4,7 +4,7 @@
 
 ## 当前版本
 
-- `v1.6.1`（2026-03-08）
+- `v1.6.2`（2026-03-09）
 - 默认技术路线：官方插件 `@openclaw/feishu`
 - 当前公开主线版本：`V5.1 Hardening`
 - 当前最新稳定版：`V5.1 Hardening`
@@ -18,7 +18,7 @@
 它已经覆盖：
 
 - 你将得到什么效果
-- `roleCatalog + teams(profileId + override)` 统一入口
+- `accounts + roleCatalog + teams(profileId + override)` 统一入口
 - runtime manifest / hidden main / SQLite / watchdog 的实现原理
 - 当前正式双群、三个正式机器人和真实 `appId/appSecret`
 - 真实 supervisor / worker 提示词
@@ -26,11 +26,11 @@
 
 推荐阅读顺序：
 
-1. 产品手册：`references/codex-prompt-templates-v51-team-orchestrator.md`
-2. 收集清单：`references/客户首次使用信息清单.md`
-3. 真实案例：`references/客户首次使用真实案例.md`
-4. 操作型提示词：`references/客户首次使用-Codex提示词.md`
-5. 新机器上线：`references/V5.1-新机器快速启动-SOP.md`
+1. 产品手册：[codex-prompt-templates-v51-team-orchestrator.md](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v51-team-orchestrator.md)
+2. 收集清单：[客户首次使用信息清单.md](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用信息清单.md)
+3. 真实案例：[客户首次使用真实案例.md](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用真实案例.md)
+4. 操作型提示词：[客户首次使用-Codex提示词.md](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用-Codex提示词.md)
+5. 新机器上线：[V5.1-新机器快速启动-SOP.md](skills/openclaw-feishu-multi-agent-deploy/references/V5.1-新机器快速启动-SOP.md)
 
 ## 仓库结构
 
@@ -50,7 +50,7 @@ README.md
 
 ## 核心能力
 
-- 单机器人/多机器人多 Agent 路由（single-bot / multi-bot）
+- 统一入口配置：`accounts + roleCatalog + teams`，由 builder 自动派生 `channels.feishu`、`bindings` 和 `v51 runtime manifest`
 - Brownfield 增量改造（incremental）与灰度放量（canary）
 - 配置生成脚本（从输入 JSON 生成 patch + 验证摘要）
 - 前置条件、验收清单、回滚流程、升级回归手册
@@ -189,6 +189,18 @@ canonical schema 最小示意：
 
 ```json
 {
+  "accounts": [
+    {
+      "accountId": "aoteman",
+      "appId": "cli_a923c749bab6dcba",
+      "appSecret": "TWpD207Ri2g1Qqmw4R5YhfkPRhOokCGX"
+    },
+    {
+      "accountId": "xiaolongxia",
+      "appId": "cli_a9f1849b67f9dcc2",
+      "appSecret": "g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr"
+    }
+  ],
   "roleCatalog": {
     "supervisor_default": {
       "kind": "supervisor",
@@ -339,35 +351,48 @@ Codex 交付入口：
 - 每个机器人（每个应用）各自独立一套，不能混用。  
 - 生产配置建议必填，避免事件校验或回调链路异常。
 
-### 三、按你的示例写一版可直接落地的映射
+### 三、按当前正式双群写一版可直接落地的 team 编排
 
-你当前真实值（基于日志探测）可直接用：
+当前正式主线不是“3 个群各配 1 个 agent”，而是“2 个团队群，每个群 1 个 supervisor + N 个 worker，共复用 3 个正式机器人账号”。
 
-- 销售群：`oc_ffab0130d2cfb80f70c150918b4d4e87`  
-- 运营群：`oc_da719e85a3f75d9a6050343924d9aa62`  
-- 财务群：`oc_1a3c32a99d6a8120f9ca7c4343263b24`  
-- Agent ID：`sales_agent`、`ops_agent`、`finance_agent`  
-- 账号：`aoteman`、`xiaolongxia`、`yiran_yibao`
+你当前正式双群基线：
 
-机器人名称与账号对照（你当前私有测试）：
-- 奥特曼：`accountId=aoteman`，`appId=cli_a923c749bab6dcba`
-- 小龙虾找妈妈：`accountId=xiaolongxia`，`appId=cli_a9f1849b67f9dcc2`
-- 易燃易爆：`accountId=yiran_yibao`，`appId=cli_a923c71498b8dcc9`
+- `internal_main -> oc_f785e73d3c00954d4ccd5d49b63ef919`
+- `external_main -> oc_7121d87961740dbd72bd8e50e48ba5e3`
+- `aoteman -> supervisor`
+- `xiaolongxia -> ops`
+- `yiran_yibao -> finance`
 
-匹配关系应写成：
+统一入口最小结构应写成：
 
 ```text
-peer: oc_ffab0130d2cfb80f70c150918b4d4e87 -> agentId: sales_agent，accountId: aoteman
-peer: oc_da719e85a3f75d9a6050343924d9aa62 -> agentId: ops_agent，accountId: xiaolongxia
-peer: oc_1a3c32a99d6a8120f9ca7c4343263b24 -> agentId: finance_agent，accountId: yiran_yibao
+accounts[]
+roleCatalog[]
+teams[]
 ```
 
-### 四、群角色与权限（业内最佳实践）
-- 开场默认用 `requireMention: true`，避免无意识触发。  
-- 如果某些群允许免 `@`，只对特定群级别开启 `requireMention: false` 并确认飞书已开通 `im:message.group_msg`。  
-- 多 bot 同群时默认 `allowMentionlessInMultiBotGroup: false`，再按业务谨慎逐群放开。  
-- 以 `agentId` 能映射为准，`peer.kind` 一般用 `group`。  
-- 尽量保持 `channels.feishu.defaultAccount` 为当前主 bot，避免回退路由不可控。  
+其中当前正式双群的最小建模是：
+
+```text
+- internal_main
+  - supervisor: supervisor_internal_main（profileId=supervisor_internal_default, accountId=aoteman）
+  - workers:
+    - ops_internal_main（profileId=ops_default, accountId=xiaolongxia）
+    - finance_internal_main（profileId=finance_default, accountId=yiran_yibao）
+- external_main
+  - supervisor: supervisor_external_main（profileId=supervisor_external_default, accountId=aoteman）
+  - workers:
+    - ops_external_main（profileId=ops_default, accountId=xiaolongxia）
+    - finance_external_main（profileId=finance_default, accountId=yiran_yibao）
+```
+
+### 四、统一入口配置原则（不要手写 routes）
+- 主线输入只维护 `accounts + roleCatalog + teams`。
+- `channels.feishu`、`bindings`、必要的 `agents.list` 和 `v51 runtime manifest` 都由 builder 派生。
+- `bindings` 是 builder 派生结果，不是主线手工输入；你要人工核对排序和命中结果，但不要再把 `routes` 当成统一入口。
+- 群级策略默认写在 `teams[].group`：如 `peerId`、`entryAccountId`、`requireMention`。
+- 角色默认定义写在 `roleCatalog`；同一角色如果只是某个群上下文不同，优先在对应 `team` 里做 override，不要复制整块 prompt。
+- 同一个 bot 可以跨多个群复用，但它在所有群里都保持同一个角色；不要让同一个 `accountId` 在一个群当 supervisor、另一个群又当 finance。
 
 ### 五、飞书权限清单（含多维表格）
 
@@ -476,110 +501,67 @@ peer: oc_1a3c32a99d6a8120f9ca7c4343263b24 -> agentId: finance_agent，accountId:
 | 机器人账号 ID（`accountId`） | `aoteman` | 你在 `channels.feishu.accounts` 的键名（自己定义） | 是（`match.accountId`） |
 | 飞书应用 ID（`appId`） | `cli_xxx` | 飞书开放平台 `凭证与基础信息` | 否（用于账号凭据） |
 | 机器人 Open ID（bot open_id） | `ou_bot_xxx` | 飞书事件体 / 平台调试信息 | 否（通常不直接配路由） |
-| Agent ID（`agentId`） | `sales_agent` | `openclaw agents list` | 是（`binding.agentId`） |
+| Agent ID（`agentId`） | `supervisor_internal_main` | `openclaw agents list` | 是（`binding.agentId`） |
 
 ### 七、一步一步配置流程（照着做可落地）
 
-1. 飞书后台准备  
-- 按路由架构创建应用（可 1 个，也可多个；生产常见是 2~4 个）。  
-- 开启机器人能力。  
-- 在权限管理里完成“基础权限 + 按需权限（文档/多维表格）”。  
-- 订阅事件至少包含：`im.message.receive_v1`。  
+1. 飞书后台准备
+- 为正式 supervisor / worker 准备对应应用和机器人账号。
+- 开启机器人能力。
+- 在权限管理里完成“基础权限 + 按需权限（文档/多维表格）”。
+- 订阅事件至少包含：`im.message.receive_v1`。
 
-2. OpenClaw 账号配置  
-- 在 `channels.feishu.accounts` 配置实际 `accountId` 及凭据（一个 bot 对应一个 accountId）。  
-- 显式设置 `defaultAccount`。  
+2. OpenClaw 账号配置
+- 在统一入口 `accounts[]` 维护实际 `accountId` 及凭据。
+- `channels.feishu.accounts` 由 builder 写入 patch，不要手抄多份。
+- `defaultAccount` 保持指向当前默认入口账号，一般为 supervisor 对应的 `accountId`。
 
-3. 收集路由 ID  
-- 在销售/运营/财务群分别发测试消息。  
-- 执行 `openclaw logs --follow`，记录三个 `oc_...`。  
-- 执行 `openclaw agents list`，确认 `sales_agent` / `ops_agent` / `finance_agent` 已存在。  
+3. 收集团队群与 agent
+- 在每个目标群分别发测试消息。
+- 执行 `openclaw logs --follow`，记录每个团队群的真实 `peerId`。
+- 执行 `openclaw agents list`，确认 supervisor / worker 对应的 `agentId` 已存在。
 
-4. 绑定与排序  
-- 为每个群配置一条精确 binding：`channel + accountId + peer.id -> agentId`。  
-- 保证顺序：精确规则在前，兜底在后。  
+4. 填统一入口输入
+- 在 `roleCatalog` 里定义 supervisor / worker 默认资料。
+- 在 `teams[]` 里声明每个群的 `teamKey`、`group`、`supervisor`、`workers`、`workflow.stages`。
+- 若只是复用现有角色，不要重复写新的整块 prompt。
 
-5. 变更上线  
-- 先备份配置。  
-- 运行 `openclaw config validate`。  
-- 重启 `openclaw gateway`。  
-- 执行 `openclaw agents list --bindings` 检查结果。  
-- 先 canary 群验证，再全量。  
+5. 生成并核对 patch
+- 先备份配置。
+- 运行 builder 生成最小 patch 与 `v51 runtime manifest`。
+- 人工核对 `bindings` 排序：精确规则优先（peer+account）→ account 精确 → 兜底。
 
-6. 扩展策略  
-- 新增群：新增一条 route。  
-- 新增 agent：新增 `agentId` + route。  
-- 新增机器人：新增 `accountId` + 凭据 + routes。  
+6. 变更上线
+- 运行 `openclaw config validate`。
+- 重启 `openclaw gateway`。
+- 执行 `openclaw agents list --bindings` 检查结果。
+- 先 canary 群验证，再全量。
 
-### 八、路由架构选型（如何选“一群一Bot”或“一Bot多群”）
+### 八、统一入口扩展动作（新增 / 删减都从这里改）
 
-#### 模式 A：一群一Bot（推荐）
-
-定义：每个业务群只放一个机器人，且该机器人只服务该群（或少量同类群）。
-
-优点：
-- 路由最清晰，排障简单。
-- 几乎没有抢答和误触发。
-- 权限隔离更直观，便于审计。
-
-缺点：
-- 机器人数量更多，维护成本略高。
-
-适用：
-- 销售、运营、财务等职责边界清晰的团队。
-- 对稳定性和可追责要求高的生产环境。
-
-#### 模式 B：一Bot多群
-
-定义：一个机器人进入多个群，通过不同 `peerId` 路由到不同 agent。
-
-优点：
-- 机器人数量少，初期部署快。
-- 适合 MVP/试点。
-
-缺点：
-- 规则复杂度更高，后期容易膨胀。
-- 若误配兜底规则，容易串线。
-
-适用：
-- 团队小、场景简单、先快速验证价值。
-
-#### 你的当前状态（真实）
-
-你从日志中抓到：
-- `oc_ffab0130d2cfb80f70c150918b4d4e87` -> `accountId=aoteman`
-- `oc_da719e85a3f75d9a6050343924d9aa62` -> `accountId=xiaolongxia`
-- `oc_1a3c32a99d6a8120f9ca7c4343263b24` -> `accountId=yiran_yibao`
-
-这已经是“模式 A：一群一Bot”的结构，建议继续沿用。
-
-#### 你当前场景的推荐路由（可直接套用）
-
-```yaml
-routes:
-  - { peerKind: "group", peerId: "oc_ffab0130d2cfb80f70c150918b4d4e87", accountId: "aoteman",      agentId: "sales_agent" }
-  - { peerKind: "group", peerId: "oc_da719e85a3f75d9a6050343924d9aa62", accountId: "xiaolongxia",  agentId: "ops_agent" }
-  - { peerKind: "group", peerId: "oc_1a3c32a99d6a8120f9ca7c4343263b24", accountId: "yiran_yibao",  agentId: "finance_agent" }
-```
-
-#### 常用配置示例（真实可落地）
-
-示例 1：标准企业（推荐）
-- 销售群 -> `bot_sales` -> `sales_agent`
-- 运营群 -> `bot_ops` -> `ops_agent`
-- 财务群 -> `bot_finance` -> `finance_agent`
-
-示例 2：轻量团队（低成本）
-- `bot_main` 同时服务销售群 + 运营群
-- `bot_finance` 独立服务财务群
-
-示例 3：扩展到主管调度
-- 在管理群增加 `bot_supervisor`
-- 主管 Agent 通过 `agentToAgent` 分派给销售/运营/财务子 Agent
+- 新增一个群：
+  - 新增一个 `teams[]` 条目。
+  - 若角色复用现有 profile，只填新的 `teamKey / group / agentId / workflow.stages`。
+- 新增一个机器人账号：
+  - 新增一条 `accounts[]`。
+  - 让对应 `roleCatalog.<profileId>.accountId` 指向它。
+- 给现有群增加一个 worker：
+  - 同步修改该 `team` 的 `workers[]` 和 `workflow.stages[]`。
+- 从现有群移除一个 worker：
+  - 同步删除该 `team` 的 `workers[]` 和 `workflow.stages[]`。
+  - 若该 profile 不再被任何 team 使用，再决定是否清理 `roleCatalog`。
+- 下线一个群：
+  - 删除对应 `teams[]` 条目。
+  - 同时停掉该 `teamKey` 对应的 watchdog / launchd / SQLite / workspace。
 
 ## 使用 Codex 的实战案例（安装到上线）
 
-下面这套话术可直接复制给 Codex，后续新增 agent 或新增机器人只需按“扩展表”增加行。
+下面这套话术面向当前正式主线 `V5.1 Hardening`。
+
+注意：
+- 这里不是“3 个群各配 1 个 agent”的旧 `routes` 口径。
+- 这里是“2 个团队群，每个群 1 个 supervisor + N 个 worker，共复用 3 个正式机器人账号”的 `Team Orchestrator` 口径。
+- 前面的 `routes` 示例只适合解释基础 binding 原理；真正交付 `V5.1` 时，统一入口必须按 `accounts + roleCatalog + teams(profileId + override)` 组织。
 
 ### 1) 先安装 skill
 
@@ -590,54 +572,107 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
 安装成功后提醒我重启 Codex。
 ```
 
-### 2) 重启后直接发这个标准任务（可扩展版）
+### 2) 重启后直接发这个标准任务（V5.1 群内多 Agent 可扩展版）
 
 ```text
-请使用 openclaw-feishu-multi-agent-deploy skill，完成本次飞书多 Agent 配置。
+请使用 openclaw-feishu-multi-agent-deploy skill，完成本次飞书群内多 Agent Team Orchestrator 配置。
 
 交付边界：
 - 现网为 brownfield，必须 incremental（仅做必要最小改动）。
 - 配置目标 channel = feishu（官方插件）。
 - 不改 `bindings` 与 `channels.feishu` 无关字段。
+- 当前主线必须按 V5.1 Hardening 处理，不要退回旧 `accountMappings + routes` 模型。
 
 输入信息（请严格按下面结构读取/补齐，后续可扩展）：
-- accountMappings:
+- accounts:
   - accountId: "aoteman"
-    role: "sales_bot"
     appId: "cli_a923c749bab6dcba"
     appSecret: "TWpD207Ri2g1Qqmw4R5YhfkPRhOokCGX"
     encryptKey: "..."
     verificationToken: "..."
   - accountId: "xiaolongxia"
-    role: "ops_bot"
     appId: "cli_a9f1849b67f9dcc2"
     appSecret: "g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr"
     encryptKey: "..."
     verificationToken: "..."
   - accountId: "yiran_yibao"
-    role: "finance_bot"
     appId: "cli_a923c71498b8dcc9"
     appSecret: "swscrlPKYCwAehOyyoLrlesLTsuYY6nl"
     encryptKey: "..."
     verificationToken: "..."
-- agents: ["sales_agent", "ops_agent", "finance_agent"]
-- routes:
-  - peerKind: "group"
-    peerId: "oc_ffab0130d2cfb80f70c150918b4d4e87"
-    accountId: "aoteman"
-    agentId: "sales_agent"
-  - peerKind: "group"
-    peerId: "oc_da719e85a3f75d9a6050343924d9aa62"
-    accountId: "xiaolongxia"
-    agentId: "ops_agent"
-  - peerKind: "group"
-    peerId: "oc_1a3c32a99d6a8120f9ca7c4343263b24"
-    accountId: "yiran_yibao"
-    agentId: "finance_agent"
+- roleCatalog:
+  - supervisor_internal_default:
+      kind: "supervisor"
+      accountId: "aoteman"
+      visibleLabel: "主管"
+      role: "主管总控"
+      profileScope: "internal_main"
+      systemPrompt: "沿用当前正式内部团队主管 prompt；若客户有团队上下文差异，再按 team override 覆盖。"
+  - supervisor_external_default:
+      kind: "supervisor"
+      accountId: "aoteman"
+      visibleLabel: "主管"
+      role: "主管总控"
+      profileScope: "external_main"
+      systemPrompt: "沿用当前正式外部团队主管 prompt；若客户有团队上下文差异，再按 team override 覆盖。"
+  - ops_default:
+      kind: "worker"
+      accountId: "xiaolongxia"
+      visibleLabel: "运营"
+      role: "运营专家"
+      systemPrompt: "沿用当前正式运营专家 prompt。"
+  - finance_default:
+      kind: "worker"
+      accountId: "yiran_yibao"
+      visibleLabel: "财务"
+      role: "财务专家"
+      systemPrompt: "沿用当前正式财务专家 prompt。"
+- teams:
+  - teamKey: "internal_main"
+    displayName: "内部生产团队群"
+    group:
+      peerId: "oc_f785e73d3c00954d4ccd5d49b63ef919"
+      entryAccountId: "aoteman"
+      requireMention: true
+    supervisor:
+      profileId: "supervisor_internal_default"
+      agentId: "supervisor_internal_main"
+    workers:
+      - profileId: "ops_default"
+        agentId: "ops_internal_main"
+      - profileId: "finance_default"
+        agentId: "finance_internal_main"
+    workflow:
+      mode: "serial"
+      stages:
+        - agentId: "ops_internal_main"
+        - agentId: "finance_internal_main"
+  - teamKey: "external_main"
+    displayName: "外部生产团队群"
+    group:
+      peerId: "oc_7121d87961740dbd72bd8e50e48ba5e3"
+      entryAccountId: "aoteman"
+      requireMention: true
+    supervisor:
+      profileId: "supervisor_external_default"
+      agentId: "supervisor_external_main"
+    workers:
+      - profileId: "ops_default"
+        agentId: "ops_external_main"
+      - profileId: "finance_default"
+        agentId: "finance_external_main"
+    workflow:
+      mode: "serial"
+      stages:
+        - agentId: "ops_external_main"
+        - agentId: "finance_external_main"
 
 可选扩展示例：
-- 如果新增一个业务群和机器人，只需再加一条 accountMappings 和对应 routes。
-- 如果新增一个 Agent，只需再加一条 routes 的 agentId；agents 列表里新增该 id。
+- 如果新增一个业务群，只需新增一个 `teams[]` 条目；若主管/worker 只是复用现有角色，不必重复整块 prompt。
+- 如果新增一个机器人账号，只需新增一条 `accounts[]`，并让对应 `roleCatalog.<profileId>.accountId` 指向它。
+- 如果给现有群增加一个 worker，只需同步修改该 `team` 的 `workers[]` 和 `workflow.stages[]`。
+- 如果从现有群移除一个 worker，只需同步删除该 `team` 的 `workers[]` 和 `workflow.stages[]`；若 profile 不再被任何 team 使用，再判断是否清理 `roleCatalog`。
+- 如果下线一个群，只需删除对应 `teams[]` 条目，并输出需要停掉的 watchdog / state / workspace 清单。
 
 要求：
 1) 先读取现有 ~/.openclaw/openclaw.json。
@@ -650,53 +685,68 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
    - openclaw gateway restart
    - openclaw agents list --bindings
    - canary 验收步骤
-6) 输出回滚命令与验收证据模板。
+6) 输出 `v51 runtime manifest`。
+7) 输出回滚命令与验收证据模板。
+8) 若发现输入信息仍是旧 `accountMappings + routes` 结构，先显式指出这不是当前主线，再帮我转换成 `accounts + roleCatalog + teams` 后继续。
 ```
 
 3. 你只需要把占位值换成真实值
-- `accountId`、`appId`、`appSecret`
-- 群 ID（`oc_xxx`）和 Agent ID
-- 是否免 @（若免 @，确认飞书已审批 `im:message.group_msg`）
+- `accounts[]` 里的 `appId` / `appSecret` / `encryptKey` / `verificationToken`
+- `teams[].group.peerId`
+- `teams[].supervisor.agentId` 与 `teams[].workers[].agentId`
+- `roleCatalog.*.systemPrompt` 中客户自己的行业上下文、话术边界和交付要求
+- 是否开启 `tools.agentToAgent`
 
 ### 占位值替换对照（重点）
 
-你提到的这三行：
+当前正式双群基线不是“3 个群各配 1 个 agent”，而是下面这组：
 
-- `oc_ffab0130d2cfb80f70c150918b4d4e87 -> sales_agent（accountId=aoteman）`
-- `oc_da719e85a3f75d9a6050343924d9aa62 -> ops_agent（accountId=xiaolongxia）`
-- `oc_1a3c32a99d6a8120f9ca7c4343263b24 -> finance_agent（accountId=yiran_yibao）`
+- `internal_main -> oc_f785e73d3c00954d4ccd5d49b63ef919`
+- `external_main -> oc_7121d87961740dbd72bd8e50e48ba5e3`
+- `aoteman -> supervisor`
+- `xiaolongxia -> ops`
+- `yiran_yibao -> finance`
 
-其中每一段都需要替换为你的真实值。按下面对照填：
+其中每一段都需要替换为客户自己的真实值。按下面对照填：
 
 | 示例占位 | 你要替换成什么 | 来源位置 | 常见错误 |
 |---|---|---|---|
-| `oc_ff...` / `oc_da...` / `oc_1a3...` | 飞书群真实 `chat_id`（通常以 `oc_` 开头） | 飞书事件 `im.message.receive_v1` 的 `chat_id`；或 OpenClaw 日志中收到消息时的会话 ID | 用了群名称而不是 `chat_id`；把多个群写成同一个 ID |
-| `sales-agent` / `ops-agent` / `finance-agent` | OpenClaw 中已存在的 `agentId` | `openclaw agents list` | 写了 persona 名称但不是 `agentId`；拼写不一致 |
-| `aoteman` / `xiaolongxia` / `yiran_yibao` | `channels.feishu.accounts` 里的账号键名（`accountId`） | 你的 `openclaw.json` 中 `channels.feishu.accounts.<key>` | `bindings.match.accountId` 和 accounts 键名不一致 |
+| `internal_main` / `external_main` | 客户自己的 `teamKey` | 你定义的团队命名规则 | 用群名称临时替代，后续 workspace/watchdog 命名混乱 |
+| `oc_f785...` / `oc_7121...` | 飞书群真实 `chat_id`（通常以 `oc_` 开头） | 飞书事件 `im.message.receive_v1` 的 `chat_id`；或 OpenClaw 日志中收到消息时的会话 ID | 用了群名称而不是 `chat_id`；把多个群写成同一个 ID |
+| `supervisor_internal_main` / `ops_internal_main` / `finance_internal_main` | OpenClaw 中真实存在或准备新建的 `agentId` | `openclaw agents list` | 把 role 名称当 agentId；内部群和外部群复用同一个 agentId 导致串线 |
+| `aoteman` / `xiaolongxia` / `yiran_yibao` | `channels.feishu.accounts` 里的账号键名（`accountId`） | 你的 `openclaw.json` 中 `channels.feishu.accounts.<key>` | `roleCatalog.accountId`、`group.entryAccountId` 与 accounts 键名不一致 |
+| `supervisor_internal_default` / `ops_default` / `finance_default` | 当前角色目录里的 profileId | 输入文件 `roleCatalog` | 在每个 team 重复写一整块角色定义，后面扩群越来越乱 |
 
 ### 一份可直接照抄的“替换后”示例
 
-假设你的真实值是（你当前就是这组）：
-- 销售群：`oc_ffab0130d2cfb80f70c150918b4d4e87`
-- 运营群：`oc_da719e85a3f75d9a6050343924d9aa62`
-- 财务群：`oc_1a3c32a99d6a8120f9ca7c4343263b24`
-- Agent ID：`sales_agent`、`ops_agent`、`finance_agent`
-- 账号：`aoteman`、`xiaolongxia`、`yiran_yibao`
+假设你的真实值是当前正式双群基线：
+- 内部团队群：`internal_main -> oc_f785e73d3c00954d4ccd5d49b63ef919`
+- 外部团队群：`external_main -> oc_7121d87961740dbd72bd8e50e48ba5e3`
+- supervisor 机器人：`aoteman`
+- ops 机器人：`xiaolongxia`
+- finance 机器人：`yiran_yibao`
 
-那么路由就应写成：
+那么 `teams[]` 至少应写成：
 
 ```text
-- oc_ffab0130d2cfb80f70c150918b4d4e87 -> sales_agent（accountId=aoteman）
-- oc_da719e85a3f75d9a6050343924d9aa62 -> ops_agent（accountId=xiaolongxia）
-- oc_1a3c32a99d6a8120f9ca7c4343263b24 -> finance_agent（accountId=yiran_yibao）
+- internal_main:
+  - supervisor: supervisor_internal_main（profileId=supervisor_internal_default, accountId=aoteman）
+  - workers:
+    - ops_internal_main（profileId=ops_default, accountId=xiaolongxia）
+    - finance_internal_main（profileId=finance_default, accountId=yiran_yibao）
+- external_main:
+  - supervisor: supervisor_external_main（profileId=supervisor_external_default, accountId=aoteman）
+  - workers:
+    - ops_external_main（profileId=ops_default, accountId=xiaolongxia）
+    - finance_external_main（profileId=finance_default, accountId=yiran_yibao）
 ```
 
 ### 上线前 5 条强校验（避免配错）
 
-1. `chat_id` 唯一：一个群只对应一条精确 binding。  
-2. `agentId` 存在：`openclaw agents list` 能查到。  
-3. `accountId` 对齐：`bindings.match.accountId` 必须等于 `channels.feishu.accounts` 的键名。  
-4. 顺序正确：精确规则在前，兜底规则在后。  
+1. `teamKey` 唯一：一个群只对应一个独立 team unit。
+2. `workflow.stages` 完整：每个 team 当前启用的 worker 必须在 `workflow.stages` 中恰好声明一次。
+3. `agentId` 存在：`openclaw agents list` 能查到 supervisor / worker 对应的 agent。
+4. `accountId` 对齐：`roleCatalog.accountId`、`teams[].group.entryAccountId`、`bindings.match.accountId` 必须都等于 `channels.feishu.accounts` 的键名。
 5. 先验证再放量：先 canary 群验证通过，再全量。
 
 4. 交付验收建议
@@ -710,22 +760,22 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
 
 | 主线版本 | 定位 | 适合场景 | 核心入口 |
 |---|---|---|---|
-| `V5.1 Hardening` | 多群模板化主线 | 多个群并行、每群独立 team unit、可复制到 2/10 个团队 | `references/codex-prompt-templates-v51-team-orchestrator.md` |
+| `V5.1 Hardening` | 多群模板化主线 | 多个群并行、每群独立 team unit、可复制到 2/10 个团队 | [codex-prompt-templates-v51-team-orchestrator.md](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v51-team-orchestrator.md) |
 
 选择建议：
 1. 当前生产交付默认直接上 `V5.1 Hardening`。
 2. 如果客户后面还会持续扩群、增减机器人、替换角色提示词，仍然只用 `V5.1 Hardening`。
 
 推荐阅读顺序：
-1. `references/prerequisites-checklist.md`
-2. `templates/deployment-inputs.example.yaml`
-3. `references/codex-prompt-templates-v51-team-orchestrator.md`
-4. `templates/verification-checklist.md`
-5. `references/rollout-and-upgrade-playbook.md`
+1. [prerequisites-checklist.md](skills/openclaw-feishu-multi-agent-deploy/references/prerequisites-checklist.md)
+2. [deployment-inputs.example.yaml](skills/openclaw-feishu-multi-agent-deploy/templates/deployment-inputs.example.yaml)
+3. [codex-prompt-templates-v51-team-orchestrator.md](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v51-team-orchestrator.md)
+4. [verification-checklist.md](skills/openclaw-feishu-multi-agent-deploy/templates/verification-checklist.md)
+5. [rollout-and-upgrade-playbook.md](skills/openclaw-feishu-multi-agent-deploy/references/rollout-and-upgrade-playbook.md)
 
-当前保留的最佳实践来源：
-- OpenClaw 官方文档与 Release 交叉验证：`references/source-cross-validation-2026-03-04.md`
-- OpenClaw / 飞书平台能力复核：`references/source-cross-validation-2026-03-05.md`
+历史交叉验证归档（非主线规范）：
+- OpenClaw 官方文档与 Release 交叉验证：[source-cross-validation-2026-03-04.md](skills/openclaw-feishu-multi-agent-deploy/references/source-cross-validation-2026-03-04.md)
+- OpenClaw / 飞书平台能力复核：[source-cross-validation-2026-03-05.md](skills/openclaw-feishu-multi-agent-deploy/references/source-cross-validation-2026-03-05.md)
 
 ## 维护约定
 

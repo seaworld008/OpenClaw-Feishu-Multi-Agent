@@ -11,6 +11,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 OUTER_SKILL_ROOT = REPO_ROOT.parent
 README_FILE = REPO_ROOT / "README.md"
+CHANGELOG_FILE = REPO_ROOT / "CHANGELOG.md"
+VERSION_FILE = REPO_ROOT / "VERSION"
 SKILL_FILE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/SKILL.md"
 ROOT_SKILL_FILE = OUTER_SKILL_ROOT / "SKILL.md"
 ROOT_CODEX_PROMPT = OUTER_SKILL_ROOT / "references/codex-prompt-templates.md"
@@ -42,6 +44,7 @@ V51_QUICKSTART_DOC = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/refe
 CUSTOMER_FIRST_USE_CHECKLIST = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用信息清单.md"
 CUSTOMER_FIRST_USE_PROMPT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用-Codex提示词.md"
 CUSTOMER_FIRST_USE_EXAMPLE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用真实案例.md"
+SOURCE_CROSS_VALIDATION_20260305 = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/source-cross-validation-2026-03-05.md"
 V51_SYSTEMD_SERVICE_TEMPLATE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/systemd/v51-team-watchdog.service"
 V51_SYSTEMD_TIMER_TEMPLATE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/systemd/v51-team-watchdog.timer"
 V51_LAUNCHD_TEMPLATE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/launchd/v51-team-watchdog.plist"
@@ -193,6 +196,61 @@ def load_root_bridge_build_module():
     return module
 
 
+WORKFLOW_PARTICIPANT_DEFAULTS = {
+    "ops_internal_main": {
+        "accountId": "xiaolongxia",
+        "role": "运营执行",
+        "visibleLabel": "运营",
+    },
+    "finance_internal_main": {
+        "accountId": "yiran_yibao",
+        "role": "财务执行",
+        "visibleLabel": "财务",
+    },
+    "legal_internal_main": {
+        "accountId": "falv",
+        "role": "法务执行",
+        "visibleLabel": "法务",
+    },
+}
+
+
+def workflow_payload_json(*agent_ids):
+    return json.dumps(
+        {
+            "mode": "serial",
+            "stages": [{"agentId": agent_id} for agent_id in agent_ids],
+        },
+        ensure_ascii=False,
+    )
+
+
+def workflow_participants_json(*participants):
+    normalized = []
+    for participant in participants:
+        if isinstance(participant, str):
+            agent_id = participant
+            normalized.append(
+                {
+                    "agentId": agent_id,
+                    **WORKFLOW_PARTICIPANT_DEFAULTS[agent_id],
+                }
+            )
+            continue
+
+        item = dict(participant)
+        agent_id = str(item["agentId"])
+        defaults = WORKFLOW_PARTICIPANT_DEFAULTS.get(agent_id, {})
+        normalized.append(
+            {
+                "agentId": agent_id,
+                **defaults,
+                **item,
+            }
+        )
+    return json.dumps(normalized, ensure_ascii=False)
+
+
 class BuildSnippetTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -219,27 +277,83 @@ class BuildSnippetTests(unittest.TestCase):
             ],
         }
 
-    def test_string_agents_are_not_emitted_in_patch(self):
-        data = self.base_input()
+    def minimal_v51_input(self):
+        return {
+            "mode": "plugin",
+            "accounts": [
+                {
+                    "accountId": "main",
+                    "appId": "cli_xxx",
+                    "appSecret": "secret",
+                    "encryptKey": "",
+                    "verificationToken": "",
+                },
+                {
+                    "accountId": "ops",
+                    "appId": "cli_ops",
+                    "appSecret": "secret_ops",
+                },
+            ],
+            "teams": [
+                {
+                    "teamKey": "demo_team",
+                    "group": {
+                        "peerId": "oc_group_sales",
+                        "entryAccountId": "main",
+                        "requireMention": True,
+                    },
+                    "supervisor": {
+                        "agentId": "supervisor_demo_team",
+                        "accountId": "main",
+                        "role": "主管总控",
+                        "visibleLabel": "主管",
+                        "systemPrompt": "supervisor prompt",
+                    },
+                    "workers": [
+                        {
+                            "agentId": "ops_demo_team",
+                            "accountId": "ops",
+                            "role": "运营专家",
+                            "visibleLabel": "运营",
+                            "visibility": "visible",
+                            "systemPrompt": "ops prompt",
+                        }
+                    ],
+                    "workflow": {
+                        "mode": "serial",
+                        "stages": [{"agentId": "ops_demo_team"}],
+                    },
+                }
+            ],
+        }
+
+    def test_legacy_routes_input_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "only accepts accounts \\+ roleCatalog \\+ teams"):
+            self.module.build_plugin_patch(self.base_input())
+
+    def test_string_agents_do_not_override_generated_team_agents(self):
+        data = self.minimal_v51_input()
         data["agents"] = ["sales_agent", "ops_agent"]
 
         patch = self.module.build_plugin_patch(data)
 
-        self.assertNotIn("agents", patch)
+        self.assertEqual(
+            [agent["id"] for agent in patch["agents"]["list"]],
+            ["supervisor_demo_team", "ops_demo_team"],
+        )
 
-    def test_agent_objects_are_preserved_when_requested(self):
-        data = self.base_input()
+    def test_agent_objects_are_rejected_for_v51_inputs(self):
+        data = self.minimal_v51_input()
         data["agents"] = [
             {"id": "sales_agent", "systemPrompt": "sales prompt"},
             {"id": "ops_agent", "systemPrompt": "ops prompt"},
         ]
 
-        patch = self.module.build_plugin_patch(data)
-
-        self.assertEqual(patch["agents"]["list"], data["agents"])
+        with self.assertRaisesRegex(ValueError, "must not provide agents.list"):
+            self.module.build_plugin_patch(data)
 
     def test_blank_encrypt_fields_are_omitted(self):
-        data = self.base_input()
+        data = self.minimal_v51_input()
 
         patch = self.module.build_plugin_patch(data)
         account_cfg = patch["channels"]["feishu"]["accounts"]["main"]
@@ -249,69 +363,46 @@ class BuildSnippetTests(unittest.TestCase):
         self.assertNotIn("encryptKey", account_cfg)
         self.assertNotIn("verificationToken", account_cfg)
 
+    def test_v51_inline_team_input_requires_explicit_visible_label(self):
+        data = self.minimal_v51_input()
+        data["teams"][0]["workers"][0].pop("visibleLabel")
+
+        with self.assertRaisesRegex(ValueError, "visibleLabel is required"):
+            self.module.build_plugin_patch(data)
+
+    def test_builder_source_does_not_keep_legacy_route_validation_helpers(self):
+        content = BUILD_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertNotIn("def route_sort_key(", content)
+        self.assertNotIn("def validate_routes(", content)
+
 
 class RootBridgeBuilderTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.module = load_root_bridge_build_module()
 
-    def test_rewrite_bridge_args_rewrites_removed_legacy_input_alias(self):
-        rewritten = self.module.rewrite_bridge_args(
-            ["--input", "references/input-template.json", "--out", "/tmp/custom-out"]
-        )
+    def test_rewrite_bridge_args_rejects_removed_legacy_input_alias(self):
+        with self.assertRaisesRegex(ValueError, "Legacy input alias removed"):
+            self.module.rewrite_bridge_args(
+                ["--input", "references/input-template.json", "--out", "/tmp/custom-out"]
+            )
 
-        self.assertEqual(
-            rewritten,
-            [
-                "--input",
-                str(self.module.DEFAULT_INPUT_TEMPLATE),
-                "--out",
-                "/tmp/custom-out",
-            ],
-        )
+    def test_rewrite_bridge_args_requires_explicit_input_template(self):
+        with self.assertRaisesRegex(ValueError, "Explicit --input is required"):
+            self.module.rewrite_bridge_args([])
 
-    def test_rewrite_bridge_args_injects_v51_defaults_when_options_missing(self):
-        rewritten = self.module.rewrite_bridge_args([])
+    def test_rewrite_bridge_args_rejects_removed_plugin_alias(self):
+        with self.assertRaisesRegex(ValueError, "Legacy input alias removed"):
+            self.module.rewrite_bridge_args(
+                ["--input", "references/input-template-plugin.json", "--out", "/tmp/custom-out"]
+            )
 
-        self.assertEqual(
-            rewritten,
-            [
-                "--input",
-                str(self.module.DEFAULT_INPUT_TEMPLATE),
-                "--out",
-                str(self.module.DEFAULT_OUTPUT_DIR),
-            ],
-        )
-
-    def test_rewrite_bridge_args_rewrites_removed_plugin_alias(self):
-        rewritten = self.module.rewrite_bridge_args(
-            ["--input", "references/input-template-plugin.json", "--out", "/tmp/custom-out"]
-        )
-
-        self.assertEqual(
-            rewritten,
-            [
-                "--input",
-                str(self.module.DEFAULT_INPUT_TEMPLATE),
-                "--out",
-                "/tmp/custom-out",
-            ],
-        )
-
-    def test_rewrite_bridge_args_rewrites_removed_legacy_chat_feishu_alias(self):
-        rewritten = self.module.rewrite_bridge_args(
-            ["--input", "references/input-template-legacy-chat-feishu.json", "--out", "/tmp/custom-out"]
-        )
-
-        self.assertEqual(
-            rewritten,
-            [
-                "--input",
-                str(self.module.DEFAULT_INPUT_TEMPLATE),
-                "--out",
-                "/tmp/custom-out",
-            ],
-        )
+    def test_rewrite_bridge_args_rejects_removed_legacy_chat_feishu_alias(self):
+        with self.assertRaisesRegex(ValueError, "Legacy input alias removed"):
+            self.module.rewrite_bridge_args(
+                ["--input", "references/input-template-legacy-chat-feishu.json", "--out", "/tmp/custom-out"]
+            )
 
     def test_rewrite_bridge_args_preserves_explicit_custom_paths(self):
         rewritten = self.module.rewrite_bridge_args(
@@ -323,7 +414,13 @@ class RootBridgeBuilderTests(unittest.TestCase):
             ["--input", "/tmp/custom-input.json", "--out", "/tmp/custom-out"],
         )
 
-    def test_root_bridge_script_accepts_removed_legacy_input_alias(self):
+    def test_root_bridge_source_does_not_keep_default_input_injection(self):
+        content = ROOT_LEGACY_BUILD_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertNotIn("DEFAULT_INPUT_TEMPLATE", content)
+        self.assertNotIn('args.extend([option, str(preferred_value)])', content)
+
+    def test_root_bridge_script_rejects_removed_legacy_input_alias(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             result = subprocess.run(
                 [
@@ -340,9 +437,10 @@ class RootBridgeBuilderTests(unittest.TestCase):
                 check=False,
             )
 
-        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Legacy input alias removed", result.stderr or result.stdout)
 
-    def test_root_bridge_script_accepts_removed_plugin_alias(self):
+    def test_root_bridge_script_rejects_removed_plugin_alias(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             result = subprocess.run(
                 [
@@ -359,7 +457,26 @@ class RootBridgeBuilderTests(unittest.TestCase):
                 check=False,
             )
 
-        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Legacy input alias removed", result.stderr or result.stdout)
+
+    def test_root_bridge_script_requires_explicit_input_template(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = subprocess.run(
+                [
+                    "python3",
+                    str(ROOT_LEGACY_BUILD_SCRIPT),
+                    "--out",
+                    tmpdir,
+                ],
+                cwd=OUTER_SKILL_ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Explicit --input is required", result.stderr or result.stdout)
 
 
 class BuildSnippetV51Tests(unittest.TestCase):
@@ -423,6 +540,7 @@ class BuildSnippetV51Tests(unittest.TestCase):
                         "roleKey": "supervisor",
                         "name": "奥特曼",
                         "role": "主管总控",
+                        "visibleLabel": "主管",
                         "responsibility": "接单、拆解、调度、收口",
                         "mentionPatterns": ["@奥特曼", "奥特曼", "主管机器人"],
                         "systemPrompt": "supervisor prompt",
@@ -434,6 +552,7 @@ class BuildSnippetV51Tests(unittest.TestCase):
                             "accountId": "ops-bot",
                             "name": "小龙虾找妈妈",
                             "role": "运营专家",
+                            "visibleLabel": "运营",
                             "responsibility": "活动打法",
                             "visibility": "visible",
                             "systemPrompt": "ops prompt",
@@ -444,6 +563,7 @@ class BuildSnippetV51Tests(unittest.TestCase):
                             "accountId": "finance-bot",
                             "name": "易燃易爆",
                             "role": "财务专家",
+                            "visibleLabel": "财务",
                             "responsibility": "预算和 ROI",
                             "visibility": "visible",
                             "systemPrompt": "finance prompt",
@@ -794,6 +914,13 @@ class BuildSnippetV51Tests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.module.build_plugin_patch(data)
 
+    def test_v51_role_catalog_profiles_require_explicit_visible_label(self):
+        data = self.team_input_with_role_catalog()
+        data["roleCatalog"]["ops_default"].pop("visibleLabel")
+
+        with self.assertRaisesRegex(ValueError, "visibleLabel is required"):
+            self.module.build_plugin_patch(data)
+
     def test_v51_team_input_rejects_invalid_team_key(self):
         data = self.team_input()
         data["teams"][0]["teamKey"] = "市场一组"
@@ -1011,6 +1138,50 @@ class RuntimeRegistryTests(unittest.TestCase):
         )
         return result
 
+    def start_v51_job(
+        self,
+        db_path,
+        *,
+        title,
+        workflow_agents,
+        requested_by="SeaWorld",
+        group_peer_id="oc_demo",
+        supervisor_visible_label="主管",
+        participants=None,
+        extra_args=(),
+    ):
+        return self.run_registry(
+            db_path,
+            "start-job-with-workflow",
+            "--group-peer-id",
+            group_peer_id,
+            "--requested-by",
+            requested_by,
+            "--title",
+            title,
+            *extra_args,
+            "--supervisor-visible-label",
+            supervisor_visible_label,
+            "--workflow-json",
+            workflow_payload_json(*workflow_agents),
+            "--participants-json",
+            workflow_participants_json(*(participants or workflow_agents)),
+        )
+
+    def clear_workflow_visible_snapshots(self, db_path, job_ref, *, clear_supervisor=False, clear_agents=()):
+        conn = sqlite3.connect(db_path)
+        try:
+            if clear_supervisor:
+                conn.execute("UPDATE jobs SET supervisor_visible_label = '' WHERE job_ref = ?", (job_ref,))
+            for agent_id in clear_agents:
+                conn.execute(
+                    "UPDATE job_participants SET visible_label = '' WHERE job_ref = ? AND agent_id = ?",
+                    (job_ref, agent_id),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
     def test_registry_initializes_schema(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "team_jobs.db"
@@ -1081,6 +1252,8 @@ class RuntimeRegistryTests(unittest.TestCase):
                 "xiaolongxia",
                 "--role",
                 "运营执行",
+                "--visible-label",
+                "运营",
                 "--progress-message-id",
                 "om_ops_progress",
                 "--final-message-id",
@@ -1099,6 +1272,8 @@ class RuntimeRegistryTests(unittest.TestCase):
                 "yiran_yibao",
                 "--role",
                 "财务执行",
+                "--visible-label",
+                "财务",
                 "--progress-message-id",
                 "om_fin_progress",
                 "--final-message-id",
@@ -1166,6 +1341,8 @@ class RuntimeRegistryTests(unittest.TestCase):
                     account_id,
                     "--role",
                     role,
+                    "--visible-label",
+                    "运营" if "ops" in agent_id else "财务" if "finance" in agent_id else "法务",
                     "--progress-message-id",
                     progress_id,
                     "--final-message-id",
@@ -1216,6 +1393,8 @@ class RuntimeRegistryTests(unittest.TestCase):
                     account_id,
                     "--role",
                     role,
+                    "--visible-label",
+                    "运营" if "ops" in agent_id else "财务" if "finance" in agent_id else "法务",
                     "--dispatch-run-id",
                     f"run-{agent_id}",
                 )
@@ -1294,28 +1473,15 @@ class RuntimeRegistryTests(unittest.TestCase):
             db_path = Path(tmpdir) / "team_jobs.db"
 
             self.run_registry(db_path, "init-db")
-            started = self.run_registry(
+            started = self.start_v51_job(
                 db_path,
-                "start-job-with-workflow",
-                "--group-peer-id",
-                "oc_demo",
-                "--requested-by",
-                "ou_user",
-                "--title",
-                "V5.1 硬状态机任务",
-                "--workflow-json",
-                json.dumps(
-                    {
-                        "mode": "serial",
-                        "stages": [
-                            {"agentId": "ops_internal_main"},
-                            {"agentId": "finance_internal_main"},
-                        ],
-                    },
-                    ensure_ascii=False,
+                title="V5.1 硬状态机任务",
+                requested_by="ou_user",
+                workflow_agents=("ops_internal_main", "finance_internal_main"),
+                extra_args=(
+                    "--orchestrator-version",
+                    "V5.1 Hardening",
                 ),
-                "--orchestrator-version",
-                "V5.1 Hardening",
             )
 
             self.assertEqual(started.returncode, 0, started.stderr)
@@ -1328,26 +1494,11 @@ class RuntimeRegistryTests(unittest.TestCase):
             db_path = Path(tmpdir) / "team_jobs.db"
 
             self.run_registry(db_path, "init-db")
-            started = self.run_registry(
+            started = self.start_v51_job(
                 db_path,
-                "start-job-with-workflow",
-                "--group-peer-id",
-                "oc_demo",
-                "--requested-by",
-                "ou_user",
-                "--title",
-                "V5.1 串行推进任务",
-                "--workflow-json",
-                json.dumps(
-                    {
-                        "mode": "serial",
-                        "stages": [
-                            {"agentId": "ops_internal_main"},
-                            {"agentId": "finance_internal_main"},
-                        ],
-                    },
-                    ensure_ascii=False,
-                ),
+                title="V5.1 串行推进任务",
+                requested_by="ou_user",
+                workflow_agents=("ops_internal_main", "finance_internal_main"),
             )
             self.assertEqual(started.returncode, 0, started.stderr)
             job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
@@ -1493,51 +1644,21 @@ class RuntimeRegistryTests(unittest.TestCase):
             db_path = Path(tmpdir) / "team_jobs.db"
 
             self.run_registry(db_path, "init-db")
-            started = self.run_registry(
+            started = self.start_v51_job(
                 db_path,
-                "start-job-with-workflow",
-                "--group-peer-id",
-                "oc_demo",
-                "--requested-by",
-                "SeaWorld",
-                "--title",
-                "V5.1 上下文持久化",
-                "--request-text",
-                "请给出 3 天促销冲刺方案。",
-                "--entry-account-id",
-                "aoteman",
-                "--entry-channel",
-                "feishu",
-                "--entry-target",
-                "chat:oc_demo",
-                "--hidden-main-session-key",
-                "agent:supervisor_internal_main:main",
-                "--workflow-json",
-                json.dumps(
-                    {
-                        "mode": "serial",
-                        "stages": [
-                            {"agentId": "ops_internal_main"},
-                            {"agentId": "finance_internal_main"},
-                        ],
-                    },
-                    ensure_ascii=False,
-                ),
-                "--participants-json",
-                json.dumps(
-                    [
-                        {
-                            "agentId": "ops_internal_main",
-                            "accountId": "xiaolongxia",
-                            "role": "运营执行",
-                        },
-                        {
-                            "agentId": "finance_internal_main",
-                            "accountId": "yiran_yibao",
-                            "role": "财务执行",
-                        },
-                    ],
-                    ensure_ascii=False,
+                title="V5.1 上下文持久化",
+                workflow_agents=("ops_internal_main", "finance_internal_main"),
+                extra_args=(
+                    "--request-text",
+                    "请给出 3 天促销冲刺方案。",
+                    "--entry-account-id",
+                    "aoteman",
+                    "--entry-channel",
+                    "feishu",
+                    "--entry-target",
+                    "chat:oc_demo",
+                    "--hidden-main-session-key",
+                    "agent:supervisor_internal_main:main",
                 ),
             )
             self.assertEqual(started.returncode, 0, started.stderr)
@@ -1581,6 +1702,8 @@ class RuntimeRegistryTests(unittest.TestCase):
                 "yiran_yibao",
                 "--role",
                 "财务执行",
+                "--visible-label",
+                "财务",
                 "--status",
                 "accepted",
                 "--dispatch-run-id",
@@ -1606,7 +1729,7 @@ class RuntimeRegistryTests(unittest.TestCase):
 
             conn = sqlite3.connect(db_path)
             row = conn.execute(
-                "SELECT account_id, role FROM job_participants WHERE job_ref = ? AND agent_id = ?",
+                "SELECT account_id, role, visible_label FROM job_participants WHERE job_ref = ? AND agent_id = ?",
                 (job_ref, "finance_agent"),
             ).fetchone()
             conn.close()
@@ -1616,6 +1739,83 @@ class RuntimeRegistryTests(unittest.TestCase):
             self.assertIn('"agentId": "finance_agent"', completed.stdout)
             self.assertEqual(row[0], "yiran_yibao")
             self.assertEqual(row[1], "财务执行")
+            self.assertEqual(row[2], "财务")
+
+    def test_registry_mark_dispatch_requires_explicit_visible_label_without_existing_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "team_jobs.db"
+
+            self.run_registry(db_path, "init-db")
+            started = self.run_registry(
+                db_path,
+                "start-job",
+                "--group-peer-id",
+                "oc_demo",
+                "--requested-by",
+                "ou_user",
+                "--title",
+                "四月促销方案",
+            )
+            self.assertEqual(started.returncode, 0, started.stderr)
+            job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
+
+            dispatched = self.run_registry(
+                db_path,
+                "mark-dispatch",
+                "--job-ref",
+                job_ref,
+                "--agent-id",
+                "ops_agent",
+                "--account-id",
+                "xiaolongxia",
+                "--role",
+                "运营执行",
+                "--dispatch-run-id",
+                "run-ops",
+                "--dispatch-status",
+                "accepted",
+            )
+
+            self.assertEqual(dispatched.returncode, 2, dispatched.stdout)
+            self.assertIn('"status": "invalid_visible_label"', dispatched.stdout)
+            self.assertIn("participant visibleLabel snapshot is required", dispatched.stdout)
+
+    def test_registry_mark_worker_complete_requires_existing_snapshot_or_explicit_identity(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "team_jobs.db"
+
+            self.run_registry(db_path, "init-db")
+            started = self.run_registry(
+                db_path,
+                "start-job",
+                "--group-peer-id",
+                "oc_demo",
+                "--requested-by",
+                "ou_user",
+                "--title",
+                "四月促销方案",
+            )
+            self.assertEqual(started.returncode, 0, started.stderr)
+            job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
+
+            completed = self.run_registry(
+                db_path,
+                "mark-worker-complete",
+                "--job-ref",
+                job_ref,
+                "--agent-id",
+                "finance_agent",
+                "--progress-message-id",
+                "om_fin_progress",
+                "--final-message-id",
+                "om_fin_final",
+                "--summary",
+                "财务方案已完成",
+            )
+
+            self.assertEqual(completed.returncode, 2, completed.stdout)
+            self.assertIn('"status": "participant_identity_missing"', completed.stdout)
+            self.assertIn("accountId and role are required", completed.stdout)
 
     def test_registry_begin_turn_recovers_stale_job_before_reporting_active(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1845,6 +2045,8 @@ class RuntimeRegistryTests(unittest.TestCase):
                 "xiaolongxia",
                 "--role",
                 "运营执行",
+                "--visible-label",
+                "运营",
                 "--status",
                 "accepted",
                 "--dispatch-run-id",
@@ -1915,44 +2117,15 @@ class RuntimeRegistryTests(unittest.TestCase):
             db_path = Path(tmpdir) / "team_jobs.db"
 
             self.run_registry(db_path, "init-db")
-            started = self.run_registry(
+            started = self.start_v51_job(
                 db_path,
-                "start-job-with-workflow",
-                "--group-peer-id",
-                "oc_demo",
-                "--requested-by",
-                "ou_user",
-                "--title",
-                "V5.1 dispatch gap",
-                "--workflow-json",
-                json.dumps(
-                    {
-                        "mode": "serial",
-                        "stages": [
-                            {"agentId": "ops_internal_main"},
-                            {"agentId": "finance_internal_main"},
-                        ],
-                    },
-                    ensure_ascii=False,
+                title="V5.1 dispatch gap",
+                requested_by="ou_user",
+                workflow_agents=("ops_internal_main", "finance_internal_main"),
+                extra_args=(
+                    "--hidden-main-session-key",
+                    "agent:supervisor_internal_main:main",
                 ),
-                "--participants-json",
-                json.dumps(
-                    [
-                        {
-                            "agentId": "ops_internal_main",
-                            "accountId": "xiaolongxia",
-                            "role": "运营执行",
-                        },
-                        {
-                            "agentId": "finance_internal_main",
-                            "accountId": "yiran_yibao",
-                            "role": "财务执行",
-                        },
-                    ],
-                    ensure_ascii=False,
-                ),
-                "--hidden-main-session-key",
-                "agent:supervisor_internal_main:main",
             )
             self.assertEqual(started.returncode, 0, started.stderr)
 
@@ -1969,31 +2142,209 @@ class RuntimeRegistryTests(unittest.TestCase):
             self.assertNotIn('"status": "active_ok"', watchdog.stdout)
             self.assertIn('"status": "needs_dispatch_reconcile"', watchdog.stdout)
 
+    def test_watchdog_surfaces_invalid_visible_label_before_dispatch_reconcile(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "team_jobs.db"
+
+            self.run_registry(db_path, "init-db")
+            started = self.start_v51_job(
+                db_path,
+                title="V5.1 invalid snapshot watchdog",
+                requested_by="ou_user",
+                workflow_agents=("ops_internal_main", "finance_internal_main"),
+            )
+            self.assertEqual(started.returncode, 0, started.stderr)
+            job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
+            self.clear_workflow_visible_snapshots(
+                db_path,
+                job_ref,
+                clear_agents=("ops_internal_main",),
+            )
+
+            watchdog = self.run_registry(
+                db_path,
+                "watchdog-tick",
+                "--group-peer-id",
+                "oc_demo",
+                "--stale-seconds",
+                "999999",
+            )
+
+            self.assertEqual(watchdog.returncode, 0, watchdog.stderr)
+            self.assertIn('"status": "invalid_visible_label"', watchdog.stdout)
+            self.assertIn("workflow participant visibleLabel snapshot is required: ops_internal_main", watchdog.stdout)
+            self.assertNotIn('"status": "needs_dispatch_reconcile"', watchdog.stdout)
+
+    def test_begin_turn_surfaces_invalid_visible_label_in_recover_payload(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "team_jobs.db"
+
+            self.run_registry(db_path, "init-db")
+            started = self.start_v51_job(
+                db_path,
+                title="V5.1 invalid snapshot begin turn",
+                requested_by="ou_user",
+                workflow_agents=("ops_internal_main", "finance_internal_main"),
+            )
+            self.assertEqual(started.returncode, 0, started.stderr)
+            job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
+            self.clear_workflow_visible_snapshots(
+                db_path,
+                job_ref,
+                clear_agents=("ops_internal_main",),
+            )
+
+            begin_turn = self.run_registry(
+                db_path,
+                "begin-turn",
+                "--group-peer-id",
+                "oc_demo",
+                "--stale-seconds",
+                "999999",
+            )
+
+            self.assertEqual(begin_turn.returncode, 0, begin_turn.stderr)
+            self.assertIn('"status": "invalid_visible_label"', begin_turn.stdout)
+            self.assertIn("workflow participant visibleLabel snapshot is required: ops_internal_main", begin_turn.stdout)
+            self.assertNotIn('"status": "needs_dispatch_reconcile"', begin_turn.stdout)
+
+    def test_begin_turn_active_payload_surfaces_invalid_visible_label_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "team_jobs.db"
+
+            self.run_registry(db_path, "init-db")
+            started = self.start_v51_job(
+                db_path,
+                title="V5.1 invalid snapshot active payload",
+                requested_by="ou_user",
+                workflow_agents=("ops_internal_main", "finance_internal_main"),
+            )
+            self.assertEqual(started.returncode, 0, started.stderr)
+            job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
+            self.clear_workflow_visible_snapshots(
+                db_path,
+                job_ref,
+                clear_agents=("ops_internal_main",),
+            )
+
+            begin_turn = self.run_registry(
+                db_path,
+                "begin-turn",
+                "--group-peer-id",
+                "oc_demo",
+                "--stale-seconds",
+                "999999",
+            )
+
+            self.assertEqual(begin_turn.returncode, 0, begin_turn.stderr)
+            self.assertIn('"snapshotStatus": "invalid_visible_label"', begin_turn.stdout)
+            self.assertIn('"snapshotError": "workflow participant visibleLabel snapshot is required: ops_internal_main"', begin_turn.stdout)
+
+    def test_get_active_surfaces_invalid_visible_label_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "team_jobs.db"
+
+            self.run_registry(db_path, "init-db")
+            started = self.start_v51_job(
+                db_path,
+                title="V5.1 invalid snapshot get active",
+                requested_by="ou_user",
+                workflow_agents=("ops_internal_main", "finance_internal_main"),
+            )
+            self.assertEqual(started.returncode, 0, started.stderr)
+            job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
+            self.clear_workflow_visible_snapshots(
+                db_path,
+                job_ref,
+                clear_agents=("ops_internal_main",),
+            )
+
+            active = self.run_registry(
+                db_path,
+                "get-active",
+                "--group-peer-id",
+                "oc_demo",
+            )
+
+            self.assertEqual(active.returncode, 0, active.stderr)
+            self.assertIn('"status": "invalid_visible_label"', active.stdout)
+            self.assertIn('"snapshotStatus": "invalid_visible_label"', active.stdout)
+            self.assertIn("workflow participant visibleLabel snapshot is required: ops_internal_main", active.stdout)
+
+    def test_get_job_surfaces_invalid_visible_label_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "team_jobs.db"
+
+            self.run_registry(db_path, "init-db")
+            started = self.start_v51_job(
+                db_path,
+                title="V5.1 invalid snapshot get job",
+                requested_by="ou_user",
+                workflow_agents=("ops_internal_main", "finance_internal_main"),
+            )
+            self.assertEqual(started.returncode, 0, started.stderr)
+            job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
+            self.clear_workflow_visible_snapshots(
+                db_path,
+                job_ref,
+                clear_agents=("ops_internal_main",),
+            )
+
+            job = self.run_registry(
+                db_path,
+                "get-job",
+                "--job-ref",
+                job_ref,
+            )
+
+            self.assertEqual(job.returncode, 0, job.stderr)
+            self.assertIn('"status": "invalid_visible_label"', job.stdout)
+            self.assertIn('"snapshotStatus": "invalid_visible_label"', job.stdout)
+            self.assertIn("workflow participant visibleLabel snapshot is required: ops_internal_main", job.stdout)
+
+    def test_recover_stale_surfaces_invalid_visible_label_before_dispatch_reconcile(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "team_jobs.db"
+
+            self.run_registry(db_path, "init-db")
+            started = self.start_v51_job(
+                db_path,
+                title="V5.1 invalid snapshot recover stale",
+                requested_by="ou_user",
+                workflow_agents=("ops_internal_main", "finance_internal_main"),
+            )
+            self.assertEqual(started.returncode, 0, started.stderr)
+            job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
+            self.clear_workflow_visible_snapshots(
+                db_path,
+                job_ref,
+                clear_agents=("ops_internal_main",),
+            )
+
+            recover = self.run_registry(
+                db_path,
+                "recover-stale",
+                "--group-peer-id",
+                "oc_demo",
+                "--stale-seconds",
+                "999999",
+            )
+
+            self.assertEqual(recover.returncode, 0, recover.stderr)
+            self.assertIn('"status": "invalid_visible_label"', recover.stdout)
+            self.assertIn("workflow participant visibleLabel snapshot is required: ops_internal_main", recover.stdout)
+            self.assertNotIn('"status": "needs_dispatch_reconcile"', recover.stdout)
+
     def test_close_job_done_requires_rollup_visible_message_confirmation(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "team_jobs.db"
 
             self.run_registry(db_path, "init-db")
-            started = self.run_registry(
+            started = self.start_v51_job(
                 db_path,
-                "start-job-with-workflow",
-                "--group-peer-id",
-                "oc_demo",
-                "--requested-by",
-                "ou_user",
-                "--title",
-                "V5.1 rollup visibility",
-                "--workflow-json",
-                json.dumps(
-                    {
-                        "mode": "serial",
-                        "stages": [
-                            {"agentId": "ops_internal_main"},
-                            {"agentId": "finance_internal_main"},
-                        ],
-                    },
-                    ensure_ascii=False,
-                ),
+                title="V5.1 rollup visibility",
+                requested_by="ou_user",
+                workflow_agents=("ops_internal_main", "finance_internal_main"),
             )
             self.assertEqual(started.returncode, 0, started.stderr)
             job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
@@ -2091,52 +2442,22 @@ class RuntimeRegistryTests(unittest.TestCase):
             db_path = Path(tmpdir) / "team_jobs.db"
 
             self.run_registry(db_path, "init-db")
-            started = self.run_registry(
+            started = self.start_v51_job(
                 db_path,
-                "start-job-with-workflow",
-                "--group-peer-id",
-                "oc_demo",
-                "--requested-by",
-                "SeaWorld",
-                "--title",
-                "V5.1 canonical dispatch",
-                "--request-text",
-                "请给出 3 天促销冲刺方案，包含运营节奏、预算红线和风险预案。",
-                "--entry-account-id",
-                "aoteman",
-                "--entry-channel",
-                "feishu",
-                "--entry-target",
-                "chat:oc_demo",
-                "--workflow-json",
-                json.dumps(
-                    {
-                        "mode": "serial",
-                        "stages": [
-                            {"agentId": "ops_internal_main"},
-                            {"agentId": "finance_internal_main"},
-                        ],
-                    },
-                    ensure_ascii=False,
+                title="V5.1 canonical dispatch",
+                workflow_agents=("ops_internal_main", "finance_internal_main"),
+                extra_args=(
+                    "--request-text",
+                    "请给出 3 天促销冲刺方案，包含运营节奏、预算红线和风险预案。",
+                    "--entry-account-id",
+                    "aoteman",
+                    "--entry-channel",
+                    "feishu",
+                    "--entry-target",
+                    "chat:oc_demo",
+                    "--hidden-main-session-key",
+                    "agent:supervisor_internal_main:main",
                 ),
-                "--participants-json",
-                json.dumps(
-                    [
-                        {
-                            "agentId": "ops_internal_main",
-                            "accountId": "xiaolongxia",
-                            "role": "运营执行",
-                        },
-                        {
-                            "agentId": "finance_internal_main",
-                            "accountId": "yiran_yibao",
-                            "role": "财务执行",
-                        },
-                    ],
-                    ensure_ascii=False,
-                ),
-                "--hidden-main-session-key",
-                "agent:supervisor_internal_main:main",
             )
             self.assertEqual(started.returncode, 0, started.stderr)
             job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
@@ -2167,28 +2488,17 @@ class RuntimeRegistryTests(unittest.TestCase):
             db_path = Path(tmpdir) / "team_jobs.db"
 
             self.run_registry(db_path, "init-db")
-            started = self.run_registry(
+            started = self.start_v51_job(
                 db_path,
-                "start-job-with-workflow",
-                "--group-peer-id",
-                "oc_demo",
-                "--requested-by",
-                "SeaWorld",
-                "--title",
-                "V5.1 ack",
-                "--entry-account-id",
-                "aoteman",
-                "--entry-channel",
-                "feishu",
-                "--entry-target",
-                "chat:oc_demo",
-                "--workflow-json",
-                json.dumps(
-                    {
-                        "mode": "serial",
-                        "stages": [{"agentId": "ops_internal_main"}],
-                    },
-                    ensure_ascii=False,
+                title="V5.1 ack",
+                workflow_agents=("ops_internal_main",),
+                extra_args=(
+                    "--entry-account-id",
+                    "aoteman",
+                    "--entry-channel",
+                    "feishu",
+                    "--entry-target",
+                    "chat:oc_demo",
                 ),
             )
             self.assertEqual(started.returncode, 0, started.stderr)
@@ -2201,9 +2511,9 @@ class RuntimeRegistryTests(unittest.TestCase):
             self.assertIn('"accountId": "aoteman"', ack.stdout)
             self.assertIn('"target": "chat:oc_demo"', ack.stdout)
             self.assertIn(f"【主管已接单｜{job_ref}】", ack.stdout)
-            self.assertIn("任务已受理，按固定顺序推进，请稍候查看进度。", ack.stdout)
+            self.assertIn("任务已受理，正分配给运营处理，请稍候查看进度。", ack.stdout)
 
-    def test_registry_build_visible_ack_lists_worker_roles_in_workflow_order(self):
+    def test_start_job_with_workflow_rejects_missing_participant_visible_labels(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "team_jobs.db"
 
@@ -2216,13 +2526,15 @@ class RuntimeRegistryTests(unittest.TestCase):
                 "--requested-by",
                 "SeaWorld",
                 "--title",
-                "V5.1 ack dynamic roles",
+                "V5.1 participant visible label required",
                 "--entry-account-id",
                 "aoteman",
                 "--entry-channel",
                 "feishu",
                 "--entry-target",
                 "chat:oc_demo",
+                "--supervisor-visible-label",
+                "主管",
                 "--workflow-json",
                 json.dumps(
                     {
@@ -2246,21 +2558,95 @@ class RuntimeRegistryTests(unittest.TestCase):
                             "agentId": "finance_internal_main",
                             "accountId": "finance-bot",
                             "role": "财务专家",
+                            "visibleLabel": "财审",
                         },
                     ],
                     ensure_ascii=False,
                 ),
             )
-            self.assertEqual(started.returncode, 0, started.stderr)
-            job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
+            self.assertEqual(started.returncode, 2, started.stderr)
+            self.assertIn('"status": "invalid_workflow"', started.stdout)
+            self.assertIn("participants_json[0].visibleLabel is required", started.stdout)
 
-            ack = self.run_registry(db_path, "build-visible-ack", "--job-ref", job_ref)
+    def test_start_job_with_workflow_rejects_missing_participants_json(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "team_jobs.db"
 
-            self.assertEqual(ack.returncode, 0, ack.stderr)
-            self.assertIn(
-                "任务已受理，正分配给运营专家和财务专家处理，请稍候查看进度。",
-                ack.stdout,
+            self.run_registry(db_path, "init-db")
+            started = self.run_registry(
+                db_path,
+                "start-job-with-workflow",
+                "--group-peer-id",
+                "oc_demo",
+                "--requested-by",
+                "SeaWorld",
+                "--title",
+                "V5.1 participants required",
+                "--entry-account-id",
+                "aoteman",
+                "--entry-channel",
+                "feishu",
+                "--entry-target",
+                "chat:oc_demo",
+                "--supervisor-visible-label",
+                "主管",
+                "--workflow-json",
+                json.dumps(
+                    {
+                        "mode": "serial",
+                        "stages": [{"agentId": "ops_internal_main"}],
+                    },
+                    ensure_ascii=False,
+                ),
             )
+            self.assertEqual(started.returncode, 2, started.stderr)
+            self.assertIn('"status": "invalid_workflow"', started.stdout)
+            self.assertIn("participants_json is required", started.stdout)
+
+    def test_start_job_with_workflow_rejects_missing_supervisor_visible_label(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "team_jobs.db"
+
+            self.run_registry(db_path, "init-db")
+            started = self.run_registry(
+                db_path,
+                "start-job-with-workflow",
+                "--group-peer-id",
+                "oc_demo",
+                "--requested-by",
+                "SeaWorld",
+                "--title",
+                "V5.1 supervisor visible label required",
+                "--entry-account-id",
+                "aoteman",
+                "--entry-channel",
+                "feishu",
+                "--entry-target",
+                "chat:oc_demo",
+                "--workflow-json",
+                json.dumps(
+                    {
+                        "mode": "serial",
+                        "stages": [{"agentId": "ops_internal_main"}],
+                    },
+                    ensure_ascii=False,
+                ),
+                "--participants-json",
+                json.dumps(
+                    [
+                        {
+                            "agentId": "ops_internal_main",
+                            "accountId": "ops-bot",
+                            "role": "运营专家",
+                            "visibleLabel": "运营",
+                        }
+                    ],
+                    ensure_ascii=False,
+                ),
+            )
+            self.assertEqual(started.returncode, 2, started.stderr)
+            self.assertIn('"status": "invalid_workflow"', started.stdout)
+            self.assertIn("supervisor_visible_label is required", started.stdout)
 
     def test_registry_visible_messages_use_persisted_visible_label_snapshots(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -2398,28 +2784,17 @@ class RuntimeRegistryTests(unittest.TestCase):
             db_path = Path(tmpdir) / "team_jobs.db"
 
             self.run_registry(db_path, "init-db")
-            started = self.run_registry(
+            started = self.start_v51_job(
                 db_path,
-                "start-job-with-workflow",
-                "--group-peer-id",
-                "oc_demo",
-                "--requested-by",
-                "SeaWorld",
-                "--title",
-                "V5.1 rollup message",
-                "--entry-account-id",
-                "aoteman",
-                "--entry-channel",
-                "feishu",
-                "--entry-target",
-                "chat:oc_demo",
-                "--workflow-json",
-                json.dumps(
-                    {
-                        "mode": "serial",
-                        "stages": [{"agentId": "ops_internal_main"}],
-                    },
-                    ensure_ascii=False,
+                title="V5.1 rollup message",
+                workflow_agents=("ops_internal_main",),
+                extra_args=(
+                    "--entry-account-id",
+                    "aoteman",
+                    "--entry-channel",
+                    "feishu",
+                    "--entry-target",
+                    "chat:oc_demo",
                 ),
             )
             self.assertEqual(started.returncode, 0, started.stderr)
@@ -2477,49 +2852,19 @@ class RuntimeRegistryTests(unittest.TestCase):
             db_path = Path(tmpdir) / "team_jobs.db"
 
             self.run_registry(db_path, "init-db")
-            started = self.run_registry(
+            started = self.start_v51_job(
                 db_path,
-                "start-job-with-workflow",
-                "--group-peer-id",
-                "oc_demo",
-                "--requested-by",
-                "SeaWorld",
-                "--title",
-                "V5.1 structured rollup",
-                "--request-text",
-                "请产出完整的 3 天促销冲刺执行方案。",
-                "--entry-account-id",
-                "aoteman",
-                "--entry-channel",
-                "feishu",
-                "--entry-target",
-                "chat:oc_demo",
-                "--workflow-json",
-                json.dumps(
-                    {
-                        "mode": "serial",
-                        "stages": [
-                            {"agentId": "ops_internal_main"},
-                            {"agentId": "finance_internal_main"},
-                        ],
-                    },
-                    ensure_ascii=False,
-                ),
-                "--participants-json",
-                json.dumps(
-                    [
-                        {
-                            "agentId": "ops_internal_main",
-                            "accountId": "xiaolongxia",
-                            "role": "运营执行",
-                        },
-                        {
-                            "agentId": "finance_internal_main",
-                            "accountId": "yiran_yibao",
-                            "role": "财务执行",
-                        },
-                    ],
-                    ensure_ascii=False,
+                title="V5.1 structured rollup",
+                workflow_agents=("ops_internal_main", "finance_internal_main"),
+                extra_args=(
+                    "--request-text",
+                    "请产出完整的 3 天促销冲刺执行方案。",
+                    "--entry-account-id",
+                    "aoteman",
+                    "--entry-channel",
+                    "feishu",
+                    "--entry-target",
+                    "chat:oc_demo",
                 ),
             )
             self.assertEqual(started.returncode, 0, started.stderr)
@@ -2603,28 +2948,17 @@ class RuntimeRegistryTests(unittest.TestCase):
             db_path = Path(tmpdir) / "team_jobs.db"
 
             self.run_registry(db_path, "init-db")
-            started = self.run_registry(
+            started = self.start_v51_job(
                 db_path,
-                "start-job-with-workflow",
-                "--group-peer-id",
-                "oc_demo",
-                "--requested-by",
-                "SeaWorld",
-                "--title",
-                "V5.1 visible flags",
-                "--entry-account-id",
-                "aoteman",
-                "--entry-channel",
-                "feishu",
-                "--entry-target",
-                "chat:oc_demo",
-                "--workflow-json",
-                json.dumps(
-                    {
-                        "mode": "serial",
-                        "stages": [{"agentId": "ops_internal_main"}],
-                    },
-                    ensure_ascii=False,
+                title="V5.1 visible flags",
+                workflow_agents=("ops_internal_main",),
+                extra_args=(
+                    "--entry-account-id",
+                    "aoteman",
+                    "--entry-channel",
+                    "feishu",
+                    "--entry-target",
+                    "chat:oc_demo",
                 ),
             )
             self.assertEqual(started.returncode, 0, started.stderr)
@@ -2699,23 +3033,10 @@ class RuntimeRegistryTests(unittest.TestCase):
             db_path = Path(tmpdir) / "team_jobs.db"
 
             self.run_registry(db_path, "init-db")
-            started = self.run_registry(
+            started = self.start_v51_job(
                 db_path,
-                "start-job-with-workflow",
-                "--group-peer-id",
-                "oc_demo",
-                "--requested-by",
-                "SeaWorld",
-                "--title",
-                "V5.1 rollup gap",
-                "--workflow-json",
-                json.dumps(
-                    {
-                        "mode": "serial",
-                        "stages": [{"agentId": "ops_internal_main"}],
-                    },
-                    ensure_ascii=False,
-                ),
+                title="V5.1 rollup gap",
+                workflow_agents=("ops_internal_main",),
             )
             self.assertEqual(started.returncode, 0, started.stderr)
             job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
@@ -2776,34 +3097,10 @@ class RuntimeRegistryTests(unittest.TestCase):
             db_path = Path(tmpdir) / "team_jobs.db"
 
             self.run_registry(db_path, "init-db")
-            started = self.run_registry(
+            started = self.start_v51_job(
                 db_path,
-                "start-job-with-workflow",
-                "--group-peer-id",
-                "oc_demo",
-                "--requested-by",
-                "SeaWorld",
-                "--title",
-                "V5.1 wait worker",
-                "--workflow-json",
-                json.dumps(
-                    {
-                        "mode": "serial",
-                        "stages": [{"agentId": "ops_internal_main"}],
-                    },
-                    ensure_ascii=False,
-                ),
-                "--participants-json",
-                json.dumps(
-                    [
-                        {
-                            "agentId": "ops_internal_main",
-                            "accountId": "xiaolongxia",
-                            "role": "运营执行",
-                        }
-                    ],
-                    ensure_ascii=False,
-                ),
+                title="V5.1 wait worker",
+                workflow_agents=("ops_internal_main",),
             )
             self.assertEqual(started.returncode, 0, started.stderr)
             job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
@@ -2856,6 +3153,36 @@ class V51ReconcileTests(unittest.TestCase):
             check=False,
         )
 
+    def start_v51_job(
+        self,
+        db_path,
+        *,
+        title,
+        workflow_agents,
+        requested_by="SeaWorld",
+        group_peer_id="oc_demo",
+        supervisor_visible_label="主管",
+        participants=None,
+        extra_args=(),
+    ):
+        return self.run_registry(
+            db_path,
+            "start-job-with-workflow",
+            "--group-peer-id",
+            group_peer_id,
+            "--requested-by",
+            requested_by,
+            "--title",
+            title,
+            *extra_args,
+            "--supervisor-visible-label",
+            supervisor_visible_label,
+            "--workflow-json",
+            workflow_payload_json(*workflow_agents),
+            "--participants-json",
+            workflow_participants_json(*(participants or workflow_agents)),
+        )
+
     def run_reconcile(self, manifest_path, team_key, openclaw_home, openclaw_bin, *args):
         return subprocess.run(
             [
@@ -2891,6 +3218,7 @@ class V51ReconcileTests(unittest.TestCase):
                     "supervisor": {
                         "agentId": "supervisor_internal_main",
                         "accountId": "aoteman",
+                        "visibleLabel": "主管",
                         "hiddenMainSessionKey": "agent:supervisor_internal_main:main",
                     },
                     "workers": [
@@ -2898,12 +3226,14 @@ class V51ReconcileTests(unittest.TestCase):
                             "agentId": "ops_internal_main",
                             "accountId": "xiaolongxia",
                             "role": "运营执行",
+                            "visibleLabel": "运营",
                             "groupSessionKey": f"agent:ops_internal_main:feishu:group:{group_peer_id}",
                         },
                         {
                             "agentId": "finance_internal_main",
                             "accountId": "yiran_yibao",
                             "role": "财务执行",
+                            "visibleLabel": "财务",
                             "groupSessionKey": f"agent:finance_internal_main:feishu:group:{group_peer_id}",
                         },
                     ],
@@ -3796,45 +4126,23 @@ else:
             self.write_manifest(manifest_path, db_path)
             self.make_fake_openclaw(fake_openclaw, fake_log)
 
-            started = self.run_registry(
+            started = self.start_v51_job(
                 db_path,
-                "start-job-with-workflow",
-                "--group-peer-id",
-                "oc_demo",
-                "--requested-by",
-                "SeaWorld",
-                "--source-message-id",
-                "om_retry_seed",
-                "--title",
-                "worker no reply retry",
-                "--request-text",
-                "请生成完整方案。",
-                "--entry-account-id",
-                "aoteman",
-                "--entry-channel",
-                "feishu",
-                "--entry-target",
-                "chat:oc_demo",
-                "--hidden-main-session-key",
-                "agent:supervisor_internal_main:main",
-                "--workflow-json",
-                json.dumps(
-                    {
-                        "mode": "serial",
-                        "stages": [{"agentId": "ops_internal_main"}],
-                    },
-                    ensure_ascii=False,
-                ),
-                "--participants-json",
-                json.dumps(
-                    [
-                        {
-                            "agentId": "ops_internal_main",
-                            "accountId": "xiaolongxia",
-                            "role": "运营执行",
-                        }
-                    ],
-                    ensure_ascii=False,
+                title="worker no reply retry",
+                workflow_agents=("ops_internal_main",),
+                extra_args=(
+                    "--source-message-id",
+                    "om_retry_seed",
+                    "--request-text",
+                    "请生成完整方案。",
+                    "--entry-account-id",
+                    "aoteman",
+                    "--entry-channel",
+                    "feishu",
+                    "--entry-target",
+                    "chat:oc_demo",
+                    "--hidden-main-session-key",
+                    "agent:supervisor_internal_main:main",
                 ),
             )
             self.assertEqual(started.returncode, 0, started.stderr)
@@ -3906,45 +4214,23 @@ else:
             self.write_manifest(manifest_path, db_path)
             self.make_retrying_fake_openclaw(fake_openclaw, fake_log, openclaw_home)
 
-            started = self.run_registry(
+            started = self.start_v51_job(
                 db_path,
-                "start-job-with-workflow",
-                "--group-peer-id",
-                "oc_demo",
-                "--requested-by",
-                "SeaWorld",
-                "--source-message-id",
-                "om_worker_retry_loop",
-                "--title",
-                "worker no reply loop recovery",
-                "--request-text",
-                "请生成完整方案。",
-                "--entry-account-id",
-                "aoteman",
-                "--entry-channel",
-                "feishu",
-                "--entry-target",
-                "chat:oc_demo",
-                "--hidden-main-session-key",
-                "agent:supervisor_internal_main:main",
-                "--workflow-json",
-                json.dumps(
-                    {
-                        "mode": "serial",
-                        "stages": [{"agentId": "ops_internal_main"}],
-                    },
-                    ensure_ascii=False,
-                ),
-                "--participants-json",
-                json.dumps(
-                    [
-                        {
-                            "agentId": "ops_internal_main",
-                            "accountId": "xiaolongxia",
-                            "role": "运营执行",
-                        }
-                    ],
-                    ensure_ascii=False,
+                title="worker no reply loop recovery",
+                workflow_agents=("ops_internal_main",),
+                extra_args=(
+                    "--source-message-id",
+                    "om_worker_retry_loop",
+                    "--request-text",
+                    "请生成完整方案。",
+                    "--entry-account-id",
+                    "aoteman",
+                    "--entry-channel",
+                    "feishu",
+                    "--entry-target",
+                    "chat:oc_demo",
+                    "--hidden-main-session-key",
+                    "agent:supervisor_internal_main:main",
                 ),
             )
             self.assertEqual(started.returncode, 0, started.stderr)
@@ -4009,53 +4295,23 @@ else:
             self.write_manifest(manifest_path, db_path)
             self.make_fake_openclaw(fake_openclaw, fake_log)
 
-            started = self.run_registry(
+            started = self.start_v51_job(
                 db_path,
-                "start-job-with-workflow",
-                "--group-peer-id",
-                "oc_demo",
-                "--requested-by",
-                "SeaWorld",
-                "--source-message-id",
-                "om_hidden_main_valid",
-                "--title",
-                "hidden main callback retry",
-                "--request-text",
-                "请生成完整方案。",
-                "--entry-account-id",
-                "aoteman",
-                "--entry-channel",
-                "feishu",
-                "--entry-target",
-                "chat:oc_demo",
-                "--hidden-main-session-key",
-                "agent:supervisor_internal_main:main",
-                "--workflow-json",
-                json.dumps(
-                    {
-                        "mode": "serial",
-                        "stages": [
-                            {"agentId": "ops_internal_main"},
-                            {"agentId": "finance_internal_main"},
-                        ],
-                    },
-                    ensure_ascii=False,
-                ),
-                "--participants-json",
-                json.dumps(
-                    [
-                        {
-                            "agentId": "ops_internal_main",
-                            "accountId": "xiaolongxia",
-                            "role": "运营执行",
-                        },
-                        {
-                            "agentId": "finance_internal_main",
-                            "accountId": "yiran_yibao",
-                            "role": "财务执行",
-                        },
-                    ],
-                    ensure_ascii=False,
+                title="hidden main callback retry",
+                workflow_agents=("ops_internal_main", "finance_internal_main"),
+                extra_args=(
+                    "--source-message-id",
+                    "om_hidden_main_valid",
+                    "--request-text",
+                    "请生成完整方案。",
+                    "--entry-account-id",
+                    "aoteman",
+                    "--entry-channel",
+                    "feishu",
+                    "--entry-target",
+                    "chat:oc_demo",
+                    "--hidden-main-session-key",
+                    "agent:supervisor_internal_main:main",
                 ),
             )
             self.assertEqual(started.returncode, 0, started.stderr)
@@ -4141,45 +4397,23 @@ else:
             self.write_manifest(manifest_path, db_path)
             self.make_fake_openclaw(fake_openclaw, fake_log)
 
-            started = self.run_registry(
+            started = self.start_v51_job(
                 db_path,
-                "start-job-with-workflow",
-                "--group-peer-id",
-                "oc_demo",
-                "--requested-by",
-                "SeaWorld",
-                "--source-message-id",
-                "om_hidden_main_invalid",
-                "--title",
-                "hidden main invalid callback retry",
-                "--request-text",
-                "请生成完整方案。",
-                "--entry-account-id",
-                "aoteman",
-                "--entry-channel",
-                "feishu",
-                "--entry-target",
-                "chat:oc_demo",
-                "--hidden-main-session-key",
-                "agent:supervisor_internal_main:main",
-                "--workflow-json",
-                json.dumps(
-                    {
-                        "mode": "serial",
-                        "stages": [{"agentId": "ops_internal_main"}],
-                    },
-                    ensure_ascii=False,
-                ),
-                "--participants-json",
-                json.dumps(
-                    [
-                        {
-                            "agentId": "ops_internal_main",
-                            "accountId": "xiaolongxia",
-                            "role": "运营执行",
-                        }
-                    ],
-                    ensure_ascii=False,
+                title="hidden main invalid callback retry",
+                workflow_agents=("ops_internal_main",),
+                extra_args=(
+                    "--source-message-id",
+                    "om_hidden_main_invalid",
+                    "--request-text",
+                    "请生成完整方案。",
+                    "--entry-account-id",
+                    "aoteman",
+                    "--entry-channel",
+                    "feishu",
+                    "--entry-target",
+                    "chat:oc_demo",
+                    "--hidden-main-session-key",
+                    "agent:supervisor_internal_main:main",
                 ),
             )
             self.assertEqual(started.returncode, 0, started.stderr)
@@ -4261,53 +4495,23 @@ else:
             self.write_manifest(manifest_path, db_path)
             self.make_fake_openclaw(fake_openclaw, fake_log)
 
-            started = self.run_registry(
+            started = self.start_v51_job(
                 db_path,
-                "start-job-with-workflow",
-                "--group-peer-id",
-                "oc_demo",
-                "--requested-by",
-                "SeaWorld",
-                "--source-message-id",
-                "om_hidden_main_mixed",
-                "--title",
-                "hidden main mixed callbacks",
-                "--request-text",
-                "请生成完整方案。",
-                "--entry-account-id",
-                "aoteman",
-                "--entry-channel",
-                "feishu",
-                "--entry-target",
-                "chat:oc_demo",
-                "--hidden-main-session-key",
-                "agent:supervisor_internal_main:main",
-                "--workflow-json",
-                json.dumps(
-                    {
-                        "mode": "serial",
-                        "stages": [
-                            {"agentId": "ops_internal_main"},
-                            {"agentId": "finance_internal_main"},
-                        ],
-                    },
-                    ensure_ascii=False,
-                ),
-                "--participants-json",
-                json.dumps(
-                    [
-                        {
-                            "agentId": "ops_internal_main",
-                            "accountId": "xiaolongxia",
-                            "role": "运营执行",
-                        },
-                        {
-                            "agentId": "finance_internal_main",
-                            "accountId": "yiran_yibao",
-                            "role": "财务执行",
-                        },
-                    ],
-                    ensure_ascii=False,
+                title="hidden main mixed callbacks",
+                workflow_agents=("ops_internal_main", "finance_internal_main"),
+                extra_args=(
+                    "--source-message-id",
+                    "om_hidden_main_mixed",
+                    "--request-text",
+                    "请生成完整方案。",
+                    "--entry-account-id",
+                    "aoteman",
+                    "--entry-channel",
+                    "feishu",
+                    "--entry-target",
+                    "chat:oc_demo",
+                    "--hidden-main-session-key",
+                    "agent:supervisor_internal_main:main",
                 ),
             )
             self.assertEqual(started.returncode, 0, started.stderr)
@@ -4392,53 +4596,23 @@ else:
             self.write_manifest(manifest_path, db_path)
             self.make_fake_openclaw(fake_openclaw, fake_log)
 
-            started = self.run_registry(
+            started = self.start_v51_job(
                 db_path,
-                "start-job-with-workflow",
-                "--group-peer-id",
-                "oc_demo",
-                "--requested-by",
-                "SeaWorld",
-                "--source-message-id",
-                "om_hidden_main_placeholder",
-                "--title",
-                "hidden main placeholder callback",
-                "--request-text",
-                "请生成完整方案。",
-                "--entry-account-id",
-                "aoteman",
-                "--entry-channel",
-                "feishu",
-                "--entry-target",
-                "chat:oc_demo",
-                "--hidden-main-session-key",
-                "agent:supervisor_internal_main:main",
-                "--workflow-json",
-                json.dumps(
-                    {
-                        "mode": "serial",
-                        "stages": [
-                            {"agentId": "ops_internal_main"},
-                            {"agentId": "finance_internal_main"},
-                        ],
-                    },
-                    ensure_ascii=False,
-                ),
-                "--participants-json",
-                json.dumps(
-                    [
-                        {
-                            "agentId": "ops_internal_main",
-                            "accountId": "xiaolongxia",
-                            "role": "运营执行",
-                        },
-                        {
-                            "agentId": "finance_internal_main",
-                            "accountId": "yiran_yibao",
-                            "role": "财务执行",
-                        },
-                    ],
-                    ensure_ascii=False,
+                title="hidden main placeholder callback",
+                workflow_agents=("ops_internal_main", "finance_internal_main"),
+                extra_args=(
+                    "--source-message-id",
+                    "om_hidden_main_placeholder",
+                    "--request-text",
+                    "请生成完整方案。",
+                    "--entry-account-id",
+                    "aoteman",
+                    "--entry-channel",
+                    "feishu",
+                    "--entry-target",
+                    "chat:oc_demo",
+                    "--hidden-main-session-key",
+                    "agent:supervisor_internal_main:main",
                 ),
             )
             self.assertEqual(started.returncode, 0, started.stderr)
@@ -4523,53 +4697,23 @@ else:
             self.write_manifest(manifest_path, db_path)
             self.make_fake_openclaw(fake_openclaw, fake_log)
 
-            started = self.run_registry(
+            started = self.start_v51_job(
                 db_path,
-                "start-job-with-workflow",
-                "--group-peer-id",
-                "oc_demo",
-                "--requested-by",
-                "SeaWorld",
-                "--source-message-id",
-                "om_hidden_main_transcript_recovery",
-                "--title",
-                "hidden main transcript recovery",
-                "--request-text",
-                "请生成完整方案。",
-                "--entry-account-id",
-                "aoteman",
-                "--entry-channel",
-                "feishu",
-                "--entry-target",
-                "chat:oc_demo",
-                "--hidden-main-session-key",
-                "agent:supervisor_internal_main:main",
-                "--workflow-json",
-                json.dumps(
-                    {
-                        "mode": "serial",
-                        "stages": [
-                            {"agentId": "ops_internal_main"},
-                            {"agentId": "finance_internal_main"},
-                        ],
-                    },
-                    ensure_ascii=False,
-                ),
-                "--participants-json",
-                json.dumps(
-                    [
-                        {
-                            "agentId": "ops_internal_main",
-                            "accountId": "xiaolongxia",
-                            "role": "运营执行",
-                        },
-                        {
-                            "agentId": "finance_internal_main",
-                            "accountId": "yiran_yibao",
-                            "role": "财务执行",
-                        },
-                    ],
-                    ensure_ascii=False,
+                title="hidden main transcript recovery",
+                workflow_agents=("ops_internal_main", "finance_internal_main"),
+                extra_args=(
+                    "--source-message-id",
+                    "om_hidden_main_transcript_recovery",
+                    "--request-text",
+                    "请生成完整方案。",
+                    "--entry-account-id",
+                    "aoteman",
+                    "--entry-channel",
+                    "feishu",
+                    "--entry-target",
+                    "chat:oc_demo",
+                    "--hidden-main-session-key",
+                    "agent:supervisor_internal_main:main",
                 ),
             )
             self.assertEqual(started.returncode, 0, started.stderr)
@@ -4647,53 +4791,23 @@ else:
             self.write_manifest(manifest_path, db_path)
             self.make_fake_openclaw(fake_openclaw, fake_log)
 
-            started = self.run_registry(
+            started = self.start_v51_job(
                 db_path,
-                "start-job-with-workflow",
-                "--group-peer-id",
-                "oc_demo",
-                "--requested-by",
-                "SeaWorld",
-                "--source-message-id",
-                "om_worker_transcript_only",
-                "--title",
-                "worker transcript callback only",
-                "--request-text",
-                "请生成完整方案。",
-                "--entry-account-id",
-                "aoteman",
-                "--entry-channel",
-                "feishu",
-                "--entry-target",
-                "chat:oc_demo",
-                "--hidden-main-session-key",
-                "agent:supervisor_internal_main:main",
-                "--workflow-json",
-                json.dumps(
-                    {
-                        "mode": "serial",
-                        "stages": [
-                            {"agentId": "ops_internal_main"},
-                            {"agentId": "finance_internal_main"},
-                        ],
-                    },
-                    ensure_ascii=False,
-                ),
-                "--participants-json",
-                json.dumps(
-                    [
-                        {
-                            "agentId": "ops_internal_main",
-                            "accountId": "xiaolongxia",
-                            "role": "运营执行",
-                        },
-                        {
-                            "agentId": "finance_internal_main",
-                            "accountId": "yiran_yibao",
-                            "role": "财务执行",
-                        },
-                    ],
-                    ensure_ascii=False,
+                title="worker transcript callback only",
+                workflow_agents=("ops_internal_main", "finance_internal_main"),
+                extra_args=(
+                    "--source-message-id",
+                    "om_worker_transcript_only",
+                    "--request-text",
+                    "请生成完整方案。",
+                    "--entry-account-id",
+                    "aoteman",
+                    "--entry-channel",
+                    "feishu",
+                    "--entry-target",
+                    "chat:oc_demo",
+                    "--hidden-main-session-key",
+                    "agent:supervisor_internal_main:main",
                 ),
             )
             self.assertEqual(started.returncode, 0, started.stderr)
@@ -4793,45 +4907,23 @@ else:
             self.write_manifest(manifest_path, db_path)
             self.make_fake_openclaw(fake_openclaw, fake_log)
 
-            started = self.run_registry(
+            started = self.start_v51_job(
                 db_path,
-                "start-job-with-workflow",
-                "--group-peer-id",
-                "oc_demo",
-                "--requested-by",
-                "SeaWorld",
-                "--source-message-id",
-                "om_rollup_entry",
-                "--title",
-                "V5.1 rollup reconcile",
-                "--request-text",
-                "请生成完整方案。",
-                "--entry-account-id",
-                "aoteman",
-                "--entry-channel",
-                "feishu",
-                "--entry-target",
-                "chat:oc_demo",
-                "--hidden-main-session-key",
-                "agent:supervisor_internal_main:main",
-                "--workflow-json",
-                json.dumps(
-                    {
-                        "mode": "serial",
-                        "stages": [{"agentId": "ops_internal_main"}],
-                    },
-                    ensure_ascii=False,
-                ),
-                "--participants-json",
-                json.dumps(
-                    [
-                        {
-                            "agentId": "ops_internal_main",
-                            "accountId": "xiaolongxia",
-                            "role": "运营执行",
-                        }
-                    ],
-                    ensure_ascii=False,
+                title="V5.1 rollup reconcile",
+                workflow_agents=("ops_internal_main",),
+                extra_args=(
+                    "--source-message-id",
+                    "om_rollup_entry",
+                    "--request-text",
+                    "请生成完整方案。",
+                    "--entry-account-id",
+                    "aoteman",
+                    "--entry-channel",
+                    "feishu",
+                    "--entry-target",
+                    "chat:oc_demo",
+                    "--hidden-main-session-key",
+                    "agent:supervisor_internal_main:main",
                 ),
             )
             self.assertEqual(started.returncode, 0, started.stderr)
@@ -4913,45 +5005,23 @@ else:
             self.write_manifest(manifest_path, db_path)
             self.make_fake_openclaw(fake_openclaw, fake_log)
 
-            started = self.run_registry(
+            started = self.start_v51_job(
                 db_path,
-                "start-job-with-workflow",
-                "--group-peer-id",
-                "oc_demo",
-                "--requested-by",
-                "SeaWorld",
-                "--source-message-id",
-                "om_rollup_existing",
-                "--title",
-                "V5.1 existing rollup",
-                "--request-text",
-                "请生成完整方案。",
-                "--entry-account-id",
-                "aoteman",
-                "--entry-channel",
-                "feishu",
-                "--entry-target",
-                "chat:oc_demo",
-                "--hidden-main-session-key",
-                "agent:supervisor_internal_main:main",
-                "--workflow-json",
-                json.dumps(
-                    {
-                        "mode": "serial",
-                        "stages": [{"agentId": "ops_internal_main"}],
-                    },
-                    ensure_ascii=False,
-                ),
-                "--participants-json",
-                json.dumps(
-                    [
-                        {
-                            "agentId": "ops_internal_main",
-                            "accountId": "xiaolongxia",
-                            "role": "运营执行",
-                        }
-                    ],
-                    ensure_ascii=False,
+                title="V5.1 existing rollup",
+                workflow_agents=("ops_internal_main",),
+                extra_args=(
+                    "--source-message-id",
+                    "om_rollup_existing",
+                    "--request-text",
+                    "请生成完整方案。",
+                    "--entry-account-id",
+                    "aoteman",
+                    "--entry-channel",
+                    "feishu",
+                    "--entry-target",
+                    "chat:oc_demo",
+                    "--hidden-main-session-key",
+                    "agent:supervisor_internal_main:main",
                 ),
             )
             self.assertEqual(started.returncode, 0, started.stderr)
@@ -5473,6 +5543,42 @@ class V51DocumentationTests(unittest.TestCase):
         self.assertIn('"profileId"', v5_snapshot)
         self.assertIn('"visibleLabel"', v5_snapshot)
 
+    def test_v51_canonical_schema_examples_include_accounts(self):
+        readme = README_FILE.read_text(encoding="utf-8")
+        v5_doc = V51_DOC.read_text(encoding="utf-8")
+
+        self.assertRegex(readme, r"canonical schema 最小示意：[\s\S]*?\"accounts\"")
+        self.assertRegex(v5_doc, r"### canonical schema[\s\S]*?\"accounts\"")
+
+    def test_v51_mainline_docs_name_accounts_as_part_of_unified_entry_schema(self):
+        readme = README_FILE.read_text(encoding="utf-8")
+        skill = SKILL_FILE.read_text(encoding="utf-8")
+        prompt = CUSTOMER_FIRST_USE_PROMPT.read_text(encoding="utf-8")
+        example = CUSTOMER_FIRST_USE_EXAMPLE.read_text(encoding="utf-8")
+        checklist = CUSTOMER_FIRST_USE_CHECKLIST.read_text(encoding="utf-8")
+        v5_doc = V51_DOC.read_text(encoding="utf-8")
+
+        self.assertIn("accounts + roleCatalog + teams(profileId + override)", readme)
+        self.assertIn("accounts + roleCatalog + teams(profileId + override)", skill)
+        self.assertIn("accounts + roleCatalog + teams(profileId + override)", prompt)
+        self.assertIn("accounts + roleCatalog + teams(profileId + override)", example)
+        self.assertIn("accounts + roleCatalog + teams(profileId + override)", checklist)
+        self.assertIn("accounts + roleCatalog + teams(profileId + override)", v5_doc)
+
+        self.assertNotIn("主线 schema 固定按 `roleCatalog + teams(profileId + override)` 组织", skill)
+        self.assertNotIn("主线 schema 统一使用 `roleCatalog + teams(profileId + override)`", prompt)
+        self.assertNotIn("主线 schema 必须按 roleCatalog + teams(profileId + override) 解析。", prompt)
+        self.assertNotIn("canonical schema：`roleCatalog + teams(profileId + override)`", example)
+        self.assertNotIn("当前主线输入采用 `roleCatalog + teams(profileId + override)`。", example)
+        self.assertNotIn("canonical schema：`roleCatalog + teams(profileId + override)`", checklist)
+
+    def test_source_cross_validation_20260305_uses_bindings_for_v51_mainline(self):
+        content = SOURCE_CROSS_VALIDATION_20260305.read_text(encoding="utf-8")
+
+        self.assertIn("当前 `V5.1 Hardening` 主线统一入口是 `accounts + roleCatalog + teams`", content)
+        self.assertIn("最终由 builder 派生 `bindings`", content)
+        self.assertNotIn("并在 routes 中显式写 `accountId`", content)
+
 
 class V51TemplateTests(unittest.TestCase):
     def test_v51_input_template_exists_and_mentions_teams(self):
@@ -5601,6 +5707,121 @@ class V51ReadmeAndSkillTests(unittest.TestCase):
         self.assertIn("v51_team_runtime", deployment_inputs)
         self.assertIn("runtime manifest", readme)
 
+    def test_readme_codex_task_uses_v51_team_schema_instead_of_legacy_routes(self):
+        readme = README_FILE.read_text(encoding="utf-8")
+        marker = "### 2) 重启后直接发这个标准任务（V5.1 群内多 Agent 可扩展版）"
+        self.assertIn(marker, readme)
+        prompt_section = readme.split(marker, 1)[1]
+        prompt = prompt_section.split("```text\n", 1)[1].split("\n```", 1)[0]
+
+        self.assertIn("V5.1 Hardening", prompt)
+        self.assertIn("roleCatalog:", prompt)
+        self.assertIn("teams:", prompt)
+        self.assertIn("internal_main", prompt)
+        self.assertIn("external_main", prompt)
+        self.assertIn("v51 runtime manifest", prompt)
+        self.assertNotIn("accountMappings:", prompt)
+        self.assertNotIn("routes:", prompt)
+        self.assertNotIn('agents: ["sales_agent", "ops_agent", "finance_agent"]', prompt)
+
+    def test_readme_collection_guidance_uses_unified_team_entry(self):
+        readme = README_FILE.read_text(encoding="utf-8")
+        start = "## 飞书与 OpenClaw 信息采集（你现在最容易卡的点）"
+        end = "## 使用 Codex 的实战案例（安装到上线）"
+        self.assertIn(start, readme)
+        self.assertIn(end, readme)
+        section = readme.split(start, 1)[1].split(end, 1)[0]
+
+        self.assertIn("internal_main", section)
+        self.assertIn("external_main", section)
+        self.assertIn("roleCatalog", section)
+        self.assertIn("teams[]", section)
+        self.assertIn("`bindings` 是", section)
+        self.assertIn("派生结果", section)
+        self.assertNotIn("sales_agent", section)
+        self.assertNotIn("ops_agent", section)
+        self.assertNotIn("finance_agent", section)
+        self.assertNotIn("routes:", section)
+
+    def test_skill_prefers_unified_entry_over_route_templates(self):
+        content = SKILL_FILE.read_text(encoding="utf-8")
+
+        self.assertIn("roleCatalog", content)
+        self.assertIn("teams", content)
+        self.assertIn("`bindings` 是", content)
+        self.assertIn("派生结果", content)
+        self.assertNotIn("确认 `agents`、`accounts`、`routes` 完整", content)
+        self.assertNotIn("templates/openclaw-single-bot-route.example.jsonc", content)
+        self.assertNotIn("templates/openclaw-multi-bot-route.example.jsonc", content)
+
+    def test_readme_version_matches_version_file_and_current_release_date(self):
+        readme = README_FILE.read_text(encoding="utf-8")
+        changelog = CHANGELOG_FILE.read_text(encoding="utf-8")
+        version = VERSION_FILE.read_text(encoding="utf-8").strip()
+
+        self.assertIn(f"`v{version}`（2026-03-09）", readme)
+        self.assertIn("当前最新稳定版：`V5.1 Hardening`", readme)
+        self.assertIn(f"## [{version}] - 2026-03-09", changelog)
+
+    def test_skill_marks_single_bot_and_multi_bot_as_topology_background_only(self):
+        content = SKILL_FILE.read_text(encoding="utf-8")
+
+        self.assertIn("部署拓扑背景（不是第二套配置入口）", content)
+        self.assertIn("主线配置入口仍然是 `accounts + roleCatalog + teams`", content)
+        self.assertIn("不应让用户手写另一套 `routes` 入口", content)
+
+    def test_deployment_inputs_template_uses_unified_entry_input_not_manual_routing(self):
+        content = (
+            REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/deployment-inputs.example.yaml"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("accounts:", content)
+        self.assertIn("roleCatalog:", content)
+        self.assertIn("teams:", content)
+        self.assertIn("workflow:", content)
+        self.assertNotIn("\nrouting:\n", content)
+        self.assertNotIn("\n  bindings:\n", content)
+        self.assertNotIn("account_profiles:", content)
+
+    def test_prerequisites_checklist_requests_unified_entry_materials(self):
+        content = (
+            REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/prerequisites-checklist.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("统一入口素材", content)
+        self.assertIn("accounts", content)
+        self.assertIn("roleCatalog", content)
+        self.assertIn("teams", content)
+        self.assertIn("workflow.stages", content)
+        self.assertNotIn("## 4. 路由素材", content)
+        self.assertNotIn("路由表（哪个 accountId + 哪个群/私聊 → 哪个 agent）", content)
+
+    def test_skill_required_reading_prefers_stable_docs_over_time_snapshot(self):
+        content = SKILL_FILE.read_text(encoding="utf-8")
+        marker = "## 必读资源（按顺序）"
+        self.assertIn(marker, content)
+        section = content.split(marker, 1)[1].split("## 交付模式", 1)[0]
+
+        self.assertIn("references/rollout-and-upgrade-playbook.md", section)
+        self.assertNotIn("references/source-cross-validation-2026-03-04.md", section)
+
+    def test_readme_cross_validation_docs_are_archived_not_best_practice_sources(self):
+        content = README_FILE.read_text(encoding="utf-8")
+
+        self.assertIn("历史交叉验证归档", content)
+        self.assertNotIn("当前保留的最佳实践来源", content)
+
+    def test_skill_reusable_files_do_not_mix_cross_validation_into_runbooks(self):
+        content = SKILL_FILE.read_text(encoding="utf-8")
+        marker = "- 运行手册："
+        self.assertIn(marker, content)
+        section = content.split(marker, 1)[1].split("- `templates/systemd/v51-team-watchdog.service`", 1)[0]
+
+        self.assertIn("references/rollout-and-upgrade-playbook.md", section)
+        self.assertIn("references/codex-prompt-templates-v51-team-orchestrator.md", section)
+        self.assertNotIn("references/source-cross-validation-2026-03-04.md", section)
+        self.assertNotIn("references/source-cross-validation-2026-03-05.md", section)
+
     def test_readme_includes_bilingual_default_expert_catalog_with_30_experts(self):
         content = README_FILE.read_text(encoding="utf-8")
 
@@ -5656,10 +5877,30 @@ class V51ReadmeAndSkillTests(unittest.TestCase):
             self.assertTrue(path.exists(), path.name)
 
         readme = README_FILE.read_text(encoding="utf-8")
-        self.assertIn("V5.1-新机器快速启动-SOP.md", readme)
-        self.assertIn("客户首次使用信息清单.md", readme)
-        self.assertIn("客户首次使用-Codex提示词.md", readme)
-        self.assertIn("客户首次使用真实案例.md", readme)
+        self.assertIn(
+            "skills/openclaw-feishu-multi-agent-deploy/references/V5.1-新机器快速启动-SOP.md",
+            readme,
+        )
+        self.assertIn(
+            "skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用信息清单.md",
+            readme,
+        )
+        self.assertIn(
+            "skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用-Codex提示词.md",
+            readme,
+        )
+        self.assertIn(
+            "skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用真实案例.md",
+            readme,
+        )
+        self.assertNotIn(
+            "产品手册：`references/codex-prompt-templates-v51-team-orchestrator.md`",
+            readme,
+        )
+        self.assertNotIn(
+            "收集清单：`references/客户首次使用信息清单.md`",
+            readme,
+        )
 
     def test_customer_first_use_docs_cover_collection_prompt_and_real_case(self):
         quickstart = V51_QUICKSTART_DOC.read_text(encoding="utf-8")
@@ -5703,6 +5944,32 @@ class V51ReadmeAndSkillTests(unittest.TestCase):
         self.assertIn("xiaolongxia", example)
         self.assertIn("yiran_yibao", example)
         self.assertIn("把下面这些真实值替换成客户自己的值", example)
+
+    def test_readme_mainline_navigation_links_resolve_to_inner_docs(self):
+        readme = README_FILE.read_text(encoding="utf-8")
+
+        expected_links = (
+            "skills/openclaw-feishu-multi-agent-deploy/references/prerequisites-checklist.md",
+            "skills/openclaw-feishu-multi-agent-deploy/templates/deployment-inputs.example.yaml",
+            "skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v51-team-orchestrator.md",
+            "skills/openclaw-feishu-multi-agent-deploy/templates/verification-checklist.md",
+            "skills/openclaw-feishu-multi-agent-deploy/references/rollout-and-upgrade-playbook.md",
+            "skills/openclaw-feishu-multi-agent-deploy/references/source-cross-validation-2026-03-04.md",
+            "skills/openclaw-feishu-multi-agent-deploy/references/source-cross-validation-2026-03-05.md",
+        )
+        for path in expected_links:
+            self.assertIn(path, readme)
+            self.assertTrue((REPO_ROOT / path).exists(), path)
+
+        self.assertNotIn("1. `references/prerequisites-checklist.md`", readme)
+        self.assertNotIn("2. `templates/deployment-inputs.example.yaml`", readme)
+        self.assertNotIn("3. `references/codex-prompt-templates-v51-team-orchestrator.md`", readme)
+        self.assertNotIn("4. `templates/verification-checklist.md`", readme)
+        self.assertNotIn("5. `references/rollout-and-upgrade-playbook.md`", readme)
+        self.assertNotIn(
+            "| `V5.1 Hardening` | 多群模板化主线 | 多个群并行、每群独立 team unit、可复制到 2/10 个团队 | `references/codex-prompt-templates-v51-team-orchestrator.md` |",
+            readme,
+        )
 
     def test_v51_product_docs_cover_unified_entry_and_expansion_scenarios(self):
         readme = README_FILE.read_text(encoding="utf-8")

@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.6.2] - 2026-03-09
+
+### Changed
+- README 和 `openclaw-feishu-multi-agent-deploy/SKILL.md` 进一步收口为统一入口口径：
+  - 主线只强调 `accounts + roleCatalog + teams`
+  - `channels.feishu`、`bindings`、必要的 `agents.list` 和 `v51 runtime manifest` 明确为 builder 派生产物
+  - `single-bot / multi-bot` 降级为部署拓扑背景，不再像第二套并列配置入口
+- README 中的“飞书与 OpenClaw 信息采集”与“真实 Codex 提示词”统一到 `V5.1 Hardening` 双群 team-orchestrator 结构。
+- `VERSION` 与 README 当前版本头同步到 `1.6.2 / 2026-03-09`。
+
+### Fixed
+- 修复 README 前半段仍可能把用户带回旧 route-first 心智的问题。
+- 修复公开入口文档与当前版本元信息不完全同步的问题。
+
 ## [1.6.1] - 2026-03-08
 
 ### Added

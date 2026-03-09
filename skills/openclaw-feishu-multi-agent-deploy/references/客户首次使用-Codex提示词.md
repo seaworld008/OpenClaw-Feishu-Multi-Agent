@@ -5,7 +5,7 @@
 统一原则：
 
 - 优先让 Codex 读取输入文件，而不是把真实值散落在聊天里
-- 主线 schema 统一使用 `roleCatalog + teams(profileId + override)`
+- 主线 schema 统一使用 `accounts + roleCatalog + teams(profileId + override)`
 - 必须先读取现网 `~/.openclaw/openclaw.json`
 - 必须先备份，再生成最小 patch
 - 每次都要输出 `v51 runtime manifest`
@@ -27,7 +27,7 @@
 
 要求：
 1. 按 V5.1 Hardening 生成配置。
-2. 主线 schema 必须按 roleCatalog + teams(profileId + override) 解析。
+2. 主线 schema 必须按 accounts + roleCatalog + teams(profileId + override) 解析。
 3. 一次配置 1 个群或多个群，均以 teams[] 为准。
 4. 必须先读取现网 ~/.openclaw/openclaw.json，不要盲写。
 5. 必须先备份，再生成最小 patch。
@@ -56,7 +56,7 @@
 
 要求：
 1. 按 V5.1 Hardening 生成配置。
-2. 主线 schema 必须按 roleCatalog + teams(profileId + override) 解析。
+2. 主线 schema 必须按 accounts + roleCatalog + teams(profileId + override) 解析。
 3. 必须先读取现网 ~/.openclaw/openclaw.json。
 4. 必须先备份，再生成最小 patch。
 5. 执行：
