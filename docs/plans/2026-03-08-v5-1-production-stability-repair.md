@@ -1,8 +1,8 @@
-# V5 Production Stability Repair Implementation Plan
+# V5.1 Production Stability Repair Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** 修复当前 `V5 Team Orchestrator / V5.1 Hardening` 在线上双群中的三类结构性故障，使两群真实任务都能稳定完成“主管接单 -> 运营 -> 财务 -> 主管最终收口”全链路。
+**Goal:** 修复当前 `V5.1 Hardening` 在线上双群中的三类结构性故障，使两群真实任务都能稳定完成“主管接单 -> 运营 -> 财务 -> 主管最终收口”全链路。
 
 **Architecture:** 本次不再继续依赖 supervisor prompt 自己“记得下一步要做什么”。控制面收敛到“显式状态 + 可重放动作 + 可见消息确认”三层：SQLite registry 负责真状态，control-plane helper 负责生成确定性动作，watchdog 从被动 stale 回收升级为主动 reconcile。hidden main 不再隐式继承错误的 `webchat` 投递上下文，所有主管可见消息必须基于显式的飞书 delivery metadata 发送。
 
@@ -52,7 +52,7 @@
 - registry schema 和状态机补强
 - supervisor/worker 的 canonical control payload
 - watchdog 主动 reconcile
-- V5 generator / runtime manifest / prompts / docs 一致性升级
+- V5.1 generator / runtime manifest / prompts / docs 一致性升级
 - 远端重部署与双群真实验收
 
 本次不包含：
@@ -126,7 +126,6 @@ Expected: 失败，因为命令和数据模型还不存在。
 
 **Files:**
 - Modify: `skills/openclaw-feishu-multi-agent-deploy/scripts/core_job_registry.py`
-- Modify: `skills/openclaw-feishu-multi-agent-deploy/templates/v4-3-job-registry.example.sql`
 - Test: `tests/test_openclaw_feishu_multi_agent_skill.py`
 
 **Step 1: Add new persisted fields**
@@ -287,9 +286,9 @@ Expected: 全绿。
 ### Task 6: 收紧 supervisor / worker 提示词，只保留“执行 helper”的职责
 
 **Files:**
-- Modify: `skills/openclaw-feishu-multi-agent-deploy/references/input-template-v5-team-orchestrator.json`
-- Modify: `skills/openclaw-feishu-multi-agent-deploy/templates/openclaw-v5-team-orchestrator.example.jsonc`
-- Modify: `skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v5-team-orchestrator.md`
+- Modify: `skills/openclaw-feishu-multi-agent-deploy/references/input-template-v51-team-orchestrator.json`
+- Modify: `skills/openclaw-feishu-multi-agent-deploy/templates/openclaw-v51-team-orchestrator.example.jsonc`
+- Modify: `skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v51-team-orchestrator.md`
 - Modify: `README.md`
 - Modify: `skills/openclaw-feishu-multi-agent-deploy/SKILL.md`
 - Test: `tests/test_openclaw_feishu_multi_agent_skill.py`
@@ -318,8 +317,7 @@ worker 必须：
 Run:
 ```bash
 python3 -m unittest \
-  tests.test_openclaw_feishu_multi_agent_skill.BuildSnippetV5Tests \
-  tests.test_openclaw_feishu_multi_agent_skill.V5DocumentationTests \
+  tests.test_openclaw_feishu_multi_agent_skill.BuildSnippetV51Tests \
   tests.test_openclaw_feishu_multi_agent_skill.V51DocumentationTests -v
 ```
 
@@ -354,8 +352,8 @@ Expected: 全绿。
 Run:
 ```bash
 python3 -m unittest \
-  tests.test_openclaw_feishu_multi_agent_skill.BuildSnippetV5Tests.test_v5_team_input_builds_team_runtime_manifest \
-  tests.test_openclaw_feishu_multi_agent_skill.BuildSnippetV5Tests.test_v5_team_input_persists_visible_delivery_metadata_for_reconcile -v
+  tests.test_openclaw_feishu_multi_agent_skill.BuildSnippetV51Tests.test_v51_team_input_builds_team_runtime_manifest \
+  tests.test_openclaw_feishu_multi_agent_skill.BuildSnippetV51Tests.test_v51_team_input_persists_visible_delivery_metadata_for_reconcile -v
 ```
 
 Expected: 全绿。
@@ -377,7 +375,7 @@ ssh openclaw-test-vm 'ts=$(date +%Y%m%d-%H%M%S); cp -a ~/.openclaw ~/.openclaw-b
 同步：
 - `~/.openclaw/tools/v5/*`
 - `~/.openclaw/openclaw.json`
-- `~/.openclaw/v5-runtime-manifest.json`
+- `~/.openclaw/v51-runtime-manifest.json`
 - team workspaces `SOUL.md/USER.md/IDENTITY.md`
 
 **Step 3: Migrate DBs**
@@ -394,7 +392,7 @@ Run:
 ```bash
 ssh openclaw-test-vm 'systemctl --user daemon-reload'
 ssh openclaw-test-vm 'systemctl --user restart openclaw-gateway.service'
-ssh openclaw-test-vm 'systemctl --user restart v5-team-internal_main.timer v5-team-external_main.timer'
+ssh openclaw-test-vm 'systemctl --user restart v51-team-internal_main.timer v51-team-external_main.timer'
 ```
 
 **Step 5: Verify control plane**
@@ -469,7 +467,7 @@ Expected:
 
 1. 回滚远端 `~/.openclaw/openclaw.json`
 2. 回滚远端 `~/.openclaw/tools/v5`
-3. 回滚远端 `~/.openclaw/v5-runtime-manifest.json`
+3. 回滚远端 `~/.openclaw/v51-runtime-manifest.json`
 4. 回滚 team workspace 的 `SOUL.md/USER.md`
 5. 重启 gateway/timers
 

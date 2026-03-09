@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reset V4.3.1/V5 team sessions after protocol changes or stuck runs."""
+"""Reset OpenClaw Feishu team sessions after protocol changes or stuck runs."""
 
 from __future__ import annotations
 

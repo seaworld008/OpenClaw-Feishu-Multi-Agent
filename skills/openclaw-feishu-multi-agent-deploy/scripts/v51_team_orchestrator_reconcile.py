@@ -153,6 +153,13 @@ def extract_text_content(message: dict[str, Any]) -> str:
     return "\n".join(chunk for chunk in chunks if chunk)
 
 
+def iter_content_items(message: dict[str, Any]) -> list[dict[str, Any]]:
+    content = message.get("content")
+    if not isinstance(content, list):
+        return []
+    return [item for item in content if isinstance(item, dict)]
+
+
 def load_session_turn(sessions_dir: Path, session_key: str) -> SessionTurn | None:
     turns = load_session_turns(sessions_dir, session_key)
     if not turns:
@@ -464,6 +471,7 @@ def recover_hidden_main_packet_from_worker_transcript(
     in_current_dispatch = False
     message_ids: list[str] = []
     last_assistant_text = ""
+    visible_messages = extract_worker_visible_messages(entries, dispatch_marker)
     for entry in entries:
         if entry.get("type") != "message":
             continue
@@ -507,6 +515,162 @@ def recover_hidden_main_packet_from_worker_transcript(
     if not summary:
         summary = "已通过 worker transcript 恢复真实消息回调并继续团队流程。"
     recovered_packet["summary"] = summary
+    if len(visible_messages) >= 2:
+        recovered_packet["finalVisibleText"] = visible_messages[1]
+    recovered_packet.setdefault("from", agent_id)
+    recovered_packet.setdefault("status", "completed")
+    return HiddenMainPacket(packet=recovered_packet, valid=True)
+
+
+def extract_completion_packet_from_worker_toolcall(
+    message: dict[str, Any],
+    job_ref: str,
+    agent_id: str,
+) -> dict[str, str] | None:
+    for item in iter_content_items(message):
+        if item.get("type") != "toolCall" or str(item.get("name") or "") != "sessions_send":
+            continue
+        arguments = item.get("arguments")
+        if not isinstance(arguments, dict):
+            continue
+        raw_message = str(arguments.get("message") or "").strip()
+        packet = parse_pipe_packet(raw_message, "COMPLETE_PACKET")
+        if not packet or packet.get("jobRef") != job_ref:
+            continue
+        packet_agent_id = str(packet.get("from") or packet.get("agent") or "").strip()
+        if packet_agent_id and packet_agent_id != agent_id:
+            continue
+        return packet
+    return None
+
+
+def extract_worker_visible_messages(entries: list[dict[str, Any]], dispatch_marker: str) -> list[str]:
+    in_current_dispatch = False
+    visible_messages: list[str] = []
+    for entry in entries:
+        if entry.get("type") != "message":
+            continue
+        message = entry.get("message")
+        if not isinstance(message, dict):
+            continue
+        role = str(message.get("role") or "")
+        if role == "user":
+            text = extract_text_content(message)
+            if dispatch_marker in text:
+                in_current_dispatch = True
+                visible_messages = []
+                continue
+            if in_current_dispatch:
+                break
+            continue
+        if not in_current_dispatch or role != "assistant":
+            continue
+        for item in iter_content_items(message):
+            if item.get("type") != "toolCall" or str(item.get("name") or "") != "message":
+                continue
+            arguments = item.get("arguments")
+            if not isinstance(arguments, dict):
+                continue
+            raw_message = str(arguments.get("message") or "").strip()
+            if raw_message:
+                visible_messages.append(raw_message)
+    return visible_messages
+
+
+def latest_worker_final_visible_text(openclaw_home: Path, agent_id: str, job_ref: str) -> str:
+    sessions_dir = openclaw_home / "agents" / agent_id / "sessions"
+    entries = load_session_entries(sessions_dir, f"agent:{agent_id}:main")
+    if not entries:
+        return ""
+    visible_messages = extract_worker_visible_messages(entries, f"TASK_DISPATCH|jobRef={job_ref}|")
+    if len(visible_messages) < 2:
+        return ""
+    return visible_messages[1]
+
+
+def worker_transcript_completion_packet(
+    openclaw_home: Path,
+    row: sqlite3.Row,
+) -> HiddenMainPacket | None:
+    agent_id = str(row["waiting_for_agent_id"] or "").strip()
+    if not agent_id:
+        return None
+
+    sessions_dir = openclaw_home / "agents" / agent_id / "sessions"
+    entries = load_session_entries(sessions_dir, f"agent:{agent_id}:main")
+    if not entries:
+        return None
+
+    dispatch_marker = f"TASK_DISPATCH|jobRef={row['job_ref']}|"
+    in_current_dispatch = False
+    message_ids: list[str] = []
+    latest_packet: dict[str, str] | None = None
+    last_assistant_text = ""
+    visible_messages = extract_worker_visible_messages(entries, dispatch_marker)
+
+    for entry in entries:
+        if entry.get("type") != "message":
+            continue
+        message = entry.get("message")
+        if not isinstance(message, dict):
+            continue
+        role = str(message.get("role") or "")
+        if role == "user":
+            text = extract_text_content(message)
+            if dispatch_marker in text:
+                in_current_dispatch = True
+                message_ids = []
+                latest_packet = None
+                last_assistant_text = ""
+                continue
+            if in_current_dispatch:
+                break
+            continue
+        if not in_current_dispatch:
+            continue
+
+        if role == "toolResult" and str(message.get("toolName") or "") == "message":
+            message_id = extract_message_id_from_tool_result(message)
+            if message_id and not placeholder_message_id(message_id) and message_id not in message_ids:
+                message_ids.append(message_id)
+            continue
+
+        if role != "assistant":
+            continue
+
+        packet = extract_completion_packet_from_worker_toolcall(message, str(row["job_ref"]), agent_id)
+        if packet is not None:
+            latest_packet = packet
+
+        assistant_text = extract_text_content(message).strip()
+        if assistant_text:
+            last_assistant_text = assistant_text
+
+    if latest_packet is None:
+        return None
+
+    recovered_packet = dict(latest_packet)
+    progress_message_id = str(recovered_packet.get("progressMessageId") or "").strip()
+    final_message_id = str(recovered_packet.get("finalMessageId") or "").strip()
+
+    if placeholder_message_id(progress_message_id):
+        if len(message_ids) < 1:
+            return None
+        recovered_packet["progressMessageId"] = message_ids[0]
+
+    if placeholder_message_id(final_message_id):
+        if len(message_ids) < 2:
+            return None
+        recovered_packet["finalMessageId"] = message_ids[1]
+
+    summary = str(recovered_packet.get("summary") or "").strip()
+    if not summary or summary.lower() == "processing":
+        summary = summarize_worker_output(last_assistant_text)
+    if not summary:
+        summary = "已通过 worker transcript 合成有效回调并继续团队流程。"
+    recovered_packet["summary"] = summary
+    if len(visible_messages) >= 2:
+        recovered_packet["finalVisibleText"] = visible_messages[1]
     recovered_packet.setdefault("from", agent_id)
     recovered_packet.setdefault("status", "completed")
     return HiddenMainPacket(packet=recovered_packet, valid=True)
@@ -528,6 +692,7 @@ def participants_payload(team: dict[str, Any]) -> list[dict[str, str]]:
                 "agentId": str(worker["agentId"]),
                 "accountId": str(worker["accountId"]),
                 "role": str(worker.get("role") or worker.get("responsibility") or worker["agentId"]),
+                "visibleLabel": str(worker.get("visibleLabel") or ""),
             }
         )
     return participants
@@ -549,6 +714,8 @@ def start_job_from_inbound(team: dict[str, Any], manifest_path: Path, inbound: P
         derive_job_title(inbound.request_text),
         "--request-text",
         inbound.request_text,
+        "--supervisor-visible-label",
+        str(team.get("supervisor", {}).get("visibleLabel") or ""),
         "--entry-account-id",
         str(runtime["entryAccountId"]),
         "--entry-channel",
@@ -617,6 +784,9 @@ def consume_hidden_main_completion_packet(
     if participant is None:
         emit({"status": "callback_participant_missing", "jobRef": row["job_ref"], "agentId": agent_id})
         return 2
+    final_visible_text = str(packet.packet.get("finalVisibleText") or packet.packet.get("final_visible_text") or "").strip()
+    if not final_visible_text:
+        final_visible_text = latest_worker_final_visible_text(openclaw_home, agent_id, str(row["job_ref"]))
 
     registry_command(
         team,
@@ -638,8 +808,12 @@ def consume_hidden_main_completion_packet(
         str(packet.packet.get("summary") or ""),
         "--details",
         str(packet.packet.get("details") or ""),
+        "--final-visible-text",
+        final_visible_text,
         "--risks",
         str(packet.packet.get("risks") or ""),
+        "--action-items",
+        str(packet.packet.get("actionItems") or packet.packet.get("action_items") or ""),
         "--dependencies",
         str(packet.packet.get("dependencies") or ""),
         "--conflicts",
@@ -780,14 +954,37 @@ def reconcile_rollup(team: dict[str, Any], manifest_path: Path, openclaw_bin: Pa
         if row is None:
             emit({"status": "job_missing", "jobRef": job_ref})
             return 2
+        if bool(row["rollup_visible_sent"]):
+            if str(row["status"] or "") != "done":
+                registry_command(
+                    team,
+                    manifest_path,
+                    "close-job",
+                    "--job-ref",
+                    row["job_ref"],
+                    "--status",
+                    "done",
+                )
+            emit(
+                {
+                    "status": "rollup_already_recorded",
+                    "jobRef": row["job_ref"],
+                    "rollupVisibleSent": True,
+                    "messageId": row["rollup_visible_message_id"],
+                }
+            )
+            return 0
+        if str(row["status"] or "") != "active":
+            emit({"status": "rollup_not_needed", "jobRef": row["job_ref"], "currentStatus": row["status"]})
+            return 0
 
         _rollup_result, rollup_payload = registry_command(
-        team,
-        manifest_path,
-        "build-rollup-visible-message",
-        "--job-ref",
-        row["job_ref"],
-    )
+            team,
+            manifest_path,
+            "build-rollup-visible-message",
+            "--job-ref",
+            row["job_ref"],
+        )
         delivery = rollup_payload["delivery"]
         _send_result, send_payload = openclaw_command(
             openclaw_bin,
@@ -892,53 +1089,110 @@ def resume_job(team: dict[str, Any], manifest_path: Path, openclaw_home: Path, o
                         }
                     )
                     packet = recovered_packet
-                if packet.valid:
-                    consume_exit = consume_hidden_main_completion_packet(
-                        team,
-                        manifest_path,
-                        openclaw_home,
-                        openclaw_bin,
-                        active,
-                        conn,
-                        packet,
-                    )
-                    if consume_exit != 0:
-                        return consume_exit
-                    conn.close()
-                    conn, active = db_and_active_job(team, manifest_path)
-                    continue
-                packet_signature = json.dumps(packet.packet, ensure_ascii=False, sort_keys=True)
-                if packet_signature in handled_invalid_hidden_packets:
-                    break
-                handled_invalid_hidden_packets.add(packet_signature)
-                if bare_no_reply_retries >= INLINE_WORKER_NO_REPLY_RETRY_LIMIT:
+                elif not packet.valid:
+                    promoted_packet = worker_transcript_completion_packet(openclaw_home, active)
+                    if promoted_packet is not None:
+                        emit(
+                            {
+                                "status": "worker_transcript_callback_promoted",
+                                "jobRef": active["job_ref"],
+                                "agentId": active["waiting_for_agent_id"],
+                                "progressMessageId": promoted_packet.packet["progressMessageId"],
+                                "finalMessageId": promoted_packet.packet["finalMessageId"],
+                            }
+                        )
+                        packet = promoted_packet
+            else:
+                promoted_packet = worker_transcript_completion_packet(openclaw_home, active)
+                if promoted_packet is not None:
                     emit(
                         {
-                            "status": "worker_no_reply_retry_exhausted",
+                            "status": "worker_transcript_callback_promoted",
                             "jobRef": active["job_ref"],
                             "agentId": active["waiting_for_agent_id"],
-                            "reason": packet.error or "invalid_hidden_main_packet",
+                            "progressMessageId": promoted_packet.packet["progressMessageId"],
+                            "finalMessageId": promoted_packet.packet["finalMessageId"],
                         }
                     )
-                    return 2
-                bare_no_reply_retries += 1
-                job_ref = str(active["job_ref"])
-                agent_id = str(active["waiting_for_agent_id"] or "")
+                    packet = promoted_packet
+            if packet is None:
+                if current_worker_main_no_reply(team, openclaw_home, active):
+                    if bare_no_reply_retries >= INLINE_WORKER_NO_REPLY_RETRY_LIMIT:
+                        emit(
+                            {
+                                "status": "worker_no_reply_retry_exhausted",
+                                "jobRef": active["job_ref"],
+                                "agentId": active["waiting_for_agent_id"],
+                                "reason": "worker_main_bare_no_reply",
+                            }
+                        )
+                        return 2
+                    bare_no_reply_retries += 1
+                    job_ref = str(active["job_ref"])
+                    agent_id = str(active["waiting_for_agent_id"] or "")
+                    conn.close()
+                    dispatch_exit = reconcile_dispatch(team, manifest_path, openclaw_home, openclaw_bin, job_ref, force=True)
+                    if dispatch_exit != 0:
+                        return dispatch_exit
+                    conn, active = db_and_active_job(team, manifest_path)
+                    emit(
+                        {
+                            "status": "worker_no_reply_retry_scheduled",
+                            "jobRef": job_ref,
+                            "agentId": agent_id,
+                            "attempt": bare_no_reply_retries,
+                            "limit": INLINE_WORKER_NO_REPLY_RETRY_LIMIT,
+                        }
+                    )
+                    continue
+                break
+            if packet.valid:
+                consume_exit = consume_hidden_main_completion_packet(
+                    team,
+                    manifest_path,
+                    openclaw_home,
+                    openclaw_bin,
+                    active,
+                    conn,
+                    packet,
+                )
+                if consume_exit != 0:
+                    return consume_exit
                 conn.close()
-                dispatch_exit = reconcile_dispatch(team, manifest_path, openclaw_home, openclaw_bin, job_ref, force=True)
-                if dispatch_exit != 0:
-                    return dispatch_exit
                 conn, active = db_and_active_job(team, manifest_path)
+                continue
+            packet_signature = json.dumps(packet.packet, ensure_ascii=False, sort_keys=True)
+            if packet_signature in handled_invalid_hidden_packets:
+                break
+            handled_invalid_hidden_packets.add(packet_signature)
+            if bare_no_reply_retries >= INLINE_WORKER_NO_REPLY_RETRY_LIMIT:
                 emit(
                     {
-                        "status": "worker_no_reply_retry_scheduled",
-                        "jobRef": job_ref,
-                        "agentId": agent_id,
-                        "attempt": bare_no_reply_retries,
-                        "limit": INLINE_WORKER_NO_REPLY_RETRY_LIMIT,
+                        "status": "worker_no_reply_retry_exhausted",
+                        "jobRef": active["job_ref"],
+                        "agentId": active["waiting_for_agent_id"],
+                        "reason": packet.error or "invalid_hidden_main_packet",
                     }
                 )
-                continue
+                return 2
+            bare_no_reply_retries += 1
+            job_ref = str(active["job_ref"])
+            agent_id = str(active["waiting_for_agent_id"] or "")
+            conn.close()
+            dispatch_exit = reconcile_dispatch(team, manifest_path, openclaw_home, openclaw_bin, job_ref, force=True)
+            if dispatch_exit != 0:
+                return dispatch_exit
+            conn, active = db_and_active_job(team, manifest_path)
+            emit(
+                {
+                    "status": "worker_no_reply_retry_scheduled",
+                    "jobRef": job_ref,
+                    "agentId": agent_id,
+                    "attempt": bare_no_reply_retries,
+                    "limit": INLINE_WORKER_NO_REPLY_RETRY_LIMIT,
+                }
+            )
+            continue
 
             if current_worker_main_no_reply(team, openclaw_home, active):
                 if bare_no_reply_retries >= INLINE_WORKER_NO_REPLY_RETRY_LIMIT:

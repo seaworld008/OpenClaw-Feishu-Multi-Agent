@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>bot.molt.v5-team-__TEAM_KEY__</string>
+  <string>bot.molt.v51-team-__TEAM_KEY__</string>
 
   <key>ProgramArguments</key>
   <array>
@@ -31,9 +31,9 @@
   <integer>60</integer>
 
   <key>StandardOutPath</key>
-  <string>__LOG_DIR__/v5-team-__TEAM_KEY__.stdout.log</string>
+  <string>__LOG_DIR__/v51-team-__TEAM_KEY__.stdout.log</string>
 
   <key>StandardErrorPath</key>
-  <string>__LOG_DIR__/v5-team-__TEAM_KEY__.stderr.log</string>
+  <string>__LOG_DIR__/v51-team-__TEAM_KEY__.stderr.log</string>
 </dict>
 </plist>

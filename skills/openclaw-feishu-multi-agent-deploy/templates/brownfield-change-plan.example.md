@@ -13,8 +13,8 @@
 - `bindings`
 - （可选）`agents.list` 新增条目
 - （可选）`tools.agentToAgent`
-- （V3 可选）`tools.allow` / `tools.sessions`
-- （V3 可选）`session.sendPolicy`
+- （按需）`tools.allow` / `tools.sessions`
+- （按需）`session.sendPolicy`
 
 禁止改动：
 - 与本次飞书路由无关的 provider、tools、sandbox、gateway 全局参数

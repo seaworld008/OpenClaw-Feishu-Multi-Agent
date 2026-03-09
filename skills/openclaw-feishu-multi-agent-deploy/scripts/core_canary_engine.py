@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared canary helpers for V3.1, V4.3.1, and V5.1 entrypoints."""
+"""Shared canary helpers for current V5.1 and reusable team runtime checks."""
 
 from __future__ import annotations
 
@@ -158,7 +158,7 @@ def build_sqlite_parser() -> argparse.ArgumentParser:
     parser.add_argument("--worker-agents", default="ops_agent,finance_agent")
     parser.add_argument("--supervisor-agent", default="supervisor_agent")
     parser.add_argument("--team-key")
-    parser.add_argument("--success-token", default="V4_3_CANARY_OK")
+    parser.add_argument("--success-token", default="TEAM_CANARY_OK")
     parser.add_argument("--require-supervisor-target-chat", action="store_true")
     return parser
 

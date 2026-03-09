@@ -1,71 +1,58 @@
-# 客户首次使用真实案例
-
-这份案例不是抽象骨架，而是当前测试/交付环境的真实结构化案例。你可以直接复制，再把需要替换的字段换成客户真实值。
-
-## 这份案例解决什么问题
-
-它一次性给出 4 类信息：
-
-1. 当前正式双群、三个正式机器人和真实 `appId/appSecret`
-2. 当前主线 canonical schema：`roleCatalog + teams(profileId + override)`
-3. 真实 supervisor / worker `systemPrompt`
-4. 后续扩容和裁剪时具体改哪里
-
-## 当前真实基线
-
-### 正式 teamKey
-
-- `internal_main`
-- `external_main`
-
-### 正式群 peerId
-
-- 内部团队群：`oc_f785e73d3c00954d4ccd5d49b63ef919`
-- 外部团队群：`oc_7121d87961740dbd72bd8e50e48ba5e3`
-
-### 正式机器人账号
-
-- `aoteman`
-  - `appId`: `cli_a923c749bab6dcba`
-  - `appSecret`: `TWpD207Ri2g1Qqmw4R5YhfkPRhOokCGX`
-- `xiaolongxia`
-  - `appId`: `cli_a9f1849b67f9dcc2`
-  - `appSecret`: `g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr`
-- `yiran_yibao`
-  - `appId`: `cli_a923c71498b8dcc9`
-  - `appSecret`: `swscrlPKYCwAehOyyoLrlesLTsuYY6nl`
-
-### 固定角色映射
-
-- `aoteman -> supervisor`
-- `xiaolongxia -> ops`
-- `yiran_yibao -> finance`
-
-### 当前主线输入模型
-
-当前主线输入采用 `roleCatalog + teams(profileId + override)`。
-
-含义是：
-
-- `roleCatalog` 统一维护角色默认定义
-- `teams[]` 只负责引用这些 profile，并声明该 team 的 `agentId`、群信息和 `workflow.stages`
-- 如果某个群要对同一角色做局部特化，再在该 team 内覆盖
-
-## 真实可替换输入示例
-
-```json
 {
   "mode": "plugin",
-  "defaultAccount": "aoteman",
   "connectionMode": "websocket",
   "domain": "feishu",
+  "defaultAccount": "aoteman",
   "messages": {
+    "ackReactionScope": "group-mentions",
     "groupChat": {
       "mentionPatterns": ["@奥特曼", "奥特曼", "主管机器人"]
     }
   },
+  "accounts": [
+    {
+      "accountId": "aoteman",
+      "appId": "cli_a923c749bab6dcba",
+      "appSecret": "TWpD207Ri2g1Qqmw4R5YhfkPRhOokCGX"
+    },
+    {
+      "accountId": "xiaolongxia",
+      "appId": "cli_a9f1849b67f9dcc2",
+      "appSecret": "g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr"
+    },
+    {
+      "accountId": "yiran_yibao",
+      "appId": "cli_a923c71498b8dcc9",
+      "appSecret": "swscrlPKYCwAehOyyoLrlesLTsuYY6nl"
+    }
+  ],
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "sub2api/gpt-5.3-codex",
+        "fallbacks": ["sub2api/gpt-5.2-codex"]
+      },
+      "workspace": "~/.openclaw/workspace",
+      "maxConcurrent": 4,
+      "subagents": {
+        "maxConcurrent": 8
+      },
+      "sandbox": {
+        "sessionToolsVisibility": "all"
+      }
+    }
+  },
+  "agentToAgent": {
+    "enabled": true
+  },
   "tools": {
-    "allow": ["group:fs", "group:runtime", "group:web", "group:messaging", "group:sessions"],
+    "allow": [
+      "group:fs",
+      "group:runtime",
+      "group:web",
+      "group:messaging",
+      "group:sessions"
+    ],
     "sessions": {
       "visibility": "all"
     }
@@ -73,31 +60,18 @@
   "session": {
     "sendPolicy": {
       "default": "allow"
+    },
+    "resetByType": {
+      "group": {
+        "mode": "idle",
+        "idleMinutes": 1440
+      }
+    },
+    "resetTriggers": ["/reset", "/new"],
+    "agentToAgent": {
+      "maxPingPongTurns": 0
     }
   },
-  "accounts": [
-    {
-      "accountId": "aoteman",
-      "appId": "cli_a923c749bab6dcba",
-      "appSecret": "TWpD207Ri2g1Qqmw4R5YhfkPRhOokCGX",
-      "encryptKey": "<替换为客户自己的真实值>",
-      "verificationToken": "<替换为客户自己的真实值>"
-    },
-    {
-      "accountId": "xiaolongxia",
-      "appId": "cli_a9f1849b67f9dcc2",
-      "appSecret": "g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr",
-      "encryptKey": "<替换为客户自己的真实值>",
-      "verificationToken": "<替换为客户自己的真实值>"
-    },
-    {
-      "accountId": "yiran_yibao",
-      "appId": "cli_a923c71498b8dcc9",
-      "appSecret": "swscrlPKYCwAehOyyoLrlesLTsuYY6nl",
-      "encryptKey": "<替换为客户自己的真实值>",
-      "verificationToken": "<替换为客户自己的真实值>"
-    }
-  ],
   "roleCatalog": {
     "supervisor_internal_default": {
       "kind": "supervisor",
@@ -229,92 +203,3 @@
     }
   ]
 }
-```
-
-## 这份输入会推导出什么 runtime 结果
-
-| teamKey | hidden main | SQLite | systemd | launchd |
-|---|---|---|---|---|
-| `internal_main` | `agent:supervisor_internal_main:main` | `~/.openclaw/teams/internal_main/state/team_jobs.db` | `v51-team-internal_main.service` / `v51-team-internal_main.timer` | `bot.molt.v51-team-internal_main` |
-| `external_main` | `agent:supervisor_external_main:main` | `~/.openclaw/teams/external_main/state/team_jobs.db` | `v51-team-external_main.service` / `v51-team-external_main.timer` | `bot.molt.v51-team-external_main` |
-
-这也是为什么 `teamKey` 不能乱改。它会驱动：
-
-- hidden main session key
-- workspace 路径
-- agentDir 路径
-- SQLite 路径
-- watchdog service / timer / launchd label
-
-## 替换说明
-
-把下面这些真实值替换成客户自己的值：
-
-- `accounts[].appId`
-- `accounts[].appSecret`
-- `accounts[].encryptKey`
-- `accounts[].verificationToken`
-- `teams[].group.peerId`
-- `teams[].displayName`
-- `roleCatalog.*.systemPrompt`
-- `roleCatalog.*.name / description / role / responsibility / identity`
-
-## 如何改成客户自己的版本
-
-### 如果客户只需要 1 个群
-
-- 删除 `external_main`
-- 只保留一个 `team`
-- 保留该群真正需要的角色
-- 同步调整 `workflow.stages`
-
-### 新增一个群
-
-要改 3 个地方：
-
-1. 如需新 supervisor prompt，新建一个新的 supervisor profile
-例如：`supervisor_marketing_default`
-
-2. 在 `teams[]` 新增一个 team
-例如：`marketing_main`
-
-3. 在新 team 的 `workers[]` 和 `workflow.stages` 写全这个群真正启用的 worker
-
-### 新增一个机器人账号
-
-要改 3 个地方：
-
-1. `accounts[]` 新增账号
-2. `roleCatalog` 新增或修改对应 profile 的 `accountId`
-3. 让需要这个 bot 的 `team` 引用对应 `profileId`
-
-### 给现有群增加一个 worker
-
-要改 3 个地方：
-
-1. 如为新角色，先新增 `roleCatalog.<profileId>`
-2. 在对应 `team.workers[]` 新增一项
-3. 在 `workflow.stages` 里加上它，并写对顺序
-
-### 从现有群移除一个 worker
-
-要改 2 个地方：
-
-1. 从 `team.workers[]` 删除对应项
-2. 从 `workflow.stages` 删除对应项
-
-如果这个 profile 已经没有任何 team 使用，再决定是否清理 `roleCatalog`
-
-### 下线一个群
-
-要做两层清理：
-
-1. 从输入文件 `teams[]` 删除对应 team
-2. 在运行机上清理该 team 对应的 manifest、watchdog、SQLite、workspace
-
-## 推荐使用方式
-
-1. 复制这份案例
-2. 替换成客户真实值
-3. 保存成客户自己的输入文件
-4. 再配合 `客户首次使用-Codex提示词.md` 一起交给 Codex

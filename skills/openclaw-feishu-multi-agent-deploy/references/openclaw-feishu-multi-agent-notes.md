@@ -1,5 +1,10 @@
 # OpenClaw 飞书多 Agent 最佳实践（截至 2026-03-04）
 
+> 当前多群生产主线已经收口到 `V5.1 Hardening`。
+> 若目标是正式交付、角色模板化扩容或真实双群生产，请优先使用
+> `references/input-template-v51-fixed-role-multi-group.json`，
+> 不要从通用 plugin 模板直接起步。
+
 ## 1. 一手来源（官方优先）
 - OpenClaw 官方文档：
   - `docs/zh-CN/channels/feishu.md`
@@ -22,7 +27,7 @@
 
 ### 2.2 需要升级的默认实现
 - 默认通道写法应为 `channel: "feishu"`（官方插件）
-- `chat-feishu` 仅用于旧配置兼容（legacy）
+- 当前默认只维护官方 `@openclaw/feishu` 插件配置。
 - 推荐插件安装方式：`openclaw plugins install @openclaw/feishu`
 
 ## 3. 最近更新对方案的影响
@@ -89,8 +94,7 @@
   - 每条绑定做实测（DM + 群）
 
 ## 7. 模板建议
-- 新项目优先使用：
-  - `references/input-template.json`（官方插件默认）
-  - `references/input-template-plugin.json`（插件多账号完整示例）
-- 老项目兼容：
-  - `references/input-template-legacy-chat-feishu.json`
+- 当前最新稳定版 `V5.1 Hardening`：
+  - `references/input-template-v51-fixed-role-multi-group.json`（正式推荐，适合客户交付）
+  - `references/input-template-v51-team-orchestrator.json`（真实双群生产基线）
+- 老项目若仍使用旧字段结构，先统一迁移到 `channels.feishu.*` 再继续交付。

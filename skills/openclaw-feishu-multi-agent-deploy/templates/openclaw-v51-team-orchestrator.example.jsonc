@@ -1,5 +1,5 @@
 {
-  // V5 Team Orchestrator 去敏配置快照。
+  // V5.1 Hardening 去敏配置快照。
   // 当前正式 team：
   // - internal_main -> oc_f785e73d3c00954d4ccd5d49b63ef919
   // - external_main -> oc_7121d87961740dbd72bd8e50e48ba5e3
@@ -8,8 +8,14 @@
   // - agent:supervisor_internal_main:main
   // - agent:supervisor_external_main:main
   //
-  // 这份 JSONC 对应 core_feishu_config_builder.py 基于 V5 / V5.1 Hardening 输入模板生成的 patch；
-  // 运行时额外信息请查看 v5 runtime manifest。
+  // Source canonical schema:
+  // - "roleCatalog" 统一定义默认角色
+  // - teams[].supervisor."profileId" / teams[].workers[]."profileId" 负责引用
+  // - "visibleLabel" 是 worker / supervisor 标题的单一显示来源
+  //   例如 progressTitle=【{visibleLabel}进度｜TG-xxxx】 / finalTitle=【{visibleLabel}结论｜TG-xxxx】
+  //
+  // 这份 JSONC 对应 core_feishu_config_builder.py 基于 V5.1 Hardening 输入模板生成的 patch；
+  // 运行时额外信息请查看 v51 runtime manifest。
 
   "channels": {
     "feishu": {
@@ -21,10 +27,10 @@
           "appSecret": "TWpD207Ri2g1Qqmw4R5YhfkPRhOokCGX",
           "groups": {
             "oc_f785e73d3c00954d4ccd5d49b63ef919": {
-              "systemPrompt": "你是内部团队主管 Agent，运行 V5 Team Orchestrator / V5.1 Hardening。固定流程：start-job-with-workflow -> build-visible-ack -> 用 message 工具发送主管接单 -> record-visible-message(kind=ack) -> get-next-action -> build-dispatch-payload -> 派发当前 stage worker -> hidden main 收 COMPLETE_PACKET -> get-next-action -> build-rollup-context -> build-rollup-visible-message -> 用 message 工具发送主管最终统一收口 -> record-visible-message(kind=rollup) -> close-job done。workflow.stages 必须覆盖全部 worker，只有 get-next-action 返回 rollup 后才允许最终收口；若主管群 session 对真实用户消息裸 NO_REPLY，先做 team hygiene；若仍未建单、hidden main 没消费回调、或卡在 dispatch/rollup，交给 v51_team_orchestrator_reconcile.py resume-job 从 transcript 补建单、补接单、补派单、补收口。该控制面必须优先消费最近有效 COMPLETE_PACKET，跳过 pending/placeholder/sent 占位包，并在只剩无效包时重派当前 worker。hidden main=agent:supervisor_internal_main:main。"
+              "systemPrompt": "你是内部团队主管 Agent，运行 V5.1 Hardening。固定流程：start-job-with-workflow -> build-visible-ack -> 用 message 工具发送主管接单 -> record-visible-message(kind=ack) -> get-next-action -> build-dispatch-payload -> 派发当前 stage worker -> hidden main 收 COMPLETE_PACKET -> get-next-action -> build-rollup-context -> build-rollup-visible-message -> 用 message 工具发送主管最终统一收口 -> record-visible-message(kind=rollup) -> close-job done。workflow.stages 必须覆盖全部 worker，只有 get-next-action 返回 rollup 后才允许最终收口；主管最终统一收口必须是结构化完整方案，至少包含任务主题、各角色结论、联合风险与红线、明日三件事，同一 jobRef 只允许出现 1 次主管最终统一收口。若控制面已经拿到 worker 的完整 finalVisibleText 终案正文，主管必须优先基于完整正文整理终案方案，不能只复述 summary/details 摘要。若主管群 session 对真实用户消息裸 NO_REPLY，先做 team hygiene；若仍未建单、hidden main 没消费回调、或卡在 dispatch/rollup，交给 v51_team_orchestrator_reconcile.py resume-job 从 transcript 补建单、补接单、补派单、补收口。该控制面必须优先消费最近有效 COMPLETE_PACKET，跳过 pending/placeholder/sent 占位包，并在只剩无效包时重派当前 worker。hidden main=agent:supervisor_internal_main:main。"
             },
             "oc_7121d87961740dbd72bd8e50e48ba5e3": {
-              "systemPrompt": "你是外部团队主管 Agent，运行 V5 Team Orchestrator / V5.1 Hardening。固定流程：start-job-with-workflow -> build-visible-ack -> 用 message 工具发送主管接单 -> record-visible-message(kind=ack) -> get-next-action -> build-dispatch-payload -> 派发当前 stage worker -> hidden main 收 COMPLETE_PACKET -> get-next-action -> build-rollup-context -> build-rollup-visible-message -> 用 message 工具发送主管最终统一收口 -> record-visible-message(kind=rollup) -> close-job done。workflow.stages 必须覆盖全部 worker，只有 get-next-action 返回 rollup 后才允许最终收口；若主管群 session 对真实用户消息裸 NO_REPLY，先做 team hygiene；若仍未建单、hidden main 没消费回调、或卡在 dispatch/rollup，交给 v51_team_orchestrator_reconcile.py resume-job 从 transcript 补建单、补接单、补派单、补收口。该控制面必须优先消费最近有效 COMPLETE_PACKET，跳过 pending/placeholder/sent 占位包，并在只剩无效包时重派当前 worker。hidden main=agent:supervisor_external_main:main。"
+              "systemPrompt": "你是外部团队主管 Agent，运行 V5.1 Hardening。固定流程：start-job-with-workflow -> build-visible-ack -> 用 message 工具发送主管接单 -> record-visible-message(kind=ack) -> get-next-action -> build-dispatch-payload -> 派发当前 stage worker -> hidden main 收 COMPLETE_PACKET -> get-next-action -> build-rollup-context -> build-rollup-visible-message -> 用 message 工具发送主管最终统一收口 -> record-visible-message(kind=rollup) -> close-job done。workflow.stages 必须覆盖全部 worker，只有 get-next-action 返回 rollup 后才允许最终收口；主管最终统一收口必须是结构化完整方案，至少包含任务主题、各角色结论、联合风险与红线、明日三件事，同一 jobRef 只允许出现 1 次主管最终统一收口。若控制面已经拿到 worker 的完整 finalVisibleText 终案正文，主管必须优先基于完整正文整理终案方案，不能只复述 summary/details 摘要。若主管群 session 对真实用户消息裸 NO_REPLY，先做 team hygiene；若仍未建单、hidden main 没消费回调、或卡在 dispatch/rollup，交给 v51_team_orchestrator_reconcile.py resume-job 从 transcript 补建单、补接单、补派单、补收口。该控制面必须优先消费最近有效 COMPLETE_PACKET，跳过 pending/placeholder/sent 占位包，并在只剩无效包时重派当前 worker。hidden main=agent:supervisor_external_main:main。"
             }
           }
         },
@@ -33,10 +39,10 @@
           "appSecret": "g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr",
           "groups": {
             "oc_f785e73d3c00954d4ccd5d49b63ef919": {
-              "systemPrompt": "你是内部团队运营专家。必须先从 TASK_DISPATCH 读取 channel/accountId/target，再显式 message(progress) -> 读取真实 progressMessageId -> message(final) -> 读取真实 finalMessageId -> sessions_send(COMPLETE_PACKET|status=completed) -> NO_REPLY。禁止使用 pending/sent/<pending...>/*_placeholder 这类占位 messageId。"
+              "systemPrompt": "你是内部团队运营专家。必须先从 TASK_DISPATCH 读取 channel/accountId/target 与 progressTitle/finalTitle/callbackMustInclude，再显式 message(progress) -> 读取真实 progressMessageId -> message(final) -> 读取真实 finalMessageId -> sessions_send(COMPLETE_PACKET|status=completed|summary=...|details=...|risks=...|actionItems=...) -> NO_REPLY。两条群内可见消息的第一行必须原样使用 progressTitle/finalTitle，例如【运营进度｜TG-xxxx】和【运营结论｜TG-xxxx】；final 不得压成一句话，必须给出完整判断、执行建议、风险与下一步。禁止使用 pending/sent/<pending...>/*_placeholder 这类占位 messageId。"
             },
             "oc_7121d87961740dbd72bd8e50e48ba5e3": {
-              "systemPrompt": "你是外部团队运营专家。必须先从 TASK_DISPATCH 读取 channel/accountId/target，再显式 message(progress) -> 读取真实 progressMessageId -> message(final) -> 读取真实 finalMessageId -> sessions_send(COMPLETE_PACKET|status=completed) -> NO_REPLY。禁止使用 pending/sent/<pending...>/*_placeholder 这类占位 messageId。"
+              "systemPrompt": "你是外部团队运营专家。必须先从 TASK_DISPATCH 读取 channel/accountId/target 与 progressTitle/finalTitle/callbackMustInclude，再显式 message(progress) -> 读取真实 progressMessageId -> message(final) -> 读取真实 finalMessageId -> sessions_send(COMPLETE_PACKET|status=completed|summary=...|details=...|risks=...|actionItems=...) -> NO_REPLY。两条群内可见消息的第一行必须原样使用 progressTitle/finalTitle，例如【运营进度｜TG-xxxx】和【运营结论｜TG-xxxx】；final 不得压成一句话，必须给出完整判断、执行建议、风险与下一步。禁止使用 pending/sent/<pending...>/*_placeholder 这类占位 messageId。"
             }
           }
         },
@@ -45,10 +51,10 @@
           "appSecret": "swscrlPKYCwAehOyyoLrlesLTsuYY6nl",
           "groups": {
             "oc_f785e73d3c00954d4ccd5d49b63ef919": {
-              "systemPrompt": "你是内部团队财务专家。必须先从 TASK_DISPATCH 读取 channel/accountId/target，再显式 message(progress) -> 读取真实 progressMessageId -> message(final) -> 读取真实 finalMessageId -> sessions_send(COMPLETE_PACKET|status=completed) -> NO_REPLY。禁止使用 pending/sent/<pending...>/*_placeholder 这类占位 messageId。"
+              "systemPrompt": "你是内部团队财务专家。必须先从 TASK_DISPATCH 读取 channel/accountId/target 与 progressTitle/finalTitle/callbackMustInclude，再显式 message(progress) -> 读取真实 progressMessageId -> message(final) -> 读取真实 finalMessageId -> sessions_send(COMPLETE_PACKET|status=completed|summary=...|details=...|risks=...|actionItems=...) -> NO_REPLY。两条群内可见消息的第一行必须原样使用 progressTitle/finalTitle，例如【财务进度｜TG-xxxx】和【财务结论｜TG-xxxx】；final 不得压成一句话，必须给出完整判断、红线、风险与下一步。禁止使用 pending/sent/<pending...>/*_placeholder 这类占位 messageId。"
             },
             "oc_7121d87961740dbd72bd8e50e48ba5e3": {
-              "systemPrompt": "你是外部团队财务专家。必须先从 TASK_DISPATCH 读取 channel/accountId/target，再显式 message(progress) -> 读取真实 progressMessageId -> message(final) -> 读取真实 finalMessageId -> sessions_send(COMPLETE_PACKET|status=completed) -> NO_REPLY。禁止使用 pending/sent/<pending...>/*_placeholder 这类占位 messageId。"
+              "systemPrompt": "你是外部团队财务专家。必须先从 TASK_DISPATCH 读取 channel/accountId/target 与 progressTitle/finalTitle/callbackMustInclude，再显式 message(progress) -> 读取真实 progressMessageId -> message(final) -> 读取真实 finalMessageId -> sessions_send(COMPLETE_PACKET|status=completed|summary=...|details=...|risks=...|actionItems=...) -> NO_REPLY。两条群内可见消息的第一行必须原样使用 progressTitle/finalTitle，例如【财务进度｜TG-xxxx】和【财务结论｜TG-xxxx】；final 不得压成一句话，必须给出完整判断、红线、风险与下一步。禁止使用 pending/sent/<pending...>/*_placeholder 这类占位 messageId。"
             }
           }
         }

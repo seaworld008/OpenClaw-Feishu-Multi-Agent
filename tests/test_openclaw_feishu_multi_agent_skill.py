@@ -9,42 +9,84 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+OUTER_SKILL_ROOT = REPO_ROOT.parent
 README_FILE = REPO_ROOT / "README.md"
 SKILL_FILE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/SKILL.md"
+ROOT_SKILL_FILE = OUTER_SKILL_ROOT / "SKILL.md"
+ROOT_CODEX_PROMPT = OUTER_SKILL_ROOT / "references/codex-prompt-templates.md"
+ROOT_NOTES_FILE = OUTER_SKILL_ROOT / "references/openclaw-feishu-multi-agent-notes.md"
+ROOT_PREREQUISITES_FILE = OUTER_SKILL_ROOT / "references/prerequisites-checklist.md"
+ROOT_ROLLOUT_PLAYBOOK = OUTER_SKILL_ROOT / "references/rollout-and-upgrade-playbook.md"
+ROOT_VERIFICATION_TEMPLATE = OUTER_SKILL_ROOT / "templates/verification-checklist.md"
+ROOT_LEGACY_BUILD_SCRIPT = OUTER_SKILL_ROOT / ("scripts/" + "build" + "_openclaw_feishu_" + "snippets.py")
+INNER_NOTES_FILE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/openclaw-feishu-multi-agent-notes.md"
 TEST_FILE = Path(__file__).resolve()
 BUILD_SCRIPT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/core_feishu_config_builder.py"
-CANARY_SCRIPT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/v31_cross_group_canary.py"
-V4_3_CANARY_SCRIPT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/v431_single_group_canary.py"
-V4_3_1_DOC = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.3.1-single-group-production.md"
-V4_3_1_C1_DOC = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.3.1-single-group-production-C1.0.md"
-V4_3_SQL = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/v4-3-job-registry.example.sql"
-V4_3_1_CONFIG_SNAPSHOT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/openclaw-v4-3-1-single-group-production.example.jsonc"
-V4_3_REGISTRY = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/v431_single_group_runtime.py"
-V4_3_HYGIENE_SCRIPT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/v431_single_group_hygiene.py"
-V5_CANARY_SCRIPT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/v51_team_orchestrator_canary.py"
-V5_RECONCILE_SCRIPT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/v51_team_orchestrator_reconcile.py"
-V4_3_QUICKSTART_DOC = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/v4-3-1-quick-start.md"
-V5_DESIGN_DOC = REPO_ROOT / "docs/plans/2026-03-08-v5-team-orchestrator-design.md"
-V5_PLAN_DOC = REPO_ROOT / "docs/plans/2026-03-08-v5-team-orchestrator-implementation.md"
-V5_1_DESIGN_DOC = REPO_ROOT / "docs/plans/2026-03-08-v5-1-hardening-design.md"
-V5_1_PLAN_DOC = REPO_ROOT / "docs/plans/2026-03-08-v5-1-hardening-implementation.md"
-V5_INPUT_TEMPLATE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/input-template-v5-team-orchestrator.json"
-V5_FIXED_ROLE_TEMPLATE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/input-template-v5-fixed-role-multi-group.json"
-V5_DOC = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v5-team-orchestrator.md"
-V5_CONFIG_SNAPSHOT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/openclaw-v5-team-orchestrator.example.jsonc"
-V5_1_QUICKSTART_DOC = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/V5.1-新机器快速启动-SOP.md"
+JOB_REGISTRY_SCRIPT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/core_job_registry.py"
+SESSION_HYGIENE_SCRIPT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/core_session_hygiene.py"
+V51_RUNTIME_SCRIPT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/v51_team_orchestrator_runtime.py"
+V51_CANARY_SCRIPT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/v51_team_orchestrator_canary.py"
+V51_RECONCILE_SCRIPT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/v51_team_orchestrator_reconcile.py"
+V51_DESIGN_DOC = REPO_ROOT / "docs/plans/2026-03-08-v5-1-hardening-design.md"
+V51_PLAN_DOC = REPO_ROOT / "docs/plans/2026-03-08-v5-1-hardening-implementation.md"
+ROLE_CATALOG_DESIGN_DOC = REPO_ROOT / "docs/plans/2026-03-09-role-catalog-canonicalization-design.md"
+ROLE_CATALOG_PLAN_DOC = REPO_ROOT / "docs/plans/2026-03-09-role-catalog-canonicalization-implementation.md"
+PRUNING_DESIGN_DOC = REPO_ROOT / "docs/plans/2026-03-09-skill-mainline-pruning-design.md"
+PRUNING_PLAN_DOC = REPO_ROOT / "docs/plans/2026-03-09-skill-mainline-pruning-implementation.md"
+ROOT_ALIGNMENT_PLAN_DOC = REPO_ROOT / "docs/plans/2026-03-09-root-skill-mainline-alignment.md"
+V51_INPUT_TEMPLATE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/input-template-v51-team-orchestrator.json"
+V51_FIXED_ROLE_TEMPLATE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/input-template-v51-fixed-role-multi-group.json"
+V51_DOC = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v51-team-orchestrator.md"
+V51_CONFIG_SNAPSHOT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/openclaw-v51-team-orchestrator.example.jsonc"
+V51_QUICKSTART_DOC = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/V5.1-新机器快速启动-SOP.md"
 CUSTOMER_FIRST_USE_CHECKLIST = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用信息清单.md"
 CUSTOMER_FIRST_USE_PROMPT = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用-Codex提示词.md"
 CUSTOMER_FIRST_USE_EXAMPLE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用真实案例.md"
-LAUNCHD_TEMPLATE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/launchd/v4-3-watchdog.plist"
-V5_SYSTEMD_SERVICE_TEMPLATE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/systemd/v5-team-watchdog.service"
-V5_SYSTEMD_TIMER_TEMPLATE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/systemd/v5-team-watchdog.timer"
-V5_LAUNCHD_TEMPLATE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/launchd/v5-team-watchdog.plist"
+V51_SYSTEMD_SERVICE_TEMPLATE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/systemd/v51-team-watchdog.service"
+V51_SYSTEMD_TIMER_TEMPLATE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/systemd/v51-team-watchdog.timer"
+V51_LAUNCHD_TEMPLATE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/launchd/v51-team-watchdog.plist"
 VERIFICATION_CHECKLIST = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/verification-checklist.md"
 WSL_CONF_TEMPLATE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/windows/wsl.conf.example"
-WINDOWS_WSL2_NOTES = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/windows-wsl2-deployment-notes.md"
-MERGE_GAP_ANALYSIS = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/merge-gap-analysis.md"
-V4_3_1_STABILITY_PLAN = REPO_ROOT / "docs/plans/2026-03-07-v4-3-1-single-group-production-stability.md"
+
+REMOVED_V4_ASSETS = [
+    REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.3.1-single-group-production.md",
+    REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.3.1-single-group-production-C1.0.md",
+    REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/input-template-legacy-chat-feishu.json",
+    REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/v4-3-1-quick-start.md",
+    REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/source-cross-validation-2026-03-07-v4-3-1.md",
+    REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/source-cross-validation-2026-03-07-platforms.md",
+    REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/windows-wsl2-deployment-notes.md",
+    REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/openclaw-v4-3-1-single-group-production.example.jsonc",
+    REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/systemd/v4-3-watchdog.service",
+    REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/systemd/v4-3-watchdog.timer",
+    REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/launchd/v4-3-watchdog.plist",
+    REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/v4-3-job-registry.example.sql",
+    REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/v431_single_group_runtime.py",
+    REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/v431_single_group_hygiene.py",
+    REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/v431_single_group_canary.py",
+    REPO_ROOT / "docs/plans/2026-03-07-v4-3-1-cross-platform-compatibility.md",
+    REPO_ROOT / "docs/plans/2026-03-07-v4-3-1-single-group-production-stability.md",
+    REPO_ROOT / "docs/plans/2026-03-07-v4-3-1-solidify-success.md",
+    REPO_ROOT / "docs/plans/2026-03-08-script-namespace-unification-design.md",
+    REPO_ROOT / "docs/plans/2026-03-08-script-namespace-unification-implementation.md",
+    REPO_ROOT / "docs/plans/2026-03-08-default-expert-catalog-design.md",
+    REPO_ROOT / "docs/plans/2026-03-08-default-expert-catalog-implementation.md",
+    REPO_ROOT / "docs/plans/2026-03-08-v5-fixed-role-multi-group-design.md",
+    REPO_ROOT / "docs/plans/2026-03-08-v5-fixed-role-multi-group-implementation.md",
+    REPO_ROOT / "docs/plans/2026-03-08-客户首次使用交付包设计.md",
+    REPO_ROOT / "docs/plans/2026-03-08-客户首次使用交付包实施计划.md",
+]
+
+REMOVED_V3_ASSETS = [
+    REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v3.1.md",
+    REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/input-template.json",
+    REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/input-template-plugin.json",
+    REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/scripts/v31_cross_group_canary.py",
+]
+
+REMOVED_ROOT_LEGACY_ASSETS = [
+    OUTER_SKILL_ROOT / "references/input-template-legacy-chat-feishu.json",
+]
 
 
 def legacy_script_names():
@@ -64,10 +106,6 @@ def new_script_paths():
         script_root / "core_job_registry.py",
         script_root / "core_session_hygiene.py",
         script_root / "core_canary_engine.py",
-        script_root / "v31_cross_group_canary.py",
-        script_root / "v431_single_group_runtime.py",
-        script_root / "v431_single_group_hygiene.py",
-        script_root / "v431_single_group_canary.py",
         script_root / "v51_team_orchestrator_runtime.py",
         script_root / "v51_team_orchestrator_hygiene.py",
         script_root / "v51_team_orchestrator_canary.py",
@@ -81,27 +119,20 @@ def active_namespace_docs():
         README_FILE,
         SKILL_FILE,
         TEST_FILE,
+        INNER_NOTES_FILE,
+        BUILD_SCRIPT,
         REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/deployment-inputs.example.yaml",
         REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/verification-checklist.md",
-        REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/openclaw-v4-3-1-single-group-production.example.jsonc",
-        REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/openclaw-v5-team-orchestrator.example.jsonc",
-        REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/systemd/v4-3-watchdog.service",
-        REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/launchd/v4-3-watchdog.plist",
-        REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v3.1.md",
-        V4_3_1_DOC,
-        V4_3_1_C1_DOC,
-        V5_DOC,
+        REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/openclaw-v51-team-orchestrator.example.jsonc",
+        V51_DOC,
         REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/rollout-and-upgrade-playbook.md",
         CUSTOMER_FIRST_USE_CHECKLIST,
         CUSTOMER_FIRST_USE_PROMPT,
         CUSTOMER_FIRST_USE_EXAMPLE,
-        V4_3_QUICKSTART_DOC,
-        WINDOWS_WSL2_NOTES,
-        REPO_ROOT / "docs/plans/2026-03-08-v5-1-hardening-design.md",
-        REPO_ROOT / "docs/plans/2026-03-08-v5-1-hardening-implementation.md",
-        REPO_ROOT / "docs/plans/2026-03-08-v5-team-orchestrator-implementation.md",
-        REPO_ROOT / "docs/plans/2026-03-08-script-namespace-unification-design.md",
-        REPO_ROOT / "docs/plans/2026-03-08-script-namespace-unification-implementation.md",
+        V51_DESIGN_DOC,
+        V51_PLAN_DOC,
+        PRUNING_DESIGN_DOC,
+        PRUNING_PLAN_DOC,
     ]
 
 
@@ -121,20 +152,7 @@ class ScriptNamespaceContractTests(unittest.TestCase):
 
     def test_version_docs_reference_new_public_entrypoints(self):
         doc_expectations = {
-            REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v3.1.md": [
-                "v31_cross_group_canary.py",
-            ],
-            V4_3_1_DOC: [
-                "v431_single_group_runtime.py",
-                "v431_single_group_hygiene.py",
-                "v431_single_group_canary.py",
-            ],
-            V4_3_1_C1_DOC: [
-                "v431_single_group_runtime.py",
-                "v431_single_group_hygiene.py",
-                "v431_single_group_canary.py",
-            ],
-            V5_DOC: [
+            V51_DOC: [
                 "v51_team_orchestrator_runtime.py",
                 "v51_team_orchestrator_hygiene.py",
                 "v51_team_orchestrator_canary.py",
@@ -153,6 +171,22 @@ class ScriptNamespaceContractTests(unittest.TestCase):
 
 def load_build_module():
     spec = importlib.util.spec_from_file_location(BUILD_SCRIPT.stem, BUILD_SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_registry_module():
+    spec = importlib.util.spec_from_file_location(JOB_REGISTRY_SCRIPT.stem, JOB_REGISTRY_SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_root_bridge_build_module():
+    spec = importlib.util.spec_from_file_location(ROOT_LEGACY_BUILD_SCRIPT.stem, ROOT_LEGACY_BUILD_SCRIPT)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
@@ -216,7 +250,119 @@ class BuildSnippetTests(unittest.TestCase):
         self.assertNotIn("verificationToken", account_cfg)
 
 
-class BuildSnippetV5Tests(unittest.TestCase):
+class RootBridgeBuilderTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.module = load_root_bridge_build_module()
+
+    def test_rewrite_bridge_args_rewrites_removed_legacy_input_alias(self):
+        rewritten = self.module.rewrite_bridge_args(
+            ["--input", "references/input-template.json", "--out", "/tmp/custom-out"]
+        )
+
+        self.assertEqual(
+            rewritten,
+            [
+                "--input",
+                str(self.module.DEFAULT_INPUT_TEMPLATE),
+                "--out",
+                "/tmp/custom-out",
+            ],
+        )
+
+    def test_rewrite_bridge_args_injects_v51_defaults_when_options_missing(self):
+        rewritten = self.module.rewrite_bridge_args([])
+
+        self.assertEqual(
+            rewritten,
+            [
+                "--input",
+                str(self.module.DEFAULT_INPUT_TEMPLATE),
+                "--out",
+                str(self.module.DEFAULT_OUTPUT_DIR),
+            ],
+        )
+
+    def test_rewrite_bridge_args_rewrites_removed_plugin_alias(self):
+        rewritten = self.module.rewrite_bridge_args(
+            ["--input", "references/input-template-plugin.json", "--out", "/tmp/custom-out"]
+        )
+
+        self.assertEqual(
+            rewritten,
+            [
+                "--input",
+                str(self.module.DEFAULT_INPUT_TEMPLATE),
+                "--out",
+                "/tmp/custom-out",
+            ],
+        )
+
+    def test_rewrite_bridge_args_rewrites_removed_legacy_chat_feishu_alias(self):
+        rewritten = self.module.rewrite_bridge_args(
+            ["--input", "references/input-template-legacy-chat-feishu.json", "--out", "/tmp/custom-out"]
+        )
+
+        self.assertEqual(
+            rewritten,
+            [
+                "--input",
+                str(self.module.DEFAULT_INPUT_TEMPLATE),
+                "--out",
+                "/tmp/custom-out",
+            ],
+        )
+
+    def test_rewrite_bridge_args_preserves_explicit_custom_paths(self):
+        rewritten = self.module.rewrite_bridge_args(
+            ["--input", "/tmp/custom-input.json", "--out", "/tmp/custom-out"]
+        )
+
+        self.assertEqual(
+            rewritten,
+            ["--input", "/tmp/custom-input.json", "--out", "/tmp/custom-out"],
+        )
+
+    def test_root_bridge_script_accepts_removed_legacy_input_alias(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = subprocess.run(
+                [
+                    "python3",
+                    str(ROOT_LEGACY_BUILD_SCRIPT),
+                    "--input",
+                    "references/input-template.json",
+                    "--out",
+                    tmpdir,
+                ],
+                cwd=OUTER_SKILL_ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_root_bridge_script_accepts_removed_plugin_alias(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = subprocess.run(
+                [
+                    "python3",
+                    str(ROOT_LEGACY_BUILD_SCRIPT),
+                    "--input",
+                    "references/input-template-plugin.json",
+                    "--out",
+                    tmpdir,
+                ],
+                cwd=OUTER_SKILL_ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
+class BuildSnippetV51Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.module = load_build_module()
@@ -314,7 +460,136 @@ class BuildSnippetV5Tests(unittest.TestCase):
             ],
         }
 
-    def test_v5_team_input_generates_team_scoped_agents_and_bindings(self):
+    def team_input_with_role_catalog(self):
+        return {
+            "mode": "plugin",
+            "connectionMode": "websocket",
+            "defaultAccount": "aoteman",
+            "messages": {
+                "groupChat": {
+                    "mentionPatterns": ["@奥特曼", "奥特曼", "主管机器人"],
+                }
+            },
+            "accounts": [
+                {
+                    "accountId": "aoteman",
+                    "appId": "cli_supervisor",
+                    "appSecret": "secret_supervisor",
+                },
+                {
+                    "accountId": "xiaolongxia",
+                    "appId": "cli_ops",
+                    "appSecret": "secret_ops",
+                },
+                {
+                    "accountId": "yiran_yibao",
+                    "appId": "cli_finance",
+                    "appSecret": "secret_finance",
+                },
+            ],
+            "agents": {
+                "defaults": {
+                    "sandbox": {
+                        "sessionToolsVisibility": "all",
+                    }
+                }
+            },
+            "agentToAgent": {
+                "enabled": True,
+            },
+            "session": {
+                "sendPolicy": {
+                    "default": "allow",
+                }
+            },
+            "roleCatalog": {
+                "supervisor_default": {
+                    "kind": "supervisor",
+                    "accountId": "aoteman",
+                    "name": "奥特曼",
+                    "role": "主管总控",
+                    "visibleLabel": "主管",
+                    "description": "负责任务受理、拆解、调度与统一收口。",
+                    "responsibility": "接单、拆解、调度、统一收口",
+                    "identity": {
+                        "name": "奥特曼总控",
+                        "theme": "steady orchestrator",
+                        "emoji": "🧭",
+                    },
+                    "mentionPatterns": ["@奥特曼", "奥特曼", "主管机器人"],
+                    "systemPrompt": "catalog supervisor prompt",
+                },
+                "ops_default": {
+                    "kind": "worker",
+                    "accountId": "xiaolongxia",
+                    "name": "小龙虾找妈妈",
+                    "role": "运营专家",
+                    "visibleLabel": "运营",
+                    "description": "负责活动打法、节奏设计和执行推进。",
+                    "responsibility": "活动打法、节奏、执行动作",
+                    "identity": {
+                        "theme": "growth operator",
+                        "emoji": "📈",
+                    },
+                    "visibility": "visible",
+                    "systemPrompt": "catalog ops prompt",
+                },
+                "finance_default": {
+                    "kind": "worker",
+                    "accountId": "yiran_yibao",
+                    "name": "易燃易爆",
+                    "role": "财务专家",
+                    "visibleLabel": "财务",
+                    "description": "负责预算、毛利、ROI 与风险控制。",
+                    "responsibility": "预算、毛利、ROI 与风险",
+                    "identity": {
+                        "theme": "financial controller",
+                        "emoji": "💹",
+                    },
+                    "visibility": "visible",
+                    "systemPrompt": "catalog finance prompt",
+                },
+            },
+            "teams": [
+                {
+                    "teamKey": "market_sz",
+                    "displayName": "深圳团队",
+                    "group": {
+                        "peerId": "oc_team_sz",
+                        "entryAccountId": "aoteman",
+                        "requireMention": True,
+                    },
+                    "supervisor": {
+                        "profileId": "supervisor_default",
+                        "agentId": "supervisor_market_sz",
+                    },
+                    "workers": [
+                        {
+                            "profileId": "ops_default",
+                            "agentId": "ops_market_sz",
+                        },
+                        {
+                            "profileId": "finance_default",
+                            "agentId": "finance_market_sz",
+                            "visibleLabel": "财审",
+                            "systemPrompt": "team finance override prompt",
+                            "identity": {
+                                "theme": "client-facing finance",
+                            },
+                        },
+                    ],
+                    "workflow": {
+                        "mode": "serial",
+                        "stages": [
+                            {"agentId": "ops_market_sz"},
+                            {"agentId": "finance_market_sz"},
+                        ],
+                    },
+                }
+            ],
+        }
+
+    def test_v51_team_input_generates_team_scoped_agents_and_bindings(self):
         patch = self.module.build_plugin_patch(self.team_input())
 
         agents = patch["agents"]["list"]
@@ -327,7 +602,7 @@ class BuildSnippetV5Tests(unittest.TestCase):
         self.assertEqual(agents[1]["workspace"], "~/.openclaw/teams/market_sz/workspaces/ops")
         self.assertEqual(agents[2]["workspace"], "~/.openclaw/teams/market_sz/workspaces/finance")
 
-    def test_v5_team_input_generates_group_prompts_per_account(self):
+    def test_v51_team_input_generates_group_prompts_per_account(self):
         patch = self.module.build_plugin_patch(self.team_input())
         accounts = patch["channels"]["feishu"]["accounts"]
 
@@ -335,7 +610,7 @@ class BuildSnippetV5Tests(unittest.TestCase):
         self.assertEqual(accounts["ops-bot"]["groups"]["oc_team_sz"]["systemPrompt"], "ops prompt")
         self.assertEqual(accounts["finance-bot"]["groups"]["oc_team_sz"]["systemPrompt"], "finance prompt")
 
-    def test_v5_team_input_builds_agent_to_agent_allowlist_from_generated_agents(self):
+    def test_v51_team_input_builds_agent_to_agent_allowlist_from_generated_agents(self):
         patch = self.module.build_plugin_patch(self.team_input())
 
         self.assertEqual(
@@ -343,7 +618,7 @@ class BuildSnippetV5Tests(unittest.TestCase):
             ["supervisor_market_sz", "ops_market_sz", "finance_market_sz"],
         )
 
-    def test_v5_team_input_generates_group_require_mention_and_messages_defaults(self):
+    def test_v51_team_input_generates_group_require_mention_and_messages_defaults(self):
         patch = self.module.build_plugin_patch(self.team_input())
 
         self.assertEqual(patch["channels"]["feishu"]["groups"]["oc_team_sz"]["requireMention"], True)
@@ -356,7 +631,7 @@ class BuildSnippetV5Tests(unittest.TestCase):
             "all",
         )
 
-    def test_v5_team_input_preserves_identity_and_manifest_description(self):
+    def test_v51_team_input_preserves_identity_and_manifest_description(self):
         data = self.team_input()
         data["teams"][0]["supervisor"]["description"] = "负责深圳团队多专家编排与最终收口"
         data["teams"][0]["supervisor"]["identity"] = {
@@ -372,7 +647,7 @@ class BuildSnippetV5Tests(unittest.TestCase):
         }
 
         patch = self.module.build_plugin_patch(data)
-        manifest = self.module.build_v5_runtime_manifest(data)
+        manifest = self.module.build_v51_runtime_manifest(data)
 
         self.assertEqual(
             patch["agents"]["list"][0]["identity"],
@@ -403,8 +678,8 @@ class BuildSnippetV5Tests(unittest.TestCase):
             "🧭",
         )
 
-    def test_v5_team_input_builds_team_runtime_manifest(self):
-        manifest = self.module.build_v5_runtime_manifest(self.team_input())
+    def test_v51_team_input_builds_team_runtime_manifest(self):
+        manifest = self.module.build_v51_runtime_manifest(self.team_input())
 
         self.assertEqual(manifest["orchestratorVersion"], "V5.1 Hardening")
         self.assertEqual(manifest["teams"][0]["teamKey"], "market_sz")
@@ -419,6 +694,41 @@ class BuildSnippetV5Tests(unittest.TestCase):
         self.assertEqual(
             manifest["teams"][0]["workers"][0]["visibility"],
             "visible",
+        )
+
+    def test_v51_team_input_supports_role_catalog_profiles_and_overrides(self):
+        patch = self.module.build_plugin_patch(self.team_input_with_role_catalog())
+        manifest = self.module.build_v51_runtime_manifest(self.team_input_with_role_catalog())
+
+        agents = patch["agents"]["list"]
+        self.assertEqual([agent["id"] for agent in agents], ["supervisor_market_sz", "ops_market_sz", "finance_market_sz"])
+        self.assertEqual(agents[0]["name"], "奥特曼")
+        self.assertEqual(agents[1]["name"], "小龙虾找妈妈")
+        self.assertEqual(agents[2]["name"], "易燃易爆")
+        self.assertEqual(
+            patch["channels"]["feishu"]["accounts"]["aoteman"]["groups"]["oc_team_sz"]["systemPrompt"],
+            "catalog supervisor prompt",
+        )
+        self.assertEqual(
+            patch["channels"]["feishu"]["accounts"]["xiaolongxia"]["groups"]["oc_team_sz"]["systemPrompt"],
+            "catalog ops prompt",
+        )
+        self.assertEqual(
+            patch["channels"]["feishu"]["accounts"]["yiran_yibao"]["groups"]["oc_team_sz"]["systemPrompt"],
+            "team finance override prompt",
+        )
+        self.assertEqual(manifest["teams"][0]["supervisor"]["profileId"], "supervisor_default")
+        self.assertEqual(manifest["teams"][0]["supervisor"]["visibleLabel"], "主管")
+        self.assertEqual(manifest["teams"][0]["workers"][0]["profileId"], "ops_default")
+        self.assertEqual(manifest["teams"][0]["workers"][0]["visibleLabel"], "运营")
+        self.assertEqual(manifest["teams"][0]["workers"][1]["profileId"], "finance_default")
+        self.assertEqual(manifest["teams"][0]["workers"][1]["visibleLabel"], "财审")
+        self.assertEqual(
+            manifest["teams"][0]["workers"][1]["identity"],
+            {
+                "theme": "client-facing finance",
+                "emoji": "💹",
+            },
         )
         self.assertEqual(
             manifest["teams"][0]["runtime"]["controlPlane"]["commands"]["startJob"],
@@ -461,8 +771,8 @@ class BuildSnippetV5Tests(unittest.TestCase):
             "resume-job",
         )
 
-    def test_v5_team_input_persists_visible_delivery_metadata_for_reconcile(self):
-        manifest = self.module.build_v5_runtime_manifest(self.team_input())
+    def test_v51_team_input_persists_visible_delivery_metadata_for_reconcile(self):
+        manifest = self.module.build_v51_runtime_manifest(self.team_input())
 
         self.assertEqual(
             manifest["teams"][0]["runtime"]["entryAccountId"],
@@ -477,21 +787,21 @@ class BuildSnippetV5Tests(unittest.TestCase):
             "chat:oc_team_sz",
         )
 
-    def test_v5_team_input_rejects_duplicate_team_keys(self):
+    def test_v51_team_input_rejects_duplicate_team_keys(self):
         data = self.team_input()
         data["teams"].append(dict(data["teams"][0]))
 
         with self.assertRaises(ValueError):
             self.module.build_plugin_patch(data)
 
-    def test_v5_team_input_rejects_invalid_team_key(self):
+    def test_v51_team_input_rejects_invalid_team_key(self):
         data = self.team_input()
         data["teams"][0]["teamKey"] = "市场一组"
 
         with self.assertRaises(ValueError):
             self.module.build_plugin_patch(data)
 
-    def test_v5_team_input_rejects_workflow_missing_worker_stage(self):
+    def test_v51_team_input_rejects_workflow_missing_worker_stage(self):
         data = self.team_input()
         data["teams"][0]["workflow"]["stages"] = [
             {"agentId": "ops_market_sz"},
@@ -500,7 +810,7 @@ class BuildSnippetV5Tests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.module.build_plugin_patch(data)
 
-    def test_v5_team_input_rejects_duplicate_workflow_stage_agent(self):
+    def test_v51_team_input_rejects_duplicate_workflow_stage_agent(self):
         data = self.team_input()
         data["teams"][0]["workflow"]["stages"] = [
             {"agentId": "ops_market_sz"},
@@ -509,65 +819,63 @@ class BuildSnippetV5Tests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             self.module.build_plugin_patch(data)
-
-
-class CanaryScriptTests(unittest.TestCase):
-    def run_script(self, log_content, *extra_args):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            log_path = Path(tmpdir) / "openclaw.log"
-            log_path.write_text(log_content, encoding="utf-8")
-            result = subprocess.run(
-                [
-                    "python3",
-                    str(CANARY_SCRIPT),
-                    "--log",
-                    str(log_path),
-                    "--start-line",
-                    "0",
-                    *extra_args,
-                ],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            return result
-
-    def test_canary_requires_dispatch_evidence(self):
-        result = self.run_script(
-            "\n".join(
-                [
-                    "task demo-v3-001",
-                    "session=agent:sales_agent:abc",
-                    "session=agent:ops_agent:def",
-                    "session=agent:finance_agent:ghi",
-                ]
-            ),
-            "--task-id",
-            "demo-v3-001",
-        )
-
-        self.assertEqual(result.returncode, 3)
-        self.assertIn("DISPATCH_UNVERIFIED", result.stdout)
-
-    def test_canary_succeeds_with_dispatch_evidence(self):
-        result = self.run_script(
-            "\n".join(
-                [
-                    "task demo-v3-001",
-                    "tool=sessions_send target=session=agent:sales_agent:abc",
-                    "tool=sessions_send target=session=agent:ops_agent:def",
-                    "tool=sessions_send target=session=agent:finance_agent:ghi",
-                ]
-            ),
-            "--task-id",
-            "demo-v3-001",
-        )
-
-        self.assertEqual(result.returncode, 0)
-        self.assertIn("DISPATCH_OK", result.stdout)
 
 
 class DocumentationConsistencyTests(unittest.TestCase):
+    def test_root_skill_redirects_to_current_mainline_and_hides_legacy_routes(self):
+        root_skill = ROOT_SKILL_FILE.read_text(encoding="utf-8")
+        root_prompt = ROOT_CODEX_PROMPT.read_text(encoding="utf-8")
+
+        self.assertIn("V5.1 Hardening", root_skill)
+        self.assertIn("openclaw-feishu-multi-agent-deploy", root_skill)
+        self.assertIn("codex-prompt-templates-v51-team-orchestrator.md", root_skill)
+        self.assertNotIn("V3.1", root_skill)
+        self.assertNotIn("chat-feishu", root_skill)
+        self.assertNotIn("build" + "_openclaw_feishu_" + "snippets.py", root_skill)
+        self.assertNotIn("input-template-legacy-chat-feishu.json", root_skill)
+
+        self.assertIn("V5.1 Hardening", root_prompt)
+        self.assertIn("openclaw-feishu-multi-agent-deploy", root_prompt)
+        self.assertIn("codex-prompt-templates-v51-team-orchestrator.md", root_prompt)
+        self.assertNotIn("V3.1", root_prompt)
+        self.assertNotIn("chat-feishu", root_prompt)
+        self.assertNotIn("build" + "_openclaw_feishu_" + "snippets.py", root_prompt)
+
+    def test_root_notes_mark_legacy_input_as_historical_only(self):
+        root_notes = ROOT_NOTES_FILE.read_text(encoding="utf-8")
+
+        self.assertIn("V5.1 Hardening", root_notes)
+        self.assertIn("历史兼容", root_notes)
+        self.assertIn("input-template-v51-fixed-role-multi-group.json", root_notes)
+        self.assertNotIn("V3.1", root_notes)
+        self.assertNotIn("chat-feishu", root_notes)
+        self.assertNotIn("老项目兼容：\n  - `references/input-template-legacy-chat-feishu.json`", root_notes)
+
+    def test_inner_required_notes_use_v51_fixed_role_template_as_current_default(self):
+        inner_notes = INNER_NOTES_FILE.read_text(encoding="utf-8")
+
+        self.assertIn("input-template-v51-fixed-role-multi-group.json", inner_notes)
+        self.assertNotIn("V3.1", inner_notes)
+        self.assertNotIn("新项目优先使用：\n  - `references/input-template.json`（官方插件默认）", inner_notes)
+        self.assertNotIn("新项目优先使用：\n  - `references/input-template-plugin.json`（插件多账号完整示例）", inner_notes)
+
+    def test_root_checklists_are_bridge_docs_to_current_mainline(self):
+        for path in (ROOT_PREREQUISITES_FILE, ROOT_ROLLOUT_PLAYBOOK, ROOT_VERIFICATION_TEMPLATE):
+            content = path.read_text(encoding="utf-8")
+            self.assertIn("V5.1 Hardening", content, str(path))
+            self.assertIn("openclaw-feishu-multi-agent-deploy", content, str(path))
+            self.assertIn("桥接", content, str(path))
+            self.assertNotIn("V3.1", content, str(path))
+
+    def test_root_legacy_builder_script_redirects_to_inner_builder(self):
+        content = ROOT_LEGACY_BUILD_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("core_feishu_config_builder.py", content)
+        self.assertIn("input-template-v51-fixed-role-multi-group.json", content)
+        self.assertNotIn("chat-feishu", content)
+        self.assertNotIn("LEGACY_CHANNEL", content)
+        self.assertNotIn("--input references/input-template.json", content)
+
     def test_readme_documents_platform_matrix(self):
         content = README_FILE.read_text(encoding="utf-8")
 
@@ -584,93 +892,90 @@ class DocumentationConsistencyTests(unittest.TestCase):
         self.assertIn("launchd", content)
         self.assertIn("systemd --user", content)
 
-    def test_readme_keeps_mainline_versions_and_preserves_c1_variant(self):
+    def test_readme_keeps_only_v51_mainline(self):
         content = README_FILE.read_text(encoding="utf-8")
 
-        self.assertIn("V3.1", content)
-        self.assertIn("V4.3.1", content)
-        self.assertIn("V5 Team Orchestrator", content)
-        self.assertIn("V4.3.1-C1.0", content)
+        self.assertIn("V5.1 Hardening", content)
+        self.assertNotIn("V3.1", content)
+        self.assertNotIn("V4.3.1", content)
+        self.assertNotIn("C1.0", content)
         self.assertNotIn("V4.2.1", content)
         self.assertNotIn("V4.2", content)
         self.assertNotIn("V4.1", content)
         self.assertNotIn("V4：单群高级", content)
 
-    def test_v431_c1_customer_doc_is_preserved(self):
-        content = V4_3_1_C1_DOC.read_text(encoding="utf-8")
+    def test_removed_v4_assets_do_not_exist(self):
+        existing = [str(path.relative_to(REPO_ROOT)) for path in REMOVED_V4_ASSETS if path.exists()]
+        self.assertEqual(existing, [])
 
-        self.assertIn("V4.3.1-C1.0 单群生产稳定版（客户定制版）", content)
-        self.assertIn("oc_426bc13db95838b2aa9a327a20ee71ea", content)
-        self.assertIn("marketing-bot", content)
-        self.assertIn("ecom-market-bot", content)
-        self.assertIn("default", content)
-        self.assertIn("@3-营销机器人", content)
+    def test_removed_v3_assets_do_not_exist(self):
+        existing = [str(path.relative_to(REPO_ROOT)) for path in REMOVED_V3_ASSETS if path.exists()]
+        self.assertEqual(existing, [])
 
-    def test_merge_gap_analysis_has_been_removed_after_mainline_consolidation(self):
-        self.assertFalse(MERGE_GAP_ANALYSIS.exists())
+    def test_removed_root_legacy_assets_do_not_exist(self):
+        existing = [str(path.relative_to(OUTER_SKILL_ROOT)) for path in REMOVED_ROOT_LEGACY_ASSETS if path.exists()]
+        self.assertEqual(existing, [])
 
-    def test_v431_stability_plan_no_longer_references_deleted_v43_base_doc(self):
-        content = V4_3_1_STABILITY_PLAN.read_text(encoding="utf-8")
+    def test_readme_and_skill_do_not_advertise_legacy_chat_feishu_route(self):
+        readme = README_FILE.read_text(encoding="utf-8")
+        skill = SKILL_FILE.read_text(encoding="utf-8")
 
-        self.assertNotIn("codex-prompt-templates-v4.3-single-group-production.md", content)
-        self.assertIn("codex-prompt-templates-v4.3.1-single-group-production.md", content)
+        self.assertNotIn("chat-feishu", readme)
+        self.assertNotIn("chat-feishu", skill)
 
-    def test_v43_1_doc_requires_watchdog_and_one_time_init(self):
-        content = V4_3_1_DOC.read_text(encoding="utf-8")
+    def test_pruning_design_docs_exist(self):
+        self.assertTrue(PRUNING_DESIGN_DOC.exists())
+        self.assertTrue(PRUNING_PLAN_DOC.exists())
 
-        self.assertIn("watchdog", content)
-        self.assertIn("一次性", content)
-        self.assertIn("WARMUP", content)
-        self.assertIn("主管已接单", content)
-        self.assertIn("最终统一收口", content)
+        design = PRUNING_DESIGN_DOC.read_text(encoding="utf-8")
+        plan = PRUNING_PLAN_DOC.read_text(encoding="utf-8")
+        root_alignment = ROOT_ALIGNMENT_PLAN_DOC.read_text(encoding="utf-8")
 
-    def test_v43_1_doc_documents_cross_platform_delivery(self):
-        content = V4_3_1_DOC.read_text(encoding="utf-8")
+        self.assertIn("V5.1 Hardening", design)
+        self.assertIn("V4.3.1", design)
+        self.assertNotIn("V3.1", design)
+        self.assertIn("只保留 `V5.1 Hardening`", plan)
+        self.assertIn("README.md", plan)
+        self.assertIn("tests/test_openclaw_feishu_multi_agent_skill.py", plan)
+        self.assertNotIn("V3.1", plan)
+        self.assertNotIn("V3.1", root_alignment)
 
-        self.assertIn("平台兼容策略", content)
-        self.assertIn("Windows + WSL2", content)
-        self.assertIn("launchd", content)
-        self.assertIn("systemd --user", content)
+    def test_current_mainline_assets_do_not_use_legacy_version_labels(self):
+        checks = [
+            (V51_DESIGN_DOC, ["V5 team unit"]),
+            (ROLE_CATALOG_PLAN_DOC, ["normalize_v5_teams", "build_v5_plugin_patch", "build_v5_runtime_manifest"]),
+        ]
+        v51_repair_plan = REPO_ROOT / "docs/plans/2026-03-08-v5-1-production-stability-repair.md"
+        if v51_repair_plan.exists():
+            checks.append((v51_repair_plan, ["test_v5_"]))
+        checks.append((V51_PLAN_DOC, ["test_v5_"]))
+        ack_design = REPO_ROOT / "docs/plans/2026-03-09-ack-role-summary-design.md"
+        if ack_design.exists():
+            checks.append((ack_design, ["V5 job"]))
 
-    def test_v43_1_doc_keeps_full_codex_delivery_template(self):
-        content = V4_3_1_DOC.read_text(encoding="utf-8")
+        violations = []
+        for path, banned_tokens in checks:
+            text = path.read_text(encoding="utf-8")
+            for token in banned_tokens:
+                if token in text:
+                    violations.append(f"{path.relative_to(REPO_ROOT)} -> {token}")
 
-        self.assertIn("Codex 真实交付模板（V4.3.1，完整可执行版）", content)
-        self.assertIn("accountMappings", content)
-        self.assertIn("routes", content)
-        self.assertIn("部署后测试顺序", content)
-        self.assertIn("READY_FOR_TEAM_GROUP|agentId=ops_agent", content)
-        self.assertIn("V4_3_CANARY_OK", content)
-        self.assertIn("status=queued", content)
+        test_text = TEST_FILE.read_text(encoding="utf-8")
+        obsolete_test_defs = re.findall(r"^\s*def\s+([A-Za-z0-9_]*_v5_[A-Za-z0-9_]*)\(", test_text, flags=re.M)
+        for name in obsolete_test_defs:
+            violations.append(f"tests/test_openclaw_feishu_multi_agent_skill.py -> {name}")
+        obsolete_titles = re.findall(r'--title",\n\s*"V5 [^"]+"', test_text)
+        for title in obsolete_titles:
+            violations.append(f"tests/test_openclaw_feishu_multi_agent_skill.py -> {title.strip()}")
 
-    def test_v43_sql_schema_enforces_single_active_job(self):
-        content = V4_3_SQL.read_text(encoding="utf-8")
+        self.assertEqual(violations, [])
 
-        self.assertIn("idx_jobs_group_single_active", content)
-        self.assertIn("WHERE status = 'active'", content)
-
-    def test_launchd_template_targets_watchdog_registry(self):
-        content = LAUNCHD_TEMPLATE.read_text(encoding="utf-8")
-
-        self.assertIn("bot.molt.v4-3-watchdog", content)
-        self.assertIn("v431_single_group_runtime.py", content)
-        self.assertIn("StartInterval", content)
-        self.assertIn("__TEAM_GROUP_PEER_ID__", content)
-
-    def test_windows_wsl2_notes_prefer_wsl_and_systemd(self):
-        content = WINDOWS_WSL2_NOTES.read_text(encoding="utf-8")
-
-        self.assertIn("WSL2", content)
-        self.assertIn("systemd=true", content)
-        self.assertIn("Windows 原生", content)
-        self.assertIn("不推荐", content)
-
-    def test_v5_docs_require_real_message_ids_and_callback_reconcile(self):
+    def test_v51_docs_require_real_message_ids_and_callback_reconcile(self):
         readme = README_FILE.read_text(encoding="utf-8")
         skill = SKILL_FILE.read_text(encoding="utf-8")
         checklist = VERIFICATION_CHECKLIST.read_text(encoding="utf-8")
-        v5_doc = V5_DOC.read_text(encoding="utf-8")
-        v5_snapshot = V5_CONFIG_SNAPSHOT.read_text(encoding="utf-8")
+        v5_doc = V51_DOC.read_text(encoding="utf-8")
+        v5_snapshot = V51_CONFIG_SNAPSHOT.read_text(encoding="utf-8")
 
         self.assertIn("最近的有效 `COMPLETE_PACKET`", readme)
         self.assertIn("pending / placeholder / sent / <pending...>", readme)
@@ -690,12 +995,12 @@ class DocumentationConsistencyTests(unittest.TestCase):
         self.assertIn("systemd=true", content)
 
 
-class V43RegistryTests(unittest.TestCase):
+class RuntimeRegistryTests(unittest.TestCase):
     def run_registry(self, db_path, *args):
         result = subprocess.run(
             [
                 "python3",
-                str(V4_3_REGISTRY),
+                str(JOB_REGISTRY_SCRIPT),
                 "--db",
                 str(db_path),
                 *args,
@@ -814,7 +1119,7 @@ class V43RegistryTests(unittest.TestCase):
             self.assertIn('"completionPackets"', details.stdout)
             self.assertIn("预算与ROI校验完成", details.stdout)
 
-    def test_registry_ready_to_rollup_accepts_v5_team_scoped_worker_ids(self):
+    def test_registry_ready_to_rollup_accepts_v51_team_scoped_worker_ids(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "team_jobs.db"
 
@@ -827,7 +1132,7 @@ class V43RegistryTests(unittest.TestCase):
                 "--requested-by",
                 "ou_user",
                 "--title",
-                "V5 串行任务",
+                "V5.1 串行任务",
             )
             self.assertEqual(started.returncode, 0, started.stderr)
             job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
@@ -877,7 +1182,7 @@ class V43RegistryTests(unittest.TestCase):
             self.assertIn('"ops_internal_main"', ready.stdout)
             self.assertIn('"finance_internal_main"', ready.stdout)
 
-    def test_registry_ready_to_rollup_waits_for_all_v5_participants(self):
+    def test_registry_ready_to_rollup_waits_for_all_v51_participants(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "team_jobs.db"
 
@@ -890,7 +1195,7 @@ class V43RegistryTests(unittest.TestCase):
                 "--requested-by",
                 "ou_user",
                 "--title",
-                "V5 三专家串行任务",
+                "V5.1 三专家串行任务",
             )
             self.assertEqual(started.returncode, 0, started.stderr)
             job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
@@ -1134,7 +1439,7 @@ class V43RegistryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "team_jobs.db"
             conn = sqlite3.connect(db_path)
-            conn.executescript(V4_3_SQL.read_text(encoding="utf-8"))
+            conn.executescript(load_registry_module().SCHEMA)
             conn.commit()
             conn.close()
 
@@ -1158,7 +1463,7 @@ class V43RegistryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "team_jobs.db"
             conn = sqlite3.connect(db_path)
-            conn.executescript(V4_3_SQL.read_text(encoding="utf-8"))
+            conn.executescript(load_registry_module().SCHEMA)
             conn.commit()
             conn.close()
 
@@ -1849,8 +2154,13 @@ class V43RegistryTests(unittest.TestCase):
             self.assertIn('"groupPeerId": "oc_demo"', payload.stdout)
             self.assertIn('"callbackSessionKey": "agent:supervisor_internal_main:main"', payload.stdout)
             self.assertIn('"mustSend": "progress,final,callback"', payload.stdout)
+            self.assertIn(f'"progressTitle": "【运营进度｜{job_ref}】"', payload.stdout)
+            self.assertIn(f'"finalTitle": "【运营结论｜{job_ref}】"', payload.stdout)
+            self.assertIn('"callbackMustInclude": "summary,details,risks,actionItems"', payload.stdout)
             self.assertIn('"role": "运营执行"', payload.stdout)
             self.assertIn('"requestText": "请给出 3 天促销冲刺方案，包含运营节奏、预算红线和风险预案。"', payload.stdout)
+            self.assertIn(f"progressTitle=【运营进度｜{job_ref}】", payload.stdout)
+            self.assertIn(f"finalTitle=【运营结论｜{job_ref}】", payload.stdout)
 
     def test_registry_build_visible_ack_uses_explicit_feishu_delivery(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1891,6 +2201,197 @@ class V43RegistryTests(unittest.TestCase):
             self.assertIn('"accountId": "aoteman"', ack.stdout)
             self.assertIn('"target": "chat:oc_demo"', ack.stdout)
             self.assertIn(f"【主管已接单｜{job_ref}】", ack.stdout)
+            self.assertIn("任务已受理，按固定顺序推进，请稍候查看进度。", ack.stdout)
+
+    def test_registry_build_visible_ack_lists_worker_roles_in_workflow_order(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "team_jobs.db"
+
+            self.run_registry(db_path, "init-db")
+            started = self.run_registry(
+                db_path,
+                "start-job-with-workflow",
+                "--group-peer-id",
+                "oc_demo",
+                "--requested-by",
+                "SeaWorld",
+                "--title",
+                "V5.1 ack dynamic roles",
+                "--entry-account-id",
+                "aoteman",
+                "--entry-channel",
+                "feishu",
+                "--entry-target",
+                "chat:oc_demo",
+                "--workflow-json",
+                json.dumps(
+                    {
+                        "mode": "serial",
+                        "stages": [
+                            {"agentId": "ops_internal_main"},
+                            {"agentId": "finance_internal_main"},
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                "--participants-json",
+                json.dumps(
+                    [
+                        {
+                            "agentId": "ops_internal_main",
+                            "accountId": "ops-bot",
+                            "role": "运营专家",
+                        },
+                        {
+                            "agentId": "finance_internal_main",
+                            "accountId": "finance-bot",
+                            "role": "财务专家",
+                        },
+                    ],
+                    ensure_ascii=False,
+                ),
+            )
+            self.assertEqual(started.returncode, 0, started.stderr)
+            job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
+
+            ack = self.run_registry(db_path, "build-visible-ack", "--job-ref", job_ref)
+
+            self.assertEqual(ack.returncode, 0, ack.stderr)
+            self.assertIn(
+                "任务已受理，正分配给运营专家和财务专家处理，请稍候查看进度。",
+                ack.stdout,
+            )
+
+    def test_registry_visible_messages_use_persisted_visible_label_snapshots(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "team_jobs.db"
+
+            self.run_registry(db_path, "init-db")
+            started = self.run_registry(
+                db_path,
+                "start-job-with-workflow",
+                "--group-peer-id",
+                "oc_demo",
+                "--requested-by",
+                "SeaWorld",
+                "--title",
+                "V5.1 visible label snapshots",
+                "--entry-account-id",
+                "aoteman",
+                "--entry-channel",
+                "feishu",
+                "--entry-target",
+                "chat:oc_demo",
+                "--hidden-main-session-key",
+                "agent:supervisor_internal_main:main",
+                "--supervisor-visible-label",
+                "总控台",
+                "--workflow-json",
+                json.dumps(
+                    {
+                        "mode": "serial",
+                        "stages": [
+                            {"agentId": "ops_internal_main"},
+                            {"agentId": "finance_internal_main"},
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                "--participants-json",
+                json.dumps(
+                    [
+                        {
+                            "agentId": "ops_internal_main",
+                            "accountId": "xiaolongxia",
+                            "role": "运营专家",
+                            "visibleLabel": "增长",
+                        },
+                        {
+                            "agentId": "finance_internal_main",
+                            "accountId": "yiran_yibao",
+                            "role": "财务专家",
+                            "visibleLabel": "财审",
+                        },
+                    ],
+                    ensure_ascii=False,
+                ),
+            )
+            self.assertEqual(started.returncode, 0, started.stderr)
+            job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
+
+            details = self.run_registry(db_path, "get-job", "--job-ref", job_ref)
+            self.assertEqual(details.returncode, 0, details.stderr)
+            self.assertIn('"supervisorVisibleLabel": "总控台"', details.stdout)
+            self.assertIn('"visibleLabel": "增长"', details.stdout)
+            self.assertIn('"visibleLabel": "财审"', details.stdout)
+
+            dispatch = self.run_registry(
+                db_path,
+                "build-dispatch-payload",
+                "--job-ref",
+                job_ref,
+            )
+            self.assertEqual(dispatch.returncode, 0, dispatch.stderr)
+            self.assertIn(f'"progressTitle": "【增长进度｜{job_ref}】"', dispatch.stdout)
+            self.assertIn(f'"finalTitle": "【增长结论｜{job_ref}】"', dispatch.stdout)
+
+            ack = self.run_registry(db_path, "build-visible-ack", "--job-ref", job_ref)
+            self.assertEqual(ack.returncode, 0, ack.stderr)
+            self.assertIn(f"【总控台已接单｜{job_ref}】", ack.stdout)
+            self.assertIn("正分配给增长和财审处理", ack.stdout)
+
+            for agent_id, account_id, role, visible_label in (
+                ("ops_internal_main", "xiaolongxia", "运营专家", "增长"),
+                ("finance_internal_main", "yiran_yibao", "财务专家", "财审"),
+            ):
+                dispatch_result = self.run_registry(
+                    db_path,
+                    "mark-dispatch",
+                    "--job-ref",
+                    job_ref,
+                    "--agent-id",
+                    agent_id,
+                    "--account-id",
+                    account_id,
+                    "--role",
+                    role,
+                    "--visible-label",
+                    visible_label,
+                    "--dispatch-run-id",
+                    f"run-{agent_id}",
+                    "--dispatch-status",
+                    "accepted",
+                )
+                self.assertEqual(dispatch_result.returncode, 0, dispatch_result.stderr)
+                complete = self.run_registry(
+                    db_path,
+                    "mark-worker-complete",
+                    "--job-ref",
+                    job_ref,
+                    "--agent-id",
+                    agent_id,
+                    "--account-id",
+                    account_id,
+                    "--role",
+                    role,
+                    "--visible-label",
+                    visible_label,
+                    "--progress-message-id",
+                    f"om_{agent_id}_progress",
+                    "--final-message-id",
+                    f"om_{agent_id}_final",
+                    "--summary",
+                    f"{visible_label}方案已完成",
+                    "--final-visible-text",
+                    f"【{visible_label}结论｜{job_ref}】\n完整{visible_label}方案。",
+                )
+                self.assertEqual(complete.returncode, 0, complete.stderr)
+
+            rollup = self.run_registry(db_path, "build-rollup-visible-message", "--job-ref", job_ref)
+            self.assertEqual(rollup.returncode, 0, rollup.stderr)
+            self.assertIn(f"【总控台最终统一收口｜{job_ref}】", rollup.stdout)
+            self.assertIn("二、增长终案方案", rollup.stdout)
+            self.assertIn("三、财审终案方案", rollup.stdout)
 
     def test_registry_build_rollup_visible_message_requires_completion_packets(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1970,6 +2471,132 @@ class V43RegistryTests(unittest.TestCase):
             self.assertEqual(rolled_ready.returncode, 0, rolled_ready.stderr)
             self.assertIn(f"【主管最终统一收口｜{job_ref}】", rolled_ready.stdout)
             self.assertIn('"channel": "feishu"', rolled_ready.stdout)
+
+    def test_registry_build_rollup_visible_message_renders_structured_supervisor_summary(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "team_jobs.db"
+
+            self.run_registry(db_path, "init-db")
+            started = self.run_registry(
+                db_path,
+                "start-job-with-workflow",
+                "--group-peer-id",
+                "oc_demo",
+                "--requested-by",
+                "SeaWorld",
+                "--title",
+                "V5.1 structured rollup",
+                "--request-text",
+                "请产出完整的 3 天促销冲刺执行方案。",
+                "--entry-account-id",
+                "aoteman",
+                "--entry-channel",
+                "feishu",
+                "--entry-target",
+                "chat:oc_demo",
+                "--workflow-json",
+                json.dumps(
+                    {
+                        "mode": "serial",
+                        "stages": [
+                            {"agentId": "ops_internal_main"},
+                            {"agentId": "finance_internal_main"},
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                "--participants-json",
+                json.dumps(
+                    [
+                        {
+                            "agentId": "ops_internal_main",
+                            "accountId": "xiaolongxia",
+                            "role": "运营执行",
+                        },
+                        {
+                            "agentId": "finance_internal_main",
+                            "accountId": "yiran_yibao",
+                            "role": "财务执行",
+                        },
+                    ],
+                    ensure_ascii=False,
+                ),
+            )
+            self.assertEqual(started.returncode, 0, started.stderr)
+            job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
+
+            for agent_id, account_id, role in (
+                ("ops_internal_main", "xiaolongxia", "运营执行"),
+                ("finance_internal_main", "yiran_yibao", "财务执行"),
+            ):
+                dispatch = self.run_registry(
+                    db_path,
+                    "mark-dispatch",
+                    "--job-ref",
+                    job_ref,
+                    "--agent-id",
+                    agent_id,
+                    "--account-id",
+                    account_id,
+                    "--role",
+                    role,
+                    "--dispatch-run-id",
+                    f"run-{agent_id}",
+                    "--dispatch-status",
+                    "accepted",
+                )
+                self.assertEqual(dispatch.returncode, 0, dispatch.stderr)
+                complete = self.run_registry(
+                    db_path,
+                    "mark-worker-complete",
+                    "--job-ref",
+                    job_ref,
+                    "--agent-id",
+                    agent_id,
+                    "--account-id",
+                    account_id,
+                    "--role",
+                    role,
+                    "--progress-message-id",
+                    f"om_{agent_id}_progress",
+                    "--final-message-id",
+                    f"om_{agent_id}_final",
+                    "--summary",
+                    "该角色已完成完整方案并可直接执行。",
+                    "--details",
+                    "活动今晚完成物料锁版，明早 10 点准时开跑。",
+                    "--risks",
+                    "若 CPA 超过红线必须立刻降预算并切换素材。",
+                    "--action-items",
+                    "锁定物料、校验链路、召开战前会。",
+                    "--final-visible-text",
+                    (
+                        f"【{role}结论｜{job_ref}】\n"
+                        "一、目标与约束\n"
+                        "3天100单，预算不超10000，毛利率不低于35%。\n"
+                        "二、执行步骤\n"
+                        "今晚锁版物料，明早10点开跑，中午复盘，晚高峰二次冲刺。\n"
+                        "三、关键红线\n"
+                        "任何动作不得击穿预算和毛利红线。"
+                    ),
+                )
+                self.assertEqual(complete.returncode, 0, complete.stderr)
+
+            rolled_ready = self.run_registry(db_path, "build-rollup-visible-message", "--job-ref", job_ref)
+            self.assertEqual(rolled_ready.returncode, 0, rolled_ready.stderr)
+            self.assertIn(f"【主管最终统一收口｜{job_ref}】", rolled_ready.stdout)
+            self.assertIn("任务主题：V5.1 structured rollup", rolled_ready.stdout)
+            self.assertIn("一、主管统一终案", rolled_ready.stdout)
+            self.assertIn("二、运营终案方案", rolled_ready.stdout)
+            self.assertIn("三、财务终案方案", rolled_ready.stdout)
+            self.assertIn("四、联合风险与红线", rolled_ready.stdout)
+            self.assertIn("五、明日三件事", rolled_ready.stdout)
+            self.assertIn("一、目标与约束", rolled_ready.stdout)
+            self.assertIn("二、执行步骤", rolled_ready.stdout)
+            self.assertIn("今晚锁版物料，明早10点开跑，中午复盘，晚高峰二次冲刺。", rolled_ready.stdout)
+            self.assertIn("三、关键红线", rolled_ready.stdout)
+            self.assertIn("锁定物料、校验链路、召开战前会。", rolled_ready.stdout)
+            self.assertNotIn("ops_internal_main:", rolled_ready.stdout)
 
     def test_registry_record_visible_message_updates_ack_and_rollup_flags(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -2223,7 +2850,7 @@ class V43RegistryTests(unittest.TestCase):
 class V51ReconcileTests(unittest.TestCase):
     def run_registry(self, db_path, *args):
         return subprocess.run(
-            ["python3", str(V4_3_REGISTRY), "--db", str(db_path), *args],
+            ["python3", str(JOB_REGISTRY_SCRIPT), "--db", str(db_path), *args],
             capture_output=True,
             text=True,
             check=False,
@@ -2233,7 +2860,7 @@ class V51ReconcileTests(unittest.TestCase):
         return subprocess.run(
             [
                 "python3",
-                str(V5_RECONCILE_SCRIPT),
+                str(V51_RECONCILE_SCRIPT),
                 "--manifest",
                 str(manifest_path),
                 "--team-key",
@@ -2294,7 +2921,7 @@ class V51ReconcileTests(unittest.TestCase):
                         "entryChannel": "feishu",
                         "entryTarget": f"chat:{group_peer_id}",
                         "controlPlane": {
-                            "registryScript": str(V4_3_REGISTRY),
+                            "registryScript": str(JOB_REGISTRY_SCRIPT),
                             "commands": {
                                 "startJob": "start-job-with-workflow",
                                 "nextAction": "get-next-action",
@@ -2570,6 +3197,236 @@ class V51ReconcileTests(unittest.TestCase):
                             "type": "message",
                             "id": "worker-assistant",
                             "timestamp": "2026-03-08T15:58:19.000Z",
+                            "message": {
+                                "role": "assistant",
+                                "content": [{"type": "text", "text": "NO_REPLY"}],
+                            },
+                        },
+                        ensure_ascii=False,
+                    ),
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (sessions_dir / "sessions.json").write_text(
+            json.dumps(
+                {
+                    f"agent:{agent_id}:main": {
+                        "sessionId": session_id,
+                        "updatedAt": 1772985499284,
+                        "sessionFile": str(transcript_path),
+                    }
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+    def write_worker_main_completed_transcript_with_callback_toolcall(
+        self,
+        openclaw_home,
+        agent_id,
+        job_ref,
+        *,
+        group_peer_id="oc_demo",
+        callback_session_key="agent:supervisor_internal_main:main",
+        progress_message_id="om_progress_real",
+        final_message_id="om_final_real",
+        callback_progress_message_id="progressMessageId_pending",
+        callback_final_message_id="finalMessageId_pending",
+    ):
+        sessions_dir = openclaw_home / "agents" / agent_id / "sessions"
+        sessions_dir.mkdir(parents=True, exist_ok=True)
+        session_id = f"{agent_id}-main-complete-with-callback"
+        transcript_path = sessions_dir / f"{session_id}.jsonl"
+        dispatch_text = (
+            f"[Sun 2026-03-08 23:58 GMT+8] TASK_DISPATCH|jobRef={job_ref}|from=supervisor_internal_main|"
+            f"to={agent_id}|title=测试任务|request=请输出完整方案|"
+            f"callbackSessionKey={callback_session_key}|mustSend=progress,final,callback|"
+            f"progressTitle=【运营进度｜{job_ref}】|finalTitle=【运营结论｜{job_ref}】|"
+            f"callbackMustInclude=summary,details,risks,actionItems|"
+            f"channel=feishu|accountId=xiaolongxia|target=chat:{group_peer_id}|groupPeerId={group_peer_id}"
+        )
+        callback_text = (
+            f"COMPLETE_PACKET|jobRef={job_ref}|from={agent_id}|status=completed|"
+            f"progressMessageId={callback_progress_message_id}|"
+            f"finalMessageId={callback_final_message_id}|"
+            "summary=已完成运营阶段并可进入财务校验。|"
+            "details=已输出完整运营方案与执行节奏。|"
+            "risks=需继续校验预算与毛利红线。|"
+            "actionItems=1) 进入财务校验；2) 汇总红线；3) 准备统一收口。"
+        )
+        transcript_path.write_text(
+            "\n".join(
+                [
+                    json.dumps(
+                        {
+                            "type": "message",
+                            "id": "worker-user",
+                            "timestamp": "2026-03-08T15:58:10.127Z",
+                            "message": {
+                                "role": "user",
+                                "content": [{"type": "text", "text": dispatch_text}],
+                            },
+                        },
+                        ensure_ascii=False,
+                    ),
+                    json.dumps(
+                        {
+                            "type": "message",
+                            "id": "worker-assistant-tools",
+                            "timestamp": "2026-03-08T15:58:12.000Z",
+                            "message": {
+                                "role": "assistant",
+                                "content": [
+                                    {
+                                        "type": "toolCall",
+                                        "id": "call-progress",
+                                        "name": "message",
+                                        "arguments": {
+                                            "action": "send",
+                                            "channel": "feishu",
+                                            "accountId": "xiaolongxia",
+                                            "target": f"chat:{group_peer_id}",
+                                            "message": f"【运营进度｜{job_ref}】\\n已进入执行阶段。",
+                                        },
+                                    },
+                                    {
+                                        "type": "toolCall",
+                                        "id": "call-final",
+                                        "name": "message",
+                                        "arguments": {
+                                            "action": "send",
+                                            "channel": "feishu",
+                                            "accountId": "xiaolongxia",
+                                            "target": f"chat:{group_peer_id}",
+                                            "message": f"【运营结论｜{job_ref}】\\n已输出完整运营方案。",
+                                        },
+                                    },
+                                    {
+                                        "type": "toolCall",
+                                        "id": "call-callback",
+                                        "name": "sessions_send",
+                                        "arguments": {
+                                            "sessionKey": callback_session_key,
+                                            "message": callback_text,
+                                        },
+                                    },
+                                ],
+                            },
+                        },
+                        ensure_ascii=False,
+                    ),
+                    json.dumps(
+                        {
+                            "type": "message",
+                            "id": "worker-tool-result-progress",
+                            "timestamp": "2026-03-08T15:58:14.000Z",
+                            "message": {
+                                "role": "toolResult",
+                                "toolName": "message",
+                                "toolCallId": "call-progress",
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": json.dumps(
+                                            {
+                                                "channel": "feishu",
+                                                "result": {
+                                                    "messageId": progress_message_id,
+                                                    "chatId": group_peer_id,
+                                                },
+                                            },
+                                            ensure_ascii=False,
+                                        ),
+                                    }
+                                ],
+                                "details": {
+                                    "channel": "feishu",
+                                    "result": {
+                                        "messageId": progress_message_id,
+                                        "chatId": group_peer_id,
+                                    },
+                                },
+                            },
+                        },
+                        ensure_ascii=False,
+                    ),
+                    json.dumps(
+                        {
+                            "type": "message",
+                            "id": "worker-tool-result-final",
+                            "timestamp": "2026-03-08T15:58:18.000Z",
+                            "message": {
+                                "role": "toolResult",
+                                "toolName": "message",
+                                "toolCallId": "call-final",
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": json.dumps(
+                                            {
+                                                "channel": "feishu",
+                                                "result": {
+                                                    "messageId": final_message_id,
+                                                    "chatId": group_peer_id,
+                                                },
+                                            },
+                                            ensure_ascii=False,
+                                        ),
+                                    }
+                                ],
+                                "details": {
+                                    "channel": "feishu",
+                                    "result": {
+                                        "messageId": final_message_id,
+                                        "chatId": group_peer_id,
+                                    },
+                                },
+                            },
+                        },
+                        ensure_ascii=False,
+                    ),
+                    json.dumps(
+                        {
+                            "type": "message",
+                            "id": "worker-tool-result-callback",
+                            "timestamp": "2026-03-08T15:58:19.000Z",
+                            "message": {
+                                "role": "toolResult",
+                                "toolName": "sessions_send",
+                                "toolCallId": "call-callback",
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": json.dumps(
+                                            {
+                                                "runId": "run-callback",
+                                                "status": "ok",
+                                                "sessionKey": callback_session_key,
+                                                "delivery": {"status": "pending", "mode": "announce"},
+                                            },
+                                            ensure_ascii=False,
+                                        ),
+                                    }
+                                ],
+                                "details": {
+                                    "runId": "run-callback",
+                                    "status": "ok",
+                                    "sessionKey": callback_session_key,
+                                    "delivery": {"status": "pending", "mode": "announce"},
+                                },
+                            },
+                        },
+                        ensure_ascii=False,
+                    ),
+                    json.dumps(
+                        {
+                            "type": "message",
+                            "id": "worker-assistant-final",
+                            "timestamp": "2026-03-08T15:58:20.000Z",
                             "message": {
                                 "role": "assistant",
                                 "content": [{"type": "text", "text": "NO_REPLY"}],
@@ -3777,6 +4634,122 @@ else:
             self.assertIn('"finalMessageId": "om_final_real"', job.stdout)
             self.assertIn('"waitingForAgentId": "finance_internal_main"', job.stdout)
 
+    def test_resume_job_promotes_worker_transcript_callback_before_hidden_main_delivery(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            db_path = tmp_path / "team_jobs.db"
+            manifest_path = tmp_path / "manifest.json"
+            openclaw_home = tmp_path / "openclaw-home"
+            fake_openclaw = tmp_path / "openclaw"
+            fake_log = tmp_path / "openclaw.log"
+
+            self.run_registry(db_path, "init-db")
+            self.write_manifest(manifest_path, db_path)
+            self.make_fake_openclaw(fake_openclaw, fake_log)
+
+            started = self.run_registry(
+                db_path,
+                "start-job-with-workflow",
+                "--group-peer-id",
+                "oc_demo",
+                "--requested-by",
+                "SeaWorld",
+                "--source-message-id",
+                "om_worker_transcript_only",
+                "--title",
+                "worker transcript callback only",
+                "--request-text",
+                "请生成完整方案。",
+                "--entry-account-id",
+                "aoteman",
+                "--entry-channel",
+                "feishu",
+                "--entry-target",
+                "chat:oc_demo",
+                "--hidden-main-session-key",
+                "agent:supervisor_internal_main:main",
+                "--workflow-json",
+                json.dumps(
+                    {
+                        "mode": "serial",
+                        "stages": [
+                            {"agentId": "ops_internal_main"},
+                            {"agentId": "finance_internal_main"},
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                "--participants-json",
+                json.dumps(
+                    [
+                        {
+                            "agentId": "ops_internal_main",
+                            "accountId": "xiaolongxia",
+                            "role": "运营执行",
+                        },
+                        {
+                            "agentId": "finance_internal_main",
+                            "accountId": "yiran_yibao",
+                            "role": "财务执行",
+                        },
+                    ],
+                    ensure_ascii=False,
+                ),
+            )
+            self.assertEqual(started.returncode, 0, started.stderr)
+            job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
+            self.run_registry(
+                db_path,
+                "record-visible-message",
+                "--job-ref",
+                job_ref,
+                "--kind",
+                "ack",
+                "--message-id",
+                "om_ack_existing",
+            )
+            self.run_registry(
+                db_path,
+                "mark-dispatch",
+                "--job-ref",
+                job_ref,
+                "--agent-id",
+                "ops_internal_main",
+                "--account-id",
+                "xiaolongxia",
+                "--role",
+                "运营执行",
+                "--dispatch-run-id",
+                "run-ops-existing",
+                "--dispatch-status",
+                "accepted",
+            )
+            self.write_worker_main_completed_transcript_with_callback_toolcall(
+                openclaw_home,
+                "ops_internal_main",
+                job_ref,
+            )
+
+            result = self.run_reconcile(
+                manifest_path,
+                "internal_main",
+                openclaw_home,
+                fake_openclaw,
+                "resume-job",
+                "--stale-seconds",
+                "180",
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('"agentId": "finance_internal_main"', result.stdout)
+            self.assertIn('"status": "worker_transcript_callback_promoted"', result.stdout)
+            job = self.run_registry(db_path, "get-job", "--job-ref", job_ref)
+            self.assertIn('"progressMessageId": "om_progress_real"', job.stdout)
+            self.assertIn('"finalMessageId": "om_final_real"', job.stdout)
+            self.assertIn('"finalVisibleText": "【运营结论｜', job.stdout)
+            self.assertIn('已输出完整运营方案。', job.stdout)
+            self.assertIn('"waitingForAgentId": "finance_internal_main"', job.stdout)
+
     def test_resume_job_ignores_warmup_no_reply_transcript(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
@@ -3927,77 +4900,96 @@ else:
             calls = fake_log.read_text(encoding="utf-8")
             self.assertIn("主管最终统一收口", calls)
 
-
-class V43CanaryTests(unittest.TestCase):
-    def run_registry(self, db_path, *args):
-        result = subprocess.run(
-            ["python3", str(V4_3_REGISTRY), "--db", str(db_path), *args],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        return result
-
-    def run_canary(self, db_path, session_root, *args):
-        result = subprocess.run(
-            ["python3", str(V4_3_CANARY_SCRIPT), "--db", str(db_path), "--session-root", str(session_root), *args],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        return result
-
-    def test_v43_canary_requires_done_job(self):
+    def test_reconcile_rollup_does_not_resend_when_rollup_already_recorded(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            db_path = Path(tmpdir) / "team_jobs.db"
-            session_root = Path(tmpdir) / "agents"
-            session_root.mkdir()
+            tmp_path = Path(tmpdir)
+            db_path = tmp_path / "team_jobs.db"
+            manifest_path = tmp_path / "manifest.json"
+            openclaw_home = tmp_path / "openclaw-home"
+            fake_openclaw = tmp_path / "openclaw"
+            fake_log = tmp_path / "openclaw.log"
 
             self.run_registry(db_path, "init-db")
+            self.write_manifest(manifest_path, db_path)
+            self.make_fake_openclaw(fake_openclaw, fake_log)
+
             started = self.run_registry(
                 db_path,
-                "start-job",
+                "start-job-with-workflow",
                 "--group-peer-id",
                 "oc_demo",
                 "--requested-by",
-                "ou_user",
+                "SeaWorld",
+                "--source-message-id",
+                "om_rollup_existing",
                 "--title",
-                "四月促销方案",
+                "V5.1 existing rollup",
+                "--request-text",
+                "请生成完整方案。",
+                "--entry-account-id",
+                "aoteman",
+                "--entry-channel",
+                "feishu",
+                "--entry-target",
+                "chat:oc_demo",
+                "--hidden-main-session-key",
+                "agent:supervisor_internal_main:main",
+                "--workflow-json",
+                json.dumps(
+                    {
+                        "mode": "serial",
+                        "stages": [{"agentId": "ops_internal_main"}],
+                    },
+                    ensure_ascii=False,
+                ),
+                "--participants-json",
+                json.dumps(
+                    [
+                        {
+                            "agentId": "ops_internal_main",
+                            "accountId": "xiaolongxia",
+                            "role": "运营执行",
+                        }
+                    ],
+                    ensure_ascii=False,
+                ),
             )
+            self.assertEqual(started.returncode, 0, started.stderr)
             job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
 
-            result = self.run_canary(db_path, session_root, "--job-ref", job_ref)
-
-            self.assertEqual(result.returncode, 2)
-            self.assertIn("PARTICIPANTS_MISSING", result.stdout)
-
-    def test_v43_canary_accepts_done_job_with_visible_messages(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            db_path = Path(tmpdir) / "team_jobs.db"
-            session_root = Path(tmpdir) / "agents"
-            for agent in ("ops_agent", "finance_agent"):
-                (session_root / agent / "sessions").mkdir(parents=True)
-
-            self.run_registry(db_path, "init-db")
-            started = self.run_registry(
+            self.run_registry(
                 db_path,
-                "start-job",
-                "--group-peer-id",
-                "oc_demo",
-                "--requested-by",
-                "ou_user",
-                "--title",
-                "四月促销方案",
+                "record-visible-message",
+                "--job-ref",
+                job_ref,
+                "--kind",
+                "ack",
+                "--message-id",
+                "om_ack_existing",
             )
-            job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
-
+            self.run_registry(
+                db_path,
+                "mark-dispatch",
+                "--job-ref",
+                job_ref,
+                "--agent-id",
+                "ops_internal_main",
+                "--account-id",
+                "xiaolongxia",
+                "--role",
+                "运营执行",
+                "--dispatch-run-id",
+                "run-ops",
+                "--dispatch-status",
+                "accepted",
+            )
             self.run_registry(
                 db_path,
                 "mark-worker-complete",
                 "--job-ref",
                 job_ref,
                 "--agent-id",
-                "ops_agent",
+                "ops_internal_main",
                 "--account-id",
                 "xiaolongxia",
                 "--role",
@@ -4011,219 +5003,39 @@ class V43CanaryTests(unittest.TestCase):
             )
             self.run_registry(
                 db_path,
-                "mark-worker-complete",
+                "record-visible-message",
                 "--job-ref",
                 job_ref,
-                "--agent-id",
-                "finance_agent",
-                "--account-id",
-                "yiran_yibao",
-                "--role",
-                "财务执行",
-                "--progress-message-id",
-                "om_fin_progress",
-                "--final-message-id",
-                "om_fin_final",
-                "--summary",
-                "财务方案已完成",
-            )
-            self.run_registry(db_path, "close-job", "--job-ref", job_ref, "--status", "done")
-
-            (session_root / "ops_agent" / "sessions" / "ops.jsonl").write_text(
-                "om_ops_progress\nom_ops_final\n", encoding="utf-8"
-            )
-            (session_root / "finance_agent" / "sessions" / "fin.jsonl").write_text(
-                "om_fin_progress\nom_fin_final\n", encoding="utf-8"
+                "--kind",
+                "rollup",
+                "--message-id",
+                "om_rollup_existing",
             )
 
-            result = self.run_canary(
-                db_path,
-                session_root,
+            result = self.run_reconcile(
+                manifest_path,
+                "internal_main",
+                openclaw_home,
+                fake_openclaw,
+                "reconcile-rollup",
                 "--job-ref",
                 job_ref,
-                "--require-visible-messages",
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("V4_3_CANARY_OK", result.stdout)
+            self.assertIn('"status": "rollup_already_recorded"', result.stdout)
+            details = self.run_registry(db_path, "get-job", "--job-ref", job_ref)
+            self.assertIn('"status": "done"', details.stdout)
+            if fake_log.exists():
+                self.assertNotIn("主管最终统一收口", fake_log.read_text(encoding="utf-8"))
 
-    def test_v43_canary_rejects_protocol_leak_in_visible_session(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            db_path = Path(tmpdir) / "team_jobs.db"
-            session_root = Path(tmpdir) / "agents"
-            for agent in ("ops_agent", "finance_agent", "supervisor_agent"):
-                (session_root / agent / "sessions").mkdir(parents=True)
 
-            self.run_registry(db_path, "init-db")
-            started = self.run_registry(
-                db_path,
-                "start-job",
-                "--group-peer-id",
-                "oc_demo",
-                "--requested-by",
-                "ou_user",
-                "--title",
-                "四月促销方案",
-            )
-            job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
-
-            self.run_registry(
-                db_path,
-                "mark-worker-complete",
-                "--job-ref",
-                job_ref,
-                "--agent-id",
-                "ops_agent",
-                "--account-id",
-                "xiaolongxia",
-                "--role",
-                "运营执行",
-                "--progress-message-id",
-                "om_ops_progress",
-                "--final-message-id",
-                "om_ops_final",
-                "--summary",
-                "运营方案已完成",
-            )
-            self.run_registry(
-                db_path,
-                "mark-worker-complete",
-                "--job-ref",
-                job_ref,
-                "--agent-id",
-                "finance_agent",
-                "--account-id",
-                "yiran_yibao",
-                "--role",
-                "财务执行",
-                "--progress-message-id",
-                "om_fin_progress",
-                "--final-message-id",
-                "om_fin_final",
-                "--summary",
-                "财务方案已完成",
-            )
-            self.run_registry(db_path, "close-job", "--job-ref", job_ref, "--status", "done")
-
-            (session_root / "ops_agent" / "sessions" / "ops.jsonl").write_text(
-                "om_ops_progress\nom_ops_final\n", encoding="utf-8"
-            )
-            (session_root / "finance_agent" / "sessions" / "fin.jsonl").write_text(
-                "om_fin_progress\nom_fin_final\n", encoding="utf-8"
-            )
-            (session_root / "supervisor_agent" / "sessions" / "sup.jsonl").write_text(
-                "\n".join(
-                    [
-                        json.dumps(
-                            {
-                                "message": {
-                                    "role": "assistant",
-                                    "content": [{"type": "text", "text": f"ACK_READY|jobRef={job_ref}|agent=ops_agent"}],
-                                }
-                            },
-                            ensure_ascii=False,
-                        )
-                    ]
-                ),
-                encoding="utf-8",
-            )
-
-            result = self.run_canary(
-                db_path,
-                session_root,
-                "--job-ref",
-                job_ref,
-                "--require-visible-messages",
-            )
-
-            self.assertEqual(result.returncode, 3)
-            self.assertIn("VISIBLE_PROTOCOL_LEAK", result.stdout)
-
-class V431DocumentationContentTests(unittest.TestCase):
-    def test_v431_doc_mentions_hidden_control_session(self):
-        content = V4_3_1_DOC.read_text(encoding="utf-8")
-
-        self.assertIn("agent:supervisor_agent:main", content)
-        self.assertIn("COMPLETE_PACKET", content)
-        self.assertIn("NO_REPLY", content)
-
-    def test_v431_doc_describes_visible_sequence_and_real_success(self):
-        content = V4_3_1_DOC.read_text(encoding="utf-8")
-
-        self.assertIn("主管接单", content)
-        self.assertIn("运营进度", content)
-        self.assertIn("财务结论", content)
-        self.assertIn("TG-20260307-031", content)
-        self.assertIn("V4_3_CANARY_OK", content)
-        self.assertIn("om_x100b55f5beb1a908b3df8e78d8a7bc5", content)
-
-    def test_v431_doc_embeds_real_production_config_values(self):
-        content = V4_3_1_DOC.read_text(encoding="utf-8")
-
-        self.assertIn("当前最新生产配置快照（真实值）", content)
-        self.assertIn("oc_f785e73d3c00954d4ccd5d49b63ef919", content)
-        self.assertIn("aoteman", content)
-        self.assertIn("xiaolongxia", content)
-        self.assertIn("yiran_yibao", content)
-        self.assertIn("cli_a923c749bab6dcba", content)
-        self.assertIn("cli_a9f1849b67f9dcc2", content)
-        self.assertIn("cli_a923c71498b8dcc9", content)
-        self.assertIn('"mentionPatterns": ["@奥特曼", "奥特曼", "主管机器人"]', content)
-
-    def test_v431_doc_embeds_real_system_prompts_and_identity_sections(self):
-        content = V4_3_1_DOC.read_text(encoding="utf-8")
-
-        self.assertIn("当前最新生产 systemPrompt（真实值）", content)
-        self.assertIn("supervisor 群级 systemPrompt（真实值）", content)
-        self.assertIn("ops 群级 systemPrompt（真实值）", content)
-        self.assertIn("finance 群级 systemPrompt（真实值）", content)
-        self.assertIn("收到 TASK_DISPATCH 后必须", content)
-        self.assertIn("当前最新 workspace 身份文件（真实值）", content)
-        self.assertIn("奥特曼", content)
-        self.assertIn("小龙虾找妈妈", content)
-        self.assertIn("易燃易爆", content)
-
-    def test_v431_doc_includes_step_by_step_test_flow(self):
-        content = V4_3_1_DOC.read_text(encoding="utf-8")
-
-        self.assertIn("部署后测试顺序（必须写给客户和 Codex）", content)
-        self.assertIn("v431_single_group_hygiene.py", content)
-        self.assertIn("@小龙虾找妈妈 WARMUP", content)
-        self.assertIn("@易燃易爆 WARMUP", content)
-        self.assertIn("群里预期顺序", content)
-        self.assertIn("命令行验收", content)
-        self.assertIn("队列与恢复测试", content)
-
-    def test_v431_doc_mentions_history_guard_after_warmup(self):
-        content = V4_3_1_DOC.read_text(encoding="utf-8")
-
-        self.assertIn("Chat history since last reply", content)
-        self.assertIn("WARMUP", content)
-        self.assertIn("不能把本轮正式任务误判成初始化消息", content)
-
-    def test_v431_config_snapshot_exists_and_covers_core_fields(self):
-        content = V4_3_1_CONFIG_SNAPSHOT.read_text(encoding="utf-8")
-
-        self.assertIn("V4.3.1 单群生产稳定版去敏配置快照", content)
-        self.assertIn("marketing-bot", content)
-        self.assertIn("ops-bot", content)
-        self.assertIn("finance-bot", content)
-        self.assertIn("group:sessions", content)
-        self.assertIn("agent:supervisor_agent:main", content)
-        self.assertIn("resetByType", content)
-        self.assertIn("oc_team_group_peer_id", content)
-
-    def test_readme_links_v431_config_snapshot(self):
-        content = README_FILE.read_text(encoding="utf-8")
-
-        self.assertIn("openclaw-v4-3-1-single-group-production.example.jsonc", content)
-
-class V431QuickStartAndHygieneTests(unittest.TestCase):
+class SessionHygieneTests(unittest.TestCase):
     def run_hygiene(self, home_path, *args, group_peer_id="oc_demo_group"):
         result = subprocess.run(
             [
                 "python3",
-                str(V4_3_HYGIENE_SCRIPT),
+                str(SESSION_HYGIENE_SCRIPT),
                 "--home",
                 str(home_path),
                 "--group-peer-id",
@@ -4236,20 +5048,13 @@ class V431QuickStartAndHygieneTests(unittest.TestCase):
         )
         return result
 
-    def test_quickstart_doc_covers_hygiene_then_warmup_then_canary(self):
-        content = V4_3_QUICKSTART_DOC.read_text(encoding="utf-8")
-
-        self.assertIn("v431_single_group_hygiene.py", content)
-        self.assertIn("WARMUP", content)
-        self.assertIn("v431_single_group_canary.py", content)
-        self.assertIn("3 天限时促销", content)
-
     def test_deployment_inputs_document_runtime_hygiene(self):
         content = (REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/deployment-inputs.example.yaml").read_text(encoding="utf-8")
 
         self.assertIn("runtime_hygiene", content)
-        self.assertIn("group systemPrompt", content)
-        self.assertIn("hidden main session consumer", content)
+        self.assertIn("roleCatalog", content)
+        self.assertIn("workflow.stages", content)
+        self.assertIn("v51_team_orchestrator_hygiene.py", content)
 
     def test_hygiene_script_removes_group_and_main_sessions(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -4377,12 +5182,12 @@ class V431QuickStartAndHygieneTests(unittest.TestCase):
             )
 
 
-class V5RuntimeArtifactsTests(unittest.TestCase):
+class V51RuntimeArtifactsTests(unittest.TestCase):
     def run_canary(self, db_path, session_root, *args):
         return subprocess.run(
             [
                 "python3",
-                str(V5_CANARY_SCRIPT),
+                str(V51_CANARY_SCRIPT),
                 "--db",
                 str(db_path),
                 "--session-root",
@@ -4394,35 +5199,35 @@ class V5RuntimeArtifactsTests(unittest.TestCase):
             check=False,
         )
 
-    def test_v5_watchdog_templates_use_team_placeholders(self):
-        systemd_service = V5_SYSTEMD_SERVICE_TEMPLATE.read_text(encoding="utf-8")
-        systemd_timer = V5_SYSTEMD_TIMER_TEMPLATE.read_text(encoding="utf-8")
-        launchd = V5_LAUNCHD_TEMPLATE.read_text(encoding="utf-8")
+    def test_v51_watchdog_templates_use_team_placeholders(self):
+        systemd_service = V51_SYSTEMD_SERVICE_TEMPLATE.read_text(encoding="utf-8")
+        systemd_timer = V51_SYSTEMD_TIMER_TEMPLATE.read_text(encoding="utf-8")
+        launchd = V51_LAUNCHD_TEMPLATE.read_text(encoding="utf-8")
 
         self.assertIn("__TEAM_KEY__", systemd_service)
         self.assertIn("__SUPERVISOR_AGENT_ID__", systemd_service)
         self.assertIn("__RECONCILE_SCRIPT__", systemd_service)
         self.assertIn("__MANIFEST_PATH__", systemd_service)
-        self.assertIn("v5-team-__TEAM_KEY__.service", systemd_timer)
-        self.assertIn("bot.molt.v5-team-__TEAM_KEY__", launchd)
+        self.assertIn("v51-team-__TEAM_KEY__.service", systemd_timer)
+        self.assertIn("bot.molt.v51-team-__TEAM_KEY__", launchd)
         self.assertIn("__RECONCILE_SCRIPT__", launchd)
         self.assertIn("__MANIFEST_PATH__", launchd)
         self.assertIn("__OPENCLAW_HOME__", launchd)
 
-    def test_v5_canary_supports_custom_worker_agents(self):
+    def test_v51_canary_supports_custom_worker_agents(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             db_path = root / "team_jobs.db"
             session_root = root / "agents"
             conn = sqlite3.connect(db_path)
-            conn.executescript(V4_3_SQL.read_text(encoding="utf-8"))
+            conn.executescript(load_registry_module().SCHEMA)
             conn.execute(
                 """
                 INSERT INTO jobs (
                     job_ref, title, status, group_peer_id, created_at, updated_at, closed_at
                 ) VALUES (?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'))
                 """,
-                ("TG-V5-001", "深圳团队任务", "done", "oc_team_sz"),
+                ("TG-V51-001", "深圳团队任务", "done", "oc_team_sz"),
             )
             conn.execute(
                 """
@@ -4431,7 +5236,7 @@ class V5RuntimeArtifactsTests(unittest.TestCase):
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
                 """,
                 (
-                    "TG-V5-001",
+                    "TG-V51-001",
                     "ops_market_sz",
                     "ops-bot",
                     "ops",
@@ -4448,7 +5253,7 @@ class V5RuntimeArtifactsTests(unittest.TestCase):
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
                 """,
                 (
-                    "TG-V5-001",
+                    "TG-V51-001",
                     "finance_market_sz",
                     "finance-bot",
                     "finance",
@@ -4476,35 +5281,35 @@ class V5RuntimeArtifactsTests(unittest.TestCase):
                 db_path,
                 session_root,
                 "--job-ref",
-                "TG-V5-001",
+                "TG-V51-001",
                 "--worker-agents",
                 "ops_market_sz,finance_market_sz",
                 "--supervisor-agent",
                 "supervisor_market_sz",
                 "--require-visible-messages",
                 "--success-token",
-                "V5_TEAM_CANARY_OK",
+                "V51_TEAM_CANARY_OK",
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("V5_TEAM_CANARY_OK", result.stdout)
+            self.assertIn("V51_TEAM_CANARY_OK", result.stdout)
             self.assertIn("ops_market_sz_progress=msg_ops_progress", result.stdout)
             self.assertIn("finance_market_sz_final=msg_fin_final", result.stdout)
 
-    def test_v5_canary_requires_supervisor_rollup_to_target_group(self):
+    def test_v51_canary_requires_supervisor_rollup_to_target_group(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             db_path = root / "team_jobs.db"
             session_root = root / "agents"
             conn = sqlite3.connect(db_path)
-            conn.executescript(V4_3_SQL.read_text(encoding="utf-8"))
+            conn.executescript(load_registry_module().SCHEMA)
             conn.execute(
                 """
                 INSERT INTO jobs (
                     job_ref, title, status, group_peer_id, created_at, updated_at, closed_at
                 ) VALUES (?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'))
                 """,
-                ("TG-V5-002", "深圳团队任务", "done", "oc_team_sz"),
+                ("TG-V51-002", "深圳团队任务", "done", "oc_team_sz"),
             )
             for agent_id, account_id, role, progress_id, final_id in [
                 ("ops_market_sz", "ops-bot", "ops", "msg_ops_progress", "msg_ops_final"),
@@ -4516,7 +5321,7 @@ class V5RuntimeArtifactsTests(unittest.TestCase):
                         job_ref, agent_id, account_id, role, status, progress_message_id, final_message_id, summary, completed_at
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
                     """,
-                    ("TG-V5-002", agent_id, account_id, role, "done", progress_id, final_id, f"{agent_id} done"),
+                    ("TG-V51-002", agent_id, account_id, role, "done", progress_id, final_id, f"{agent_id} done"),
                 )
             conn.commit()
             conn.close()
@@ -4535,7 +5340,7 @@ class V5RuntimeArtifactsTests(unittest.TestCase):
             supervisor_dir = session_root / "supervisor_market_sz" / "sessions"
             supervisor_dir.mkdir(parents=True, exist_ok=True)
             (supervisor_dir / "supervisor_market_sz.jsonl").write_text(
-                'toolCall name="message" target=chat:oc_team_sz jobRef=TG-V5-002 messageId=msg_supervisor_final\n',
+                'toolCall name="message" target=chat:oc_team_sz jobRef=TG-V51-002 messageId=msg_supervisor_final\n',
                 encoding="utf-8",
             )
 
@@ -4543,7 +5348,7 @@ class V5RuntimeArtifactsTests(unittest.TestCase):
                 db_path,
                 session_root,
                 "--job-ref",
-                "TG-V5-002",
+                "TG-V51-002",
                 "--worker-agents",
                 "ops_market_sz,finance_market_sz",
                 "--supervisor-agent",
@@ -4556,54 +5361,33 @@ class V5RuntimeArtifactsTests(unittest.TestCase):
             self.assertIn("msg_supervisor_final", result.stdout)
 
 
-class V5DocumentationTests(unittest.TestCase):
-    def test_v5_design_and_plan_docs_exist(self):
-        self.assertTrue(V5_DESIGN_DOC.exists())
-        self.assertTrue(V5_PLAN_DOC.exists())
-
-        design = V5_DESIGN_DOC.read_text(encoding="utf-8")
-        plan = V5_PLAN_DOC.read_text(encoding="utf-8")
-
-        self.assertIn("Team Orchestrator", design)
-        self.assertIn("1 个 supervisor", design)
-        self.assertIn("teams", plan)
-
-    def test_readme_mentions_v5_team_orchestrator(self):
-        content = README_FILE.read_text(encoding="utf-8")
-
-        self.assertIn("V5", content)
-        self.assertIn("Team Orchestrator", content)
-        self.assertIn("oc_f785e73d3c00954d4ccd5d49b63ef919", content)
-        self.assertIn("oc_7121d87961740dbd72bd8e50e48ba5e3", content)
-
-    def test_skill_mentions_team_orchestrator_and_teams_model(self):
-        content = SKILL_FILE.read_text(encoding="utf-8")
-
-        self.assertIn("Team Orchestrator", content)
-        self.assertIn("teams", content)
-        self.assertIn("可模板化", content)
-
-
 class V51DocumentationTests(unittest.TestCase):
     def test_v51_design_and_plan_docs_exist(self):
-        self.assertTrue(V5_1_DESIGN_DOC.exists())
-        self.assertTrue(V5_1_PLAN_DOC.exists())
+        self.assertTrue(V51_DESIGN_DOC.exists())
+        self.assertTrue(V51_PLAN_DOC.exists())
+        self.assertTrue(ROLE_CATALOG_DESIGN_DOC.exists())
+        self.assertTrue(ROLE_CATALOG_PLAN_DOC.exists())
 
-        design = V5_1_DESIGN_DOC.read_text(encoding="utf-8")
-        plan = V5_1_PLAN_DOC.read_text(encoding="utf-8")
+        design = V51_DESIGN_DOC.read_text(encoding="utf-8")
+        plan = V51_PLAN_DOC.read_text(encoding="utf-8")
+        role_catalog_design = ROLE_CATALOG_DESIGN_DOC.read_text(encoding="utf-8")
+        role_catalog_plan = ROLE_CATALOG_PLAN_DOC.read_text(encoding="utf-8")
 
         self.assertIn("V5.1 Hardening", design)
         self.assertIn("Deterministic Orchestrator", design)
         self.assertIn("LLM 负责内容，代码负责流程", design)
         self.assertIn("start-job-with-workflow", plan)
         self.assertIn("get-next-action", plan)
+        self.assertIn("roleCatalog", role_catalog_design)
+        self.assertIn("visibleLabel", role_catalog_design)
+        self.assertIn("profileId", role_catalog_plan)
 
-    def test_v5_docs_and_templates_reference_v51_hardening_control_plane(self):
+    def test_v51_docs_and_templates_reference_v51_hardening_control_plane(self):
         readme = README_FILE.read_text(encoding="utf-8")
         skill = SKILL_FILE.read_text(encoding="utf-8")
-        v5_doc = V5_DOC.read_text(encoding="utf-8")
-        v5_input = V5_INPUT_TEMPLATE.read_text(encoding="utf-8")
-        v5_snapshot = V5_CONFIG_SNAPSHOT.read_text(encoding="utf-8")
+        v5_doc = V51_DOC.read_text(encoding="utf-8")
+        v5_input = V51_INPUT_TEMPLATE.read_text(encoding="utf-8")
+        v5_snapshot = V51_CONFIG_SNAPSHOT.read_text(encoding="utf-8")
 
         for content in (readme, skill, v5_doc, v5_input, v5_snapshot):
             self.assertIn("V5.1 Hardening", content)
@@ -4615,7 +5399,7 @@ class V51DocumentationTests(unittest.TestCase):
             self.assertIn("v51_team_orchestrator_reconcile.py", content)
             self.assertIn("resume-job", content)
 
-    def test_v5_skill_documents_supervisor_no_reply_hygiene_repair(self):
+    def test_v51_skill_documents_supervisor_no_reply_hygiene_repair(self):
         skill = SKILL_FILE.read_text(encoding="utf-8")
         checklist = VERIFICATION_CHECKLIST.read_text(encoding="utf-8")
 
@@ -4625,10 +5409,74 @@ class V51DocumentationTests(unittest.TestCase):
         self.assertIn("v51_team_orchestrator_reconcile.py", skill)
         self.assertIn("hygiene", checklist)
 
+    def test_v51_docs_require_canonical_worker_titles_and_single_structured_rollup(self):
+        readme = README_FILE.read_text(encoding="utf-8")
+        skill = SKILL_FILE.read_text(encoding="utf-8")
+        v5_doc = V51_DOC.read_text(encoding="utf-8")
+        v5_snapshot = V51_CONFIG_SNAPSHOT.read_text(encoding="utf-8")
+        checklist = VERIFICATION_CHECKLIST.read_text(encoding="utf-8")
 
-class V5TemplateTests(unittest.TestCase):
-    def test_v5_input_template_exists_and_mentions_teams(self):
-        content = V5_INPUT_TEMPLATE.read_text(encoding="utf-8")
+        self.assertIn("progressTitle=【角色进度｜TG-xxxx】", readme)
+        self.assertIn("finalTitle=【角色结论｜TG-xxxx】", readme)
+        self.assertIn("同一 `jobRef` 的 `【主管最终统一收口｜TG-xxxx】` 只允许出现一次", readme)
+        self.assertIn("完整 `finalVisibleText` 终案正文", readme)
+
+        self.assertIn("progressTitle/finalTitle", skill)
+        self.assertIn("同一 `jobRef` 若出现两次 `【主管最终统一收口】`", skill)
+        self.assertIn("完整 `finalVisibleText` 正文", skill)
+
+        self.assertIn("progressTitle/finalTitle/callbackMustInclude", v5_doc)
+        self.assertIn("summary=...|details=...|risks=...|actionItems=...", v5_doc)
+        self.assertIn("联合风险与红线", v5_doc)
+        self.assertIn("明日三件事", v5_doc)
+        self.assertIn("只允许出现一次", v5_doc)
+        self.assertIn("完整 `finalVisibleText` 终案正文", v5_doc)
+
+        self.assertIn("progressTitle/finalTitle/callbackMustInclude", v5_snapshot)
+        self.assertIn("【运营进度｜TG-xxxx】", v5_snapshot)
+        self.assertIn("【财务结论｜TG-xxxx】", v5_snapshot)
+        self.assertIn("完整 finalVisibleText 终案正文", v5_snapshot)
+
+        self.assertIn("worker 的两条群内可见消息都带固定标题", checklist)
+        self.assertIn("同一 `jobRef` 在群里只出现 1 次 `【主管最终统一收口｜TG-xxxx】`", checklist)
+        self.assertIn("完整 `finalVisibleText` 终案正文", checklist)
+
+    def test_v51_docs_document_role_catalog_as_canonical_schema(self):
+        readme = README_FILE.read_text(encoding="utf-8")
+        skill = SKILL_FILE.read_text(encoding="utf-8")
+        v5_doc = V51_DOC.read_text(encoding="utf-8")
+        v5_input = V51_INPUT_TEMPLATE.read_text(encoding="utf-8")
+        v5_fixed_role = V51_FIXED_ROLE_TEMPLATE.read_text(encoding="utf-8")
+        v5_snapshot = V51_CONFIG_SNAPSHOT.read_text(encoding="utf-8")
+
+        self.assertIn("roleCatalog", readme)
+        self.assertIn("profileId", readme)
+        self.assertIn("visibleLabel", readme)
+
+        self.assertIn("roleCatalog", skill)
+        self.assertIn("profileId", skill)
+        self.assertIn("visibleLabel", skill)
+
+        self.assertIn("roleCatalog", v5_doc)
+        self.assertIn("profileId", v5_doc)
+        self.assertIn("visibleLabel", v5_doc)
+
+        self.assertIn('"roleCatalog"', v5_input)
+        self.assertIn('"profileId"', v5_input)
+        self.assertIn('"visibleLabel"', v5_input)
+
+        self.assertIn('"roleCatalog"', v5_fixed_role)
+        self.assertIn('"profileId"', v5_fixed_role)
+        self.assertIn('"visibleLabel"', v5_fixed_role)
+
+        self.assertIn('"roleCatalog"', v5_snapshot)
+        self.assertIn('"profileId"', v5_snapshot)
+        self.assertIn('"visibleLabel"', v5_snapshot)
+
+
+class V51TemplateTests(unittest.TestCase):
+    def test_v51_input_template_exists_and_mentions_teams(self):
+        content = V51_INPUT_TEMPLATE.read_text(encoding="utf-8")
 
         self.assertIn('"teams"', content)
         self.assertIn('"supervisor"', content)
@@ -4639,10 +5487,10 @@ class V5TemplateTests(unittest.TestCase):
         self.assertIn('oc_f785e73d3c00954d4ccd5d49b63ef919', content)
         self.assertIn('oc_7121d87961740dbd72bd8e50e48ba5e3', content)
 
-    def test_v5_config_snapshot_exists_and_documents_two_teams(self):
-        content = V5_CONFIG_SNAPSHOT.read_text(encoding="utf-8")
+    def test_v51_config_snapshot_exists_and_documents_two_teams(self):
+        content = V51_CONFIG_SNAPSHOT.read_text(encoding="utf-8")
 
-        self.assertIn("V5 Team Orchestrator", content)
+        self.assertIn("V5.1 Hardening", content)
         self.assertIn("internal_main", content)
         self.assertIn("external_main", content)
         self.assertIn("oc_f785e73d3c00954d4ccd5d49b63ef919", content)
@@ -4650,8 +5498,8 @@ class V5TemplateTests(unittest.TestCase):
         self.assertIn("agent:supervisor_internal_main:main", content)
         self.assertIn("agent:supervisor_external_main:main", content)
 
-    def test_v5_doc_exists_and_keeps_one_supervisor_plus_n_workers_constraint(self):
-        content = V5_DOC.read_text(encoding="utf-8")
+    def test_v51_doc_exists_and_keeps_one_supervisor_plus_n_workers_constraint(self):
+        content = V51_DOC.read_text(encoding="utf-8")
 
         self.assertIn("One Team = 1 Supervisor + N Workers", content)
         self.assertIn("teams", content)
@@ -4663,18 +5511,18 @@ class V5TemplateTests(unittest.TestCase):
         self.assertIn("xiaolongxia", content)
         self.assertIn("yiran_yibao", content)
 
-    def test_v5_doc_documents_team_runtime_commands(self):
-        content = V5_DOC.read_text(encoding="utf-8")
+    def test_v51_doc_documents_team_runtime_commands(self):
+        content = V51_DOC.read_text(encoding="utf-8")
 
         self.assertIn("--team-key", content)
         self.assertIn("--supervisor-agent", content)
-        self.assertIn("v5-team-watchdog.service", content)
-        self.assertIn("v5 runtime manifest", content)
+        self.assertIn("v51-team-watchdog.service", content)
+        self.assertIn("v51 runtime manifest", content)
         self.assertIn("v51_team_orchestrator_reconcile.py", content)
         self.assertIn("resume-job", content)
 
-    def test_v5_fixed_role_template_exists_and_documents_role_combinations(self):
-        content = V5_FIXED_ROLE_TEMPLATE.read_text(encoding="utf-8")
+    def test_v51_fixed_role_template_exists_and_documents_role_combinations(self):
+        content = V51_FIXED_ROLE_TEMPLATE.read_text(encoding="utf-8")
 
         self.assertIn('"accounts"', content)
         self.assertIn('"teams"', content)
@@ -4689,10 +5537,10 @@ class V5TemplateTests(unittest.TestCase):
         self.assertIn('"teamKey": "finance_only_demo"', content)
         self.assertIn('"entryAccountId": "aoteman"', content)
 
-    def test_v5_fixed_role_standard_is_documented_in_readme_skill_and_v5_doc(self):
+    def test_v51_fixed_role_standard_is_documented_in_readme_skill_and_v51_doc(self):
         readme = README_FILE.read_text(encoding="utf-8")
         skill = SKILL_FILE.read_text(encoding="utf-8")
-        v5_doc = V5_DOC.read_text(encoding="utf-8")
+        v5_doc = V51_DOC.read_text(encoding="utf-8")
         deployment_inputs = (
             REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/deployment-inputs.example.yaml"
         ).read_text(encoding="utf-8")
@@ -4701,21 +5549,21 @@ class V5TemplateTests(unittest.TestCase):
             self.assertIn("bot 复用，role 固定", content)
             self.assertIn("同一个 bot 可以跨很多群复用", content)
             self.assertIn("每个群的角色组合可以不同", content)
-            self.assertIn("input-template-v5-fixed-role-multi-group.json", content)
+            self.assertIn("input-template-v51-fixed-role-multi-group.json", content)
 
-        self.assertIn("recommended_v5_fixed_role_accounts", deployment_inputs)
+        self.assertIn("recommended_v51_fixed_role_accounts", deployment_inputs)
         self.assertIn('supervisor: "aoteman"', deployment_inputs)
         self.assertIn('ops: "xiaolongxia"', deployment_inputs)
         self.assertIn('finance: "yiran_yibao"', deployment_inputs)
 
 
-class V5ReadmeAndSkillTests(unittest.TestCase):
-    def test_readme_marks_v3_v431_and_v5_as_current_mainlines(self):
+class V51ReadmeAndSkillTests(unittest.TestCase):
+    def test_readme_marks_v51_as_current_mainline(self):
         content = README_FILE.read_text(encoding="utf-8")
 
-        self.assertIn("V3.1", content)
-        self.assertIn("V4.3.1", content)
-        self.assertIn("V5 Team Orchestrator", content)
+        self.assertIn("V5.1 Hardening", content)
+        self.assertNotIn("V3.1", content)
+        self.assertNotIn("V4.3.1", content)
         self.assertIn("Codex", content)
 
     def test_skill_describes_team_unit_over_shared_global_agents(self):
@@ -4726,21 +5574,31 @@ class V5ReadmeAndSkillTests(unittest.TestCase):
         self.assertIn("N 个 worker", content)
         self.assertIn("team unit", content)
 
-    def test_readme_and_skill_list_v5_runtime_artifacts(self):
+    def test_skill_uses_v51_fixed_role_template_as_default_v51_input_example(self):
+        content = SKILL_FILE.read_text(encoding="utf-8")
+
+        self.assertIn("--input references/input-template-v51-fixed-role-multi-group.json", content)
+
+    def test_builder_usage_example_uses_v51_fixed_role_template(self):
+        content = BUILD_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("--input references/input-template-v51-fixed-role-multi-group.json", content)
+
+    def test_readme_and_skill_list_v51_runtime_artifacts(self):
         readme = README_FILE.read_text(encoding="utf-8")
         skill = SKILL_FILE.read_text(encoding="utf-8")
         deployment_inputs = (
             REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/deployment-inputs.example.yaml"
         ).read_text(encoding="utf-8")
 
-        self.assertIn("v5-team-watchdog.service", readme)
-        self.assertIn("v5-team-watchdog.plist", readme)
-        self.assertIn("v5-team-watchdog.service", skill)
-        self.assertIn("v5-team-watchdog.plist", skill)
+        self.assertIn("v51-team-watchdog.service", readme)
+        self.assertIn("v51-team-watchdog.plist", readme)
+        self.assertIn("v51-team-watchdog.service", skill)
+        self.assertIn("v51-team-watchdog.plist", skill)
         self.assertIn("v51_team_orchestrator_reconcile.py", readme)
         self.assertIn("v51_team_orchestrator_reconcile.py", skill)
         self.assertIn("hidden_main_session_key", deployment_inputs)
-        self.assertIn("v5_team_runtime", deployment_inputs)
+        self.assertIn("v51_team_runtime", deployment_inputs)
         self.assertIn("runtime manifest", readme)
 
     def test_readme_includes_bilingual_default_expert_catalog_with_30_experts(self):
@@ -4790,7 +5648,7 @@ class V5ReadmeAndSkillTests(unittest.TestCase):
 
     def test_customer_first_use_docs_exist_and_are_linked_in_readme(self):
         for path in (
-            V5_1_QUICKSTART_DOC,
+            V51_QUICKSTART_DOC,
             CUSTOMER_FIRST_USE_CHECKLIST,
             CUSTOMER_FIRST_USE_PROMPT,
             CUSTOMER_FIRST_USE_EXAMPLE,
@@ -4804,12 +5662,12 @@ class V5ReadmeAndSkillTests(unittest.TestCase):
         self.assertIn("客户首次使用真实案例.md", readme)
 
     def test_customer_first_use_docs_cover_collection_prompt_and_real_case(self):
-        quickstart = V5_1_QUICKSTART_DOC.read_text(encoding="utf-8")
+        quickstart = V51_QUICKSTART_DOC.read_text(encoding="utf-8")
         checklist = CUSTOMER_FIRST_USE_CHECKLIST.read_text(encoding="utf-8")
         prompt = CUSTOMER_FIRST_USE_PROMPT.read_text(encoding="utf-8")
         example = CUSTOMER_FIRST_USE_EXAMPLE.read_text(encoding="utf-8")
 
-        self.assertIn("V5 Team Orchestrator / V5.1 Hardening", quickstart)
+        self.assertIn("V5.1 Hardening", quickstart)
         self.assertIn("curl -fsSL https://openclaw.ai/install.sh | bash", quickstart)
         self.assertIn("openclaw onboard --install-daemon", quickstart)
         self.assertIn("openclaw plugins install @openclaw/feishu", quickstart)
@@ -4824,13 +5682,18 @@ class V5ReadmeAndSkillTests(unittest.TestCase):
         self.assertIn("peerId", checklist)
         self.assertIn("accountId 是我们自己定义的键名", checklist)
         self.assertIn("填写到", checklist)
-        self.assertIn("input-template-v5-fixed-role-multi-group.json", checklist)
+        self.assertIn("input-template-v51-fixed-role-multi-group.json", checklist)
 
         self.assertIn("请使用 openclaw-feishu-multi-agent-deploy skill", prompt)
         self.assertIn("先备份", prompt)
         self.assertIn("openclaw config validate", prompt)
         self.assertIn("openclaw gateway restart", prompt)
         self.assertIn("一次配置 1 个群或多个群", prompt)
+
+        self.assertIn("roleCatalog", quickstart)
+        self.assertIn("profileId", quickstart)
+        self.assertIn('"roleCatalog"', example)
+        self.assertIn('"profileId"', example)
 
         self.assertIn("internal_main", example)
         self.assertIn("external_main", example)
@@ -4840,6 +5703,32 @@ class V5ReadmeAndSkillTests(unittest.TestCase):
         self.assertIn("xiaolongxia", example)
         self.assertIn("yiran_yibao", example)
         self.assertIn("把下面这些真实值替换成客户自己的值", example)
+
+    def test_v51_product_docs_cover_unified_entry_and_expansion_scenarios(self):
+        readme = README_FILE.read_text(encoding="utf-8")
+        v51_doc = V51_DOC.read_text(encoding="utf-8")
+        prompt = CUSTOMER_FIRST_USE_PROMPT.read_text(encoding="utf-8")
+        example = CUSTOMER_FIRST_USE_EXAMPLE.read_text(encoding="utf-8")
+
+        self.assertIn("如果只看一个文件", readme)
+        self.assertIn("你将得到什么效果", v51_doc)
+        self.assertIn("统一入口配置", v51_doc)
+        self.assertIn("实现原理", v51_doc)
+        self.assertIn("新增一个群", v51_doc)
+        self.assertIn("新增一个机器人账号", v51_doc)
+        self.assertIn("给现有群增加一个 worker", v51_doc)
+        self.assertIn("从现有群移除一个 worker", v51_doc)
+        self.assertIn("下线一个群", v51_doc)
+
+        self.assertIn("新增一个群", prompt)
+        self.assertIn("新增一个机器人账号", prompt)
+        self.assertIn("给现有群增加一个 worker", prompt)
+        self.assertIn("从现有群移除一个 worker", prompt)
+        self.assertIn("下线一个群", prompt)
+
+        self.assertIn("supervisor_internal_default", example)
+        self.assertIn("ops_default", example)
+        self.assertIn("finance_default", example)
 
 
 if __name__ == "__main__":
