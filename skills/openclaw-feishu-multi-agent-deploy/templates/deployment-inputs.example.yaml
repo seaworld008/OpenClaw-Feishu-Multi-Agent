@@ -11,8 +11,8 @@ platform:
   watchdog:
     enabled: true
     stale_seconds: 180
-    systemd_timer_name: "v4-3-watchdog.timer"
-    launchd_label: "bot.molt.v4-3-watchdog"
+    systemd_timer_name: "v51-team-<teamKey>.timer"
+    launchd_label: "bot.molt.v51-team-<teamKey>"
 
 openclaw:
   version: "v2026.3.2"
@@ -54,7 +54,7 @@ feishu:
       dmPolicy: "pairing"
       allowFrom: []
 
-recommended_v5_fixed_role_accounts:
+recommended_v51_fixed_role_accounts:
   enabled: true
   supervisor: "aoteman"
   ops: "xiaolongxia"
@@ -112,7 +112,7 @@ routing:
           id: "oc_group_b"
 
 tooling:
-  # V3（主管派单 -> 三群执行）建议开启
+  # 若当前环境需要会话级排障、transcript 修复或 Brownfield 升级辅助，可按需开启
   tools_allow:
     - "group:fs"
     - "group:runtime"
@@ -129,31 +129,31 @@ tooling:
 
 runtime_hygiene:
   enabled: true
-  script: "skills/openclaw-feishu-multi-agent-deploy/scripts/v431_single_group_hygiene.py"
+  script: "skills/openclaw-feishu-multi-agent-deploy/scripts/v51_team_orchestrator_hygiene.py"
   include_workers: true
   delete_transcripts: true
   required_after_changes:
-    - "group systemPrompt"
-    - "callbackSessionKey"
-    - "COMPLETE_PACKET schema"
+    - "roleCatalog"
+    - "workflow.stages"
+    - "worker/supervisor systemPrompt"
     - "hidden main session consumer"
 
-v5_team_runtime:
+v51_team_runtime:
   enabled: false
-  # V5 生产场景下，建议每个 team 都生成并归档一份 runtime manifest。
-  # 示例：references/generated/openclaw-feishu-plugin-v5-runtime-20260308-153000.json
-  runtime_manifest_path: "references/generated/openclaw-feishu-plugin-v5-runtime-<timestamp>.json"
+  # V5.1 生产场景下，建议每个 team 都生成并归档一份 runtime manifest。
+  # 示例：references/generated/openclaw-feishu-plugin-v51-runtime-20260308-153000.json
+  runtime_manifest_path: "references/generated/openclaw-feishu-plugin-v51-runtime-<timestamp>.json"
   team_key: "market_sz"
   supervisor_agent_id: "supervisor_market_sz"
   hidden_main_session_key: "agent:supervisor_market_sz:main"
   db_path: "~/.openclaw/teams/market_sz/state/team_jobs.db"
   watchdog:
-    systemd_service_template: "skills/openclaw-feishu-multi-agent-deploy/templates/systemd/v5-team-watchdog.service"
-    systemd_timer_template: "skills/openclaw-feishu-multi-agent-deploy/templates/systemd/v5-team-watchdog.timer"
-    launchd_template: "skills/openclaw-feishu-multi-agent-deploy/templates/launchd/v5-team-watchdog.plist"
-    systemd_service_name: "v5-team-market_sz.service"
-    systemd_timer_name: "v5-team-market_sz.timer"
-    launchd_label: "bot.molt.v5-team-market_sz"
+    systemd_service_template: "skills/openclaw-feishu-multi-agent-deploy/templates/systemd/v51-team-watchdog.service"
+    systemd_timer_template: "skills/openclaw-feishu-multi-agent-deploy/templates/systemd/v51-team-watchdog.timer"
+    launchd_template: "skills/openclaw-feishu-multi-agent-deploy/templates/launchd/v51-team-watchdog.plist"
+    systemd_service_name: "v51-team-market_sz.service"
+    systemd_timer_name: "v51-team-market_sz.timer"
+    launchd_label: "bot.molt.v51-team-market_sz"
 
 permissions:
   minimum:

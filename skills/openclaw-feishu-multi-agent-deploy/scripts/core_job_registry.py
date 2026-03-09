@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Minimal SQLite-backed job registry for V4.3 single-group production mode."""
+"""Shared SQLite-backed job registry for OpenClaw Feishu team workflows."""
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -30,6 +31,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   workflow_json TEXT,
   orchestrator_version TEXT,
   request_text TEXT,
+  supervisor_visible_label TEXT,
   entry_account_id TEXT,
   entry_channel TEXT,
   entry_target TEXT,
@@ -57,6 +59,7 @@ CREATE TABLE IF NOT EXISTS job_participants (
   agent_id TEXT NOT NULL,
   account_id TEXT NOT NULL,
   role TEXT NOT NULL,
+  visible_label TEXT,
   status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'running', 'done', 'failed')),
   dispatch_run_id TEXT,
   dispatch_status TEXT,
@@ -87,6 +90,7 @@ JOB_EXTRA_COLUMNS = {
     "workflow_json": "TEXT",
     "orchestrator_version": "TEXT",
     "request_text": "TEXT",
+    "supervisor_visible_label": "TEXT",
     "entry_account_id": "TEXT",
     "entry_channel": "TEXT",
     "entry_target": "TEXT",
@@ -101,6 +105,10 @@ JOB_EXTRA_COLUMNS = {
     "rollup_visible_message_id": "TEXT",
     "dispatch_attempt_count": "INTEGER NOT NULL DEFAULT 0",
     "last_control_error": "TEXT",
+}
+
+PARTICIPANT_EXTRA_COLUMNS = {
+    "visible_label": "TEXT",
 }
 
 V5_1_HARDENING = "V5.1 Hardening"
@@ -122,6 +130,13 @@ def init_db(conn: sqlite3.Connection) -> None:
     for column, definition in JOB_EXTRA_COLUMNS.items():
         if column not in existing_jobs_columns:
             conn.execute(f"ALTER TABLE jobs ADD COLUMN {column} {definition}")
+    existing_participant_columns = {
+        row["name"] if isinstance(row, sqlite3.Row) else row[1]
+        for row in conn.execute("PRAGMA table_info(job_participants)").fetchall()
+    }
+    for column, definition in PARTICIPANT_EXTRA_COLUMNS.items():
+        if column not in existing_participant_columns:
+            conn.execute(f"ALTER TABLE job_participants ADD COLUMN {column} {definition}")
     conn.commit()
 
 
@@ -180,7 +195,7 @@ def participant_rows(conn: sqlite3.Connection, job_ref: str) -> list[sqlite3.Row
     return conn.execute(
         """
         SELECT
-          job_ref, agent_id, account_id, role, status, dispatch_run_id, dispatch_status,
+          job_ref, agent_id, account_id, role, visible_label, status, dispatch_run_id, dispatch_status,
           progress_message_id, final_message_id, summary, completed_at
         FROM job_participants
         WHERE job_ref = ?
@@ -225,6 +240,7 @@ def validate_participants_payload(raw: str | None, workflow: dict) -> list[dict]
                 "agentId": agent_id,
                 "accountId": account_id,
                 "role": role,
+                "visibleLabel": str(item.get("visibleLabel") or "").strip(),
             }
         )
 
@@ -352,6 +368,7 @@ def build_stage_packets(conn: sqlite3.Connection, job_ref: str, workflow: dict |
             {
                 "stageIndex": idx,
                 "agentId": agent_id,
+                "visibleLabel": participant_visible_label(participant, agent_id) if participant else "",
                 "status": participant["status"] if participant else None,
                 "progressMessageId": participant["progress_message_id"] if participant else None,
                 "finalMessageId": participant["final_message_id"] if participant else None,
@@ -374,10 +391,11 @@ def job_ready_to_rollup(conn: sqlite3.Connection, job_ref: str) -> tuple[bool, d
     workflow = parse_workflow_json(job["workflow_json"]) if job and "workflow_json" in job.keys() else None
     by_agent = participant_map(conn, job_ref)
     required_rows = list(by_agent.values())
+    active_job = bool(job) and str(job["status"] or "") == "active"
     if workflow and job:
-        ready = str(job["next_action"] or "") == "rollup"
+        ready = active_job and str(job["next_action"] or "") == "rollup"
     else:
-        ready = bool(required_rows) and all(
+        ready = active_job and bool(required_rows) and all(
             row["status"] == "done"
             and row["progress_message_id"]
             and row["final_message_id"]
@@ -386,6 +404,7 @@ def job_ready_to_rollup(conn: sqlite3.Connection, job_ref: str) -> tuple[bool, d
     payload = {
         agent: {
             "status": by_agent[agent]["status"],
+            "visibleLabel": participant_visible_label(by_agent[agent], agent),
             "dispatchStatus": by_agent[agent]["dispatch_status"],
             "progressMessageId": by_agent[agent]["progress_message_id"],
             "finalMessageId": by_agent[agent]["final_message_id"],
@@ -544,21 +563,253 @@ def dispatch_record_exists(participant: sqlite3.Row | None) -> bool:
     return str(participant["status"] or "") in {"accepted", "running", "done", "failed"}
 
 
+def clean_role_label(role: str) -> str:
+    cleaned = str(role or "").strip()
+    for needle in ("机器人", "专家", "执行", "Agent", "agent", "顾问", "负责人", "Leader", "leader"):
+        cleaned = cleaned.replace(needle, "")
+    return cleaned.strip(" -_/")
+
+
+def participant_role_label(agent_id: str, role: str) -> str:
+    hints = (
+        (("运营", "ops", "operation"), "运营"),
+        (("财务", "finance", "fin"), "财务"),
+        (("销售", "sales", "biz"), "销售"),
+        (("客服", "service", "support", "success"), "客服"),
+        (("数据", "data", "analyst"), "数据"),
+        (("人力", "hr", "people"), "人力"),
+        (("法务", "legal", "compliance"), "法务"),
+        (("产品", "product", "pm"), "产品"),
+    )
+    for candidate in (str(role or "").strip(), str(agent_id or "").strip()):
+        lowered = candidate.lower()
+        for markers, label in hints:
+            if any(marker in lowered or marker in candidate for marker in markers):
+                return label
+    cleaned = clean_role_label(role)
+    return cleaned or (str(agent_id or "阶段").strip() or "阶段")
+
+
+def resolved_visible_label(
+    *,
+    explicit_label: str | None,
+    agent_id: str,
+    role: str,
+    kind: str,
+) -> str:
+    label = str(explicit_label or "").strip()
+    if label:
+        return label
+    if kind == "supervisor":
+        inferred = participant_role_label(agent_id or "supervisor", role or "主管")
+        return inferred if inferred and inferred != "阶段" else "主管"
+    return participant_role_label(agent_id, role)
+
+
+def participant_visible_label(participant: sqlite3.Row | dict | None, agent_id: str = "", role: str = "") -> str:
+    if participant:
+        explicit = participant["visible_label"] if "visible_label" in participant.keys() else participant.get("visible_label")
+        agent_id = agent_id or (
+            participant["agent_id"] if "agent_id" in participant.keys() else participant.get("agent_id", "")
+        )
+        role = role or (participant["role"] if "role" in participant.keys() else participant.get("role", ""))
+    else:
+        explicit = ""
+    return resolved_visible_label(
+        explicit_label=str(explicit or ""),
+        agent_id=str(agent_id or ""),
+        role=str(role or ""),
+        kind="worker",
+    )
+
+
+def supervisor_visible_label_for_row(row: sqlite3.Row) -> str:
+    explicit = str(row["supervisor_visible_label"] or "").strip() if "supervisor_visible_label" in row.keys() else ""
+    return resolved_visible_label(
+        explicit_label=explicit,
+        agent_id=hidden_main_agent_id(row["hidden_main_session_key"]) if "hidden_main_session_key" in row.keys() else "supervisor",
+        role="主管",
+        kind="supervisor",
+    )
+
+
+def worker_visible_contract(
+    job_ref: str,
+    agent_id: str,
+    role: str,
+    visible_label: str | None = None,
+) -> dict[str, str]:
+    label = resolved_visible_label(
+        explicit_label=str(visible_label or ""),
+        agent_id=agent_id,
+        role=role,
+        kind="worker",
+    )
+    return {
+        "roleLabel": label,
+        "progressTitle": f"【{label}进度｜{job_ref}】",
+        "finalTitle": f"【{label}结论｜{job_ref}】",
+        "callbackMustInclude": "summary,details,risks,actionItems",
+    }
+
+
+def normalize_lines(raw: str) -> list[str]:
+    text = str(raw or "").strip()
+    if not text:
+        return []
+    chunks = [line.strip(" -•\t") for line in text.replace("\r", "\n").splitlines() if line.strip()]
+    if len(chunks) == 1 and re.search(r"[；;]", chunks[0]):
+        split_chunks = [part.strip(" -•\t") for part in re.split(r"[；;]", chunks[0]) if part.strip()]
+        if len(split_chunks) > 1:
+            return split_chunks
+    return chunks
+
+
+def normalize_visible_plan_lines(raw: str) -> list[str]:
+    text = str(raw or "").replace("\r", "\n")
+    if not text.strip():
+        return []
+    raw_lines = text.splitlines()
+    cleaned: list[str] = []
+    skipped_header = False
+    for line in raw_lines:
+        stripped = line.strip()
+        if not stripped:
+            if cleaned and cleaned[-1] != "":
+                cleaned.append("")
+            continue
+        if not skipped_header and stripped.startswith("【") and "】" in stripped:
+            skipped_header = True
+            continue
+        skipped_header = True
+        cleaned.append(stripped)
+    while cleaned and cleaned[0] == "":
+        cleaned.pop(0)
+    while cleaned and cleaned[-1] == "":
+        cleaned.pop()
+    return cleaned
+
+
+def chinese_section(index: int) -> str:
+    mapping = {
+        1: "一",
+        2: "二",
+        3: "三",
+        4: "四",
+        5: "五",
+        6: "六",
+        7: "七",
+        8: "八",
+        9: "九",
+        10: "十",
+    }
+    return mapping.get(index, str(index))
+
+
+def format_chinese_join(items: list[str]) -> str:
+    if not items:
+        return ""
+    if len(items) == 1:
+        return items[0]
+    if len(items) == 2:
+        return f"{items[0]}和{items[1]}"
+    return f"{'、'.join(items[:-1])}和{items[-1]}"
+
+
+def ack_worker_role_summary(row: sqlite3.Row, conn: sqlite3.Connection | None = None) -> str:
+    if conn is None or "workflow_json" not in row.keys():
+        return ""
+    workflow = parse_workflow_json(row["workflow_json"])
+    stage_agent_ids = workflow_stage_agent_ids(workflow)
+    if not stage_agent_ids:
+        return ""
+    participants = participant_map(conn, row["job_ref"])
+    ordered_roles: list[str] = []
+    seen_roles: set[str] = set()
+    for agent_id in stage_agent_ids:
+        participant = participants.get(agent_id)
+        if participant is None:
+            return ""
+        role = str(participant["visible_label"] or participant["role"] or "").strip()
+        if not role:
+            return ""
+        if role not in seen_roles:
+            seen_roles.add(role)
+            ordered_roles.append(role)
+    return format_chinese_join(ordered_roles)
+
+
 def visible_message_text(kind: str, row: sqlite3.Row, conn: sqlite3.Connection | None = None) -> str:
     job_ref = row["job_ref"]
+    supervisor_label = supervisor_visible_label_for_row(row)
     if kind == "ack":
-        return f"【主管已接单｜{job_ref}】任务已受理，按固定顺序推进，请稍候查看进度。"
+        role_summary = ack_worker_role_summary(row, conn)
+        if role_summary:
+            return f"【{supervisor_label}已接单｜{job_ref}】任务已受理，正分配给{role_summary}处理，请稍候查看进度。"
+        return f"【{supervisor_label}已接单｜{job_ref}】任务已受理，按固定顺序推进，请稍候查看进度。"
     if kind == "rollup":
         workflow = parse_workflow_json(row["workflow_json"]) if "workflow_json" in row.keys() else None
+        participants = participant_map(conn, job_ref) if conn is not None else {}
         completion_packets = latest_completion_packets(conn, job_ref) if conn is not None else {}
-        summary_lines: list[str] = []
-        for agent_id in workflow_stage_agent_ids(workflow):
+        stage_agent_ids = workflow_stage_agent_ids(workflow) if workflow else list(participants.keys())
+        lines = [
+            f"【{supervisor_label}最终统一收口｜{job_ref}】",
+            f"任务主题：{row['title']}",
+            "",
+            f"一、{supervisor_label}统一终案",
+            "以下终案已结合各角色完整结论整理，可直接作为执行底稿。",
+        ]
+        risk_lines: list[str] = []
+        action_lines: list[str] = []
+        section_index = 2
+        for agent_id in stage_agent_ids:
+            participant = participants.get(agent_id)
             packet = completion_packets.get(agent_id, {})
-            summary = str(packet.get("summary") or "").strip()
-            if summary:
-                summary_lines.append(f"- {agent_id}: {summary}")
-        body = "\n".join(summary_lines) if summary_lines else "- 已完成团队协作收口"
-        return f"【主管最终统一收口｜{job_ref}】\n{body}"
+            label = participant_visible_label(participant, agent_id)
+            final_visible_text = str(packet.get("finalVisibleText") or packet.get("final_visible_text") or "").strip()
+            summary = str(packet.get("summary") or (participant["summary"] if participant else "") or "").strip()
+            details = str(packet.get("details") or "").strip()
+            risks = str(packet.get("risks") or "").strip()
+            action_items = str(packet.get("actionItems") or packet.get("action_items") or "").strip()
+            section_lines = normalize_visible_plan_lines(final_visible_text)
+            if section_lines:
+                lines.extend(
+                    [
+                        "",
+                        f"{chinese_section(section_index)}、{label}终案方案",
+                        *section_lines,
+                    ]
+                )
+            else:
+                fallback_lines = normalize_lines(summary)
+                for line in normalize_lines(details):
+                    if line not in fallback_lines:
+                        fallback_lines.append(line)
+                if not fallback_lines:
+                    fallback_lines.append(f"{label}已完成当前阶段方案输出，详见对应角色结论消息。")
+                lines.extend(
+                    [
+                        "",
+                        f"{chinese_section(section_index)}、{label}结论",
+                        *[f"- {line}" for line in fallback_lines],
+                    ]
+                )
+            section_index += 1
+            if risks:
+                risk_lines.extend(f"{label}：{line}" for line in normalize_lines(risks))
+            if action_items:
+                action_lines.extend(f"{label}：{line}" for line in normalize_lines(action_items))
+        lines.extend(
+            [
+                "",
+                f"{chinese_section(section_index)}、联合风险与红线",
+                *([f"- {line}" for line in risk_lines] if risk_lines else ["- 当前未上报新增风险，请继续按各角色结论中的红线执行。"]),
+                "",
+                f"{chinese_section(section_index + 1)}、明日三件事",
+                *([f"- {line}" for line in action_lines] if action_lines else ["- 先按上述统一方案推进，并在首轮执行后回收数据复盘。"]),
+            ]
+        )
+        return "\n".join(lines)
     raise ValueError(f"unsupported visible message kind: {kind}")
 
 
@@ -618,6 +869,8 @@ def build_job_control_state(row: sqlite3.Row) -> dict:
         payload["entryTarget"] = row["entry_target"]
     if "hidden_main_session_key" in row.keys() and row["hidden_main_session_key"]:
         payload["hiddenMainSessionKey"] = row["hidden_main_session_key"]
+    if "supervisor_visible_label" in row.keys():
+        payload["supervisorVisibleLabel"] = supervisor_visible_label_for_row(row)
     return payload
 
 
@@ -708,16 +961,22 @@ def cmd_start_job_with_workflow(args: argparse.Namespace) -> int:
         if entry_delivery["channel"] and entry_delivery["accountId"] and entry_delivery["target"]
         else args.entry_delivery_json
     )
+    supervisor_visible_label = resolved_visible_label(
+        explicit_label=args.supervisor_visible_label,
+        agent_id=hidden_main_agent_id(args.hidden_main_session_key),
+        role="主管",
+        kind="supervisor",
+    )
 
     conn.execute(
         """
         INSERT INTO jobs (
           job_ref, group_peer_id, requested_by, source_message_id, title, status, queue_position,
-          workflow_json, orchestrator_version, request_text, entry_account_id, entry_channel,
+          workflow_json, orchestrator_version, request_text, supervisor_visible_label, entry_account_id, entry_channel,
           entry_target, entry_delivery_json, hidden_main_session_key,
           current_stage_index, waiting_for_agent_id, next_action,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             job_ref,
@@ -730,6 +989,7 @@ def cmd_start_job_with_workflow(args: argparse.Namespace) -> int:
             json.dumps(workflow, ensure_ascii=False),
             args.orchestrator_version or V5_1_HARDENING,
             args.request_text,
+            supervisor_visible_label,
             args.entry_account_id,
             args.entry_channel,
             args.entry_target,
@@ -761,12 +1021,13 @@ def cmd_start_job_with_workflow(args: argparse.Namespace) -> int:
         conn.execute(
             """
             INSERT INTO job_participants (
-              job_ref, agent_id, account_id, role, status, dispatch_run_id, dispatch_status,
+              job_ref, agent_id, account_id, role, visible_label, status, dispatch_run_id, dispatch_status,
               progress_message_id, final_message_id, summary, completed_at
-            ) VALUES (?, ?, ?, ?, 'pending', '', '', '', '', '', NULL)
+            ) VALUES (?, ?, ?, ?, ?, 'pending', '', '', '', '', '', NULL)
             ON CONFLICT(job_ref, agent_id) DO UPDATE SET
               account_id=excluded.account_id,
               role=excluded.role,
+              visible_label=excluded.visible_label,
               status='pending',
               dispatch_run_id='',
               dispatch_status=''
@@ -776,6 +1037,7 @@ def cmd_start_job_with_workflow(args: argparse.Namespace) -> int:
                 participant["agentId"],
                 participant["accountId"],
                 participant["role"],
+                str(participant.get("visibleLabel") or "").strip(),
             ),
         )
     conn.commit()
@@ -840,7 +1102,7 @@ def cmd_mark_worker_complete(args: argparse.Namespace) -> int:
 
     completed_at = now_iso()
     existing = conn.execute(
-        "SELECT account_id, role, dispatch_run_id, dispatch_status FROM job_participants WHERE job_ref = ? AND agent_id = ?",
+        "SELECT account_id, role, visible_label, dispatch_run_id, dispatch_status FROM job_participants WHERE job_ref = ? AND agent_id = ?",
         (args.job_ref, args.agent_id),
     ).fetchone()
     defaults = {
@@ -850,17 +1112,24 @@ def cmd_mark_worker_complete(args: argparse.Namespace) -> int:
     }
     account_id = args.account_id or (existing["account_id"] if existing and existing["account_id"] else defaults.get(args.agent_id, {}).get("account_id", ""))
     role = args.role or (existing["role"] if existing and existing["role"] else defaults.get(args.agent_id, {}).get("role", ""))
+    visible_label = resolved_visible_label(
+        explicit_label=args.visible_label or (existing["visible_label"] if existing and existing["visible_label"] else ""),
+        agent_id=args.agent_id,
+        role=role,
+        kind="worker",
+    )
     dispatch_run_id = args.dispatch_run_id or (existing["dispatch_run_id"] if existing and existing["dispatch_run_id"] else "")
     dispatch_status = args.dispatch_status or (existing["dispatch_status"] if existing and existing["dispatch_status"] else "accepted")
     conn.execute(
         """
         INSERT INTO job_participants (
-          job_ref, agent_id, account_id, role, status, dispatch_run_id, dispatch_status,
+          job_ref, agent_id, account_id, role, visible_label, status, dispatch_run_id, dispatch_status,
           progress_message_id, final_message_id, summary, completed_at
-        ) VALUES (?, ?, ?, ?, 'done', ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, 'done', ?, ?, ?, ?, ?, ?)
         ON CONFLICT(job_ref, agent_id) DO UPDATE SET
           account_id=excluded.account_id,
           role=excluded.role,
+          visible_label=excluded.visible_label,
           status='done',
           dispatch_run_id=excluded.dispatch_run_id,
           dispatch_status=excluded.dispatch_status,
@@ -874,6 +1143,7 @@ def cmd_mark_worker_complete(args: argparse.Namespace) -> int:
             args.agent_id,
             account_id,
             role,
+            visible_label,
             dispatch_run_id,
             dispatch_status,
             args.progress_message_id,
@@ -919,7 +1189,9 @@ def cmd_mark_worker_complete(args: argparse.Namespace) -> int:
             "finalMessageId": args.final_message_id,
             "summary": args.summary,
             "details": args.details,
+            "finalVisibleText": args.final_visible_text,
             "risks": args.risks,
+            "actionItems": args.action_items,
             "dependencies": args.dependencies,
             "conflicts": args.conflicts,
         },
@@ -958,12 +1230,13 @@ def cmd_mark_dispatch(args: argparse.Namespace) -> int:
     conn.execute(
         """
         INSERT INTO job_participants (
-          job_ref, agent_id, account_id, role, status, dispatch_run_id, dispatch_status,
+          job_ref, agent_id, account_id, role, visible_label, status, dispatch_run_id, dispatch_status,
           progress_message_id, final_message_id, summary, completed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, '', '', '', NULL)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', '', '', NULL)
         ON CONFLICT(job_ref, agent_id) DO UPDATE SET
           account_id=excluded.account_id,
           role=excluded.role,
+          visible_label=excluded.visible_label,
           status=excluded.status,
           dispatch_run_id=excluded.dispatch_run_id,
           dispatch_status=excluded.dispatch_status
@@ -973,6 +1246,12 @@ def cmd_mark_dispatch(args: argparse.Namespace) -> int:
             args.agent_id,
             args.account_id,
             args.role,
+            resolved_visible_label(
+                explicit_label=args.visible_label,
+                agent_id=args.agent_id,
+                role=args.role,
+                kind="worker",
+            ),
             args.status,
             args.dispatch_run_id,
             args.dispatch_status,
@@ -1179,6 +1458,12 @@ def cmd_build_dispatch_payload(args: argparse.Namespace) -> int:
     if not callback_session_key:
         emit({"status": "callback_session_missing", "jobRef": args.job_ref, "agentId": agent_id})
         return 2
+    visible_contract = worker_visible_contract(
+        args.job_ref,
+        agent_id,
+        participant["role"],
+        participant["visible_label"] if "visible_label" in participant.keys() else "",
+    )
     payload = {
         "jobRef": args.job_ref,
         "groupPeerId": row["group_peer_id"],
@@ -1187,6 +1472,7 @@ def cmd_build_dispatch_payload(args: argparse.Namespace) -> int:
         "role": participant["role"],
         "callbackSessionKey": callback_session_key,
         "mustSend": "progress,final,callback",
+        **visible_contract,
         "title": row["title"],
         "requestText": row["request_text"] or row["title"],
         "packet": (
@@ -1197,7 +1483,10 @@ def cmd_build_dispatch_payload(args: argparse.Namespace) -> int:
             f"title={row['title']}|"
             f"request={row['request_text'] or row['title']}|"
             f"callbackSessionKey={callback_session_key}|"
-            "mustSend=progress,final,callback"
+            "mustSend=progress,final,callback|"
+            f"progressTitle={visible_contract['progressTitle']}|"
+            f"finalTitle={visible_contract['finalTitle']}|"
+            f"callbackMustInclude={visible_contract['callbackMustInclude']}"
         ),
     }
     emit(payload)
@@ -1220,7 +1509,7 @@ def cmd_build_visible_ack(args: argparse.Namespace) -> int:
             "jobRef": args.job_ref,
             "kind": "ack",
             "delivery": delivery,
-            "message": visible_message_text("ack", row),
+            "message": visible_message_text("ack", row, conn),
         }
     )
     return 0
@@ -1244,6 +1533,7 @@ def cmd_build_rollup_context(args: argparse.Namespace) -> int:
             "participants": {
                 agent_id: {
                     "status": participant["status"],
+                    "visibleLabel": participant_visible_label(participant, agent_id),
                     "summary": participant["summary"],
                     "progressMessageId": participant["progress_message_id"],
                     "finalMessageId": participant["final_message_id"],
@@ -1261,6 +1551,12 @@ def cmd_build_rollup_visible_message(args: argparse.Namespace) -> int:
     row = get_job(conn, args.job_ref)
     if not row:
         emit({"status": "job_missing", "jobRef": args.job_ref})
+        return 2
+    if flag_value(row["rollup_visible_sent"] if "rollup_visible_sent" in row.keys() else 0):
+        emit({"status": "rollup_already_sent", "jobRef": args.job_ref, "messageId": row["rollup_visible_message_id"]})
+        return 2
+    if str(row["status"] or "") != "active":
+        emit({"status": "job_not_active", "jobRef": args.job_ref, "currentStatus": row["status"]})
         return 2
     ready, _participants = job_ready_to_rollup(conn, args.job_ref)
     if not ready:
@@ -1362,7 +1658,11 @@ def cmd_close_job(args: argparse.Namespace) -> int:
         return 2
     closed_at = now_iso()
     conn.execute(
-        "UPDATE jobs SET status = ?, updated_at = ?, closed_at = ? WHERE job_ref = ?",
+        """
+        UPDATE jobs
+        SET status = ?, updated_at = ?, closed_at = ?, next_action = NULL, waiting_for_agent_id = NULL
+        WHERE job_ref = ?
+        """,
         (args.status, closed_at, closed_at, args.job_ref),
     )
     insert_event(conn, args.job_ref, "job_closed", "system", {"status": args.status})
@@ -1601,6 +1901,7 @@ def build_parser() -> argparse.ArgumentParser:
     start_workflow.add_argument("--source-message-id", default="")
     start_workflow.add_argument("--title", required=True)
     start_workflow.add_argument("--request-text", default="")
+    start_workflow.add_argument("--supervisor-visible-label", default="")
     start_workflow.add_argument("--entry-account-id", default="")
     start_workflow.add_argument("--entry-channel", default="")
     start_workflow.add_argument("--entry-target", default="")
@@ -1620,6 +1921,7 @@ def build_parser() -> argparse.ArgumentParser:
     dispatch.add_argument("--agent-id", required=True)
     dispatch.add_argument("--account-id", required=True)
     dispatch.add_argument("--role", required=True)
+    dispatch.add_argument("--visible-label", default="")
     dispatch.add_argument("--status", default="accepted", choices=["pending", "accepted", "running", "failed"])
     dispatch.add_argument("--dispatch-run-id", default="")
     dispatch.add_argument("--dispatch-status", default="")
@@ -1629,13 +1931,16 @@ def build_parser() -> argparse.ArgumentParser:
     complete.add_argument("--agent-id", required=True)
     complete.add_argument("--account-id", default="")
     complete.add_argument("--role", default="")
+    complete.add_argument("--visible-label", default="")
     complete.add_argument("--dispatch-run-id", default="")
     complete.add_argument("--dispatch-status", default="")
     complete.add_argument("--progress-message-id", required=True)
     complete.add_argument("--final-message-id", required=True)
     complete.add_argument("--summary", default="")
     complete.add_argument("--details", default="")
+    complete.add_argument("--final-visible-text", default="")
     complete.add_argument("--risks", default="")
+    complete.add_argument("--action-items", default="")
     complete.add_argument("--dependencies", default="")
     complete.add_argument("--conflicts", default="")
 

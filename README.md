@@ -6,10 +6,31 @@
 
 - `v1.6.1`（2026-03-08）
 - 默认技术路线：官方插件 `@openclaw/feishu`
-- 兼容路线：legacy `chat-feishu`
-- 当前主线版本：`V3.1` 跨群生产、`V4.3.1` 单群生产、`V5 Team Orchestrator` 多群模板化生产
-- 当前 `V5` 的推荐生产形态：`V5.1 Hardening`
-- 客户定制保留件：`V4.3.1-C1.0`（与 `V4.3.1` 同协议，保留客户专属群与机器人配置）
+- 当前公开主线版本：`V5.1 Hardening`
+- 当前最新稳定版：`V5.1 Hardening`
+
+## 如果只看一个文件
+
+如果你当前要交付多群、多角色、多机器人协作，且希望以后继续扩群、增减角色、替换提示词都不乱，先看这一个文件：
+
+- [V5.1 Hardening 交付模板 / 产品手册](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v51-team-orchestrator.md)
+
+它已经覆盖：
+
+- 你将得到什么效果
+- `roleCatalog + teams(profileId + override)` 统一入口
+- runtime manifest / hidden main / SQLite / watchdog 的实现原理
+- 当前正式双群、三个正式机器人和真实 `appId/appSecret`
+- 真实 supervisor / worker 提示词
+- 新增一个群、新增一个机器人账号、给现有群增加一个 worker、从现有群移除一个 worker、下线一个群
+
+推荐阅读顺序：
+
+1. 产品手册：`references/codex-prompt-templates-v51-team-orchestrator.md`
+2. 收集清单：`references/客户首次使用信息清单.md`
+3. 真实案例：`references/客户首次使用真实案例.md`
+4. 操作型提示词：`references/客户首次使用-Codex提示词.md`
+5. 新机器上线：`references/V5.1-新机器快速启动-SOP.md`
 
 ## 仓库结构
 
@@ -33,9 +54,9 @@ README.md
 - Brownfield 增量改造（incremental）与灰度放量（canary）
 - 配置生成脚本（从输入 JSON 生成 patch + 验证摘要）
 - 前置条件、验收清单、回滚流程、升级回归手册
-- `V5 Team Orchestrator`：多个飞书群，每群 `1` 个主管 + `N` 个 worker，可模板化扩展角色、职能与提示词
-- `V5.1 Hardening`：在 `V5` 上把流程推进下沉到确定性控制面，`LLM 负责内容，代码负责流程`
-- 直接给 Codex 使用的完整交付模板、真实双群示例和 `v5 runtime manifest`
+- `Team Orchestrator`：多个飞书群，每群 `1` 个主管 + `N` 个 worker，可模板化扩展角色、职能与提示词
+- `V5.1 Hardening`：把 Team Orchestrator 的流程推进下沉到确定性控制面，`LLM 负责内容，代码负责流程`
+- 直接给 Codex 使用的完整交付模板、真实双群示例和 `v51 runtime manifest`
 
 ## 平台兼容矩阵
 
@@ -47,9 +68,9 @@ README.md
 | `Windows 原生` | 不作为默认生产路径 | 需单独评估 | 不默认承诺 |
 
 核心原则：
-1. `V4.3.1` 的运行模型不按平台分叉，分叉的是 service 管理与运维模板。
+1. 平台差异只体现在 service manager、watchdog 模板和运维 SOP。
 2. Windows 客户默认按 `WSL2` 交付，不把 Windows 原生 service 当成标准路线。
-3. `SQLite + hidden main session + 6 类群内可见消息` 这套协议，在 Linux / macOS / WSL2 上保持一致。
+3. `V5.1 Hardening` 的 `SQLite + hidden main session + runtime manifest` 运行模型，在 Linux / macOS / WSL2 上保持一致。
 
 ## 快速使用
 
@@ -59,19 +80,18 @@ README.md
 cd skills/openclaw-feishu-multi-agent-deploy
 ```
 
-2. 填写输入模板（任选其一）
+2. 填写输入模板
 
-- `references/input-template.json`（默认 plugin）
-- `references/input-template-plugin.json`（plugin 完整示例）
-- `references/input-template-legacy-chat-feishu.json`（legacy 兼容）
-- `references/input-template-v5-team-orchestrator.json`（`V5 Team Orchestrator` 多群模板化示例）
-- `references/input-template-v5-fixed-role-multi-group.json`（固定 bot-role 映射、群级角色组合自由的正式推荐模板）
+当前 `V5.1 Hardening` 的统一入口优先使用：
+
+- `references/input-template-v51-fixed-role-multi-group.json`（正式推荐，适合客户交付）
+- `references/input-template-v51-team-orchestrator.json`（真实双群生产基线）
 
 3. 生成 patch
 
 ```bash
 python3 scripts/core_feishu_config_builder.py \
-  --input references/input-template.json \
+  --input references/input-template-v51-fixed-role-multi-group.json \
   --out references/generated
 ```
 
@@ -83,9 +103,15 @@ openclaw gateway restart
 openclaw agents list --bindings
 ```
 
-## V5 Team Orchestrator 快速入口
+如果你需要的是产品化交付而不是单次试配，不要只看这 4 步。继续看：
 
-如果你的目标是“多个飞书群，每个群内都是多个 agent，且每个群都能自定义角色、职能与提示词”，优先按 `V5 Team Orchestrator` 建模：
+- [V5.1 Hardening 交付模板](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v51-team-orchestrator.md)
+- [客户首次使用真实案例](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用真实案例.md)
+- [客户首次使用-Codex提示词](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用-Codex提示词.md)
+
+## V5.1 Hardening 快速入口
+
+如果你的目标是“多个飞书群，每个群内都是多个 agent，且每个群都能自定义角色、职能与提示词”，优先按 `V5.1 Hardening` 建模：
 
 当前生产推荐直接采用 `V5.1 Hardening`：
 - 不再让 supervisor prompt 自己判断下一步
@@ -101,37 +127,41 @@ openclaw agents list --bindings
 - 若当前 waiting worker 的新 `main` 会话对 `TASK_DISPATCH` 裸回 `NO_REPLY`，`resume-job` 必须在单次执行里做有限次内联重派，而不是只重派一次后等待下一轮 timer
 
 1. 输入模板：
-- [V5 Team Orchestrator 输入模板](skills/openclaw-feishu-multi-agent-deploy/references/input-template-v5-team-orchestrator.json)
-- [V5 固定角色多群模板](skills/openclaw-feishu-multi-agent-deploy/references/input-template-v5-fixed-role-multi-group.json)
+- [V5.1 Hardening 输入模板](skills/openclaw-feishu-multi-agent-deploy/references/input-template-v51-team-orchestrator.json)
+- [V5.1 固定角色多群模板](skills/openclaw-feishu-multi-agent-deploy/references/input-template-v51-fixed-role-multi-group.json)
 
 2. 交付文档：
-- [V5 Team Orchestrator 交付模板](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v5-team-orchestrator.md)
+- [V5.1 Hardening 交付模板](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v51-team-orchestrator.md)
+- [V5.1 新机器快速启动 SOP](skills/openclaw-feishu-multi-agent-deploy/references/V5.1-新机器快速启动-SOP.md)
 - [客户首次使用信息清单](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用信息清单.md)
 - [客户首次使用-Codex提示词](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用-Codex提示词.md)
 - [客户首次使用真实案例](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用真实案例.md)
 
 3. 去敏配置快照：
-- [V5 Team Orchestrator JSONC 参考快照](skills/openclaw-feishu-multi-agent-deploy/templates/openclaw-v5-team-orchestrator.example.jsonc)
+- [V5.1 Hardening JSONC 参考快照](skills/openclaw-feishu-multi-agent-deploy/templates/openclaw-v51-team-orchestrator.example.jsonc)
 
 4. runtime 模板：
-- `templates/systemd/v5-team-watchdog.service`
-- `templates/systemd/v5-team-watchdog.timer`
-- `templates/launchd/v5-team-watchdog.plist`
+- `templates/systemd/v51-team-watchdog.service`
+- `templates/systemd/v51-team-watchdog.timer`
+- `templates/launchd/v51-team-watchdog.plist`
 - `skills/openclaw-feishu-multi-agent-deploy/scripts/v51_team_orchestrator_reconcile.py`
 
 5. 生成器额外产物：
-- `openclaw-feishu-plugin-v5-runtime-<timestamp>.json`
-- 该文件就是 `v5 runtime manifest`，用于 Codex、watchdog、session hygiene、canary 和回滚脚本按 `teamKey` 取值
+- `openclaw-feishu-plugin-v51-runtime-<timestamp>.json`
+- 该文件就是 `v51 runtime manifest`，用于 Codex、watchdog、session hygiene、canary 和回滚脚本按 `teamKey` 取值
 
 当前正式双群基线：
 - 内部团队群：`oc_f785e73d3c00954d4ccd5d49b63ef919`
 - 外部团队群：`oc_7121d87961740dbd72bd8e50e48ba5e3`
 - 三个正式机器人：`aoteman` / `xiaolongxia` / `yiran_yibao`
-- 当前 `V5` 正式 teamKey：`internal_main` / `external_main`
+- 当前正式 teamKey：`internal_main` / `external_main`
 
 设计原则：
 - 每个群都是一个独立 `team unit`
 - `One Team = 1 Supervisor + N Workers`
+- `roleCatalog` 是 `V5.1` 主线的角色真源，统一维护 `name / role / visibleLabel / description / responsibility / identity / mentionPatterns / systemPrompt`
+- `teams[].supervisor` 与 `teams[].workers[]` 主线推荐写法是 `profileId + agentId + override`；旧 inline 写法继续兼容，但不再作为主线规范
+- `visibleLabel` 是显示层单一来源；runtime 建单后会把 supervisor / worker 的展示名快照持久化到 `jobs.supervisor_visible_label` 与 `job_participants.visible_label`
 - 当前生产推荐标准：`bot 复用，role 固定`
 - 同一个 bot 可以跨很多群复用，但它在所有群里都保持同一个角色
 - 每个群的角色组合可以不同，只需要在该 `team` 下启用需要的 `workers`
@@ -140,8 +170,13 @@ openclaw agents list --bindings
 - 每个 agent 都允许单独定制 `name / description / identity / role / responsibility / systemPrompt`
 - 不再推荐多个群共享同一套全局 `supervisor_agent / ops_agent / finance_agent`
 - `V5.1 Hardening` 采用 `Deterministic Orchestrator`：`watchdog-tick -> v51_team_orchestrator_reconcile.py resume-job -> start-job-with-workflow -> build-visible-ack -> record-visible-message -> get-next-action -> build-dispatch-payload -> reset waiting worker main session -> mark-dispatch/mark-worker-complete -> build-rollup-context -> build-rollup-visible-message -> record-visible-message -> close-job`
+- worker 的群内可见消息必须使用控制面下发的固定标题合同：`progressTitle=【角色进度｜TG-xxxx】`、`finalTitle=【角色结论｜TG-xxxx】`，不得省略 `jobRef`
+- supervisor 最终统一收口必须是结构化完整方案，至少包含：`任务主题`、各角色结论、`联合风险与红线`、`明日三件事`
+- supervisor 最终统一收口必须优先引用各 worker 的完整 `finalVisibleText` 终案正文，并整理成可直接执行的终案方案；禁止把 worker 的完整结论压缩成两三行摘要后收口
+- 同一 `jobRef` 的 `【主管最终统一收口｜TG-xxxx】` 只允许出现一次；若 `rollupVisibleSent=true` 但 job 尚未关闭，只允许补 `close-job`，禁止再次发群消息
 - `resume-job` 必须优先消费 hidden main transcript 中最近的有效 `COMPLETE_PACKET`；若最新包是 `pending / placeholder / sent / <pending...>` 之类占位值，必须忽略并继续向后找最近有效包；若当前只剩无效包，则强制重派当前 worker
 - 若 hidden main 里的 `COMPLETE_PACKET` 仍是占位 messageId，但当前 waiting worker 的 `main` transcript 已经拿到了两个真实 `message` toolResult，`resume-job` 必须先从 worker transcript 恢复真实 `progressMessageId / finalMessageId`，再推进下一 stage / rollup，不能直接删会话重派
+- 即便 hidden main 还没真正收到 `COMPLETE_PACKET`，只要当前 waiting worker 的 `main` transcript 已经同时出现 callback toolCall 草稿和两个真实 `message` toolResult，`resume-job` 也必须直接从 worker transcript 合成有效回调并推进下一 stage / rollup，不能把这种场景误判成 worker 裸 `NO_REPLY`
 - `resume-job` 在当前 stage 还未完成时，必须忽略已消费旧 stage 的 hidden main 包；旧包不能在下一 stage 被重新当成 invalid packet 触发误重派
 - 一句话原则：`LLM 负责内容，代码负责流程`
 
@@ -149,6 +184,42 @@ openclaw agents list --bindings
 - `aoteman -> supervisor`
 - `xiaolongxia -> ops`
 - `yiran_yibao -> finance`
+
+canonical schema 最小示意：
+
+```json
+{
+  "roleCatalog": {
+    "supervisor_default": {
+      "kind": "supervisor",
+      "accountId": "aoteman",
+      "visibleLabel": "主管",
+      "systemPrompt": "..."
+    },
+    "ops_default": {
+      "kind": "worker",
+      "accountId": "xiaolongxia",
+      "visibleLabel": "运营",
+      "systemPrompt": "..."
+    }
+  },
+  "teams": [
+    {
+      "teamKey": "internal_main",
+      "supervisor": {
+        "profileId": "supervisor_default",
+        "agentId": "supervisor_internal_main"
+      },
+      "workers": [
+        {
+          "profileId": "ops_default",
+          "agentId": "ops_internal_main"
+        }
+      ]
+    }
+  ]
+}
+```
 
 ## 默认专家库 / Default Expert Catalog
 
@@ -210,95 +281,17 @@ openclaw agents list --bindings
 runtime 命名约定：
 - hidden main：`agent:<supervisorAgentId>:main`
 - SQLite：`~/.openclaw/teams/<teamKey>/state/team_jobs.db`
-- systemd：`v5-team-<teamKey>.service` / `v5-team-<teamKey>.timer`
-- launchd：`bot.molt.v5-team-<teamKey>`
+- systemd：`v51-team-<teamKey>.service` / `v51-team-<teamKey>.timer`
+- launchd：`bot.molt.v51-team-<teamKey>`
 
 当前双群对应 hidden main：
 - `agent:supervisor_internal_main:main`
 - `agent:supervisor_external_main:main`
 
 Codex 交付入口：
-- [V5 Team Orchestrator 交付模板](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v5-team-orchestrator.md)
+- [V5.1 Hardening 交付模板](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v51-team-orchestrator.md)
 - 这份文档已经写入当前 2 个正式群、3 个正式机器人、可直接复制给 Codex 的长版提示词和运行命令
 - 其中 `V5.1 Hardening` 的控制面命令必须明确出现：`start-job-with-workflow`、`build-visible-ack`、`get-next-action`、`build-dispatch-payload`、`build-rollup-context`、`build-rollup-visible-message`、`record-visible-message`，以及 `v51_team_orchestrator_reconcile.py` 的 `resume-job / reconcile-dispatch / reconcile-rollup`
-
-## V4.3.1 快速启动
-
-如果你的目标是“在一台新机器上快速拉起单群生产稳定版”，直接按这两个入口执行：
-
-1. 完整上线手册：
-- [V4.3.1 新机器快速启动 SOP](skills/openclaw-feishu-multi-agent-deploy/references/v4-3-1-quick-start.md)
-
-2. Codex 真实交付模板：
-- [V4.3.1 单群生产稳定版模板](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.3.1-single-group-production.md)
-- [V4.3.1-C1.0 客户定制模板](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.3.1-single-group-production-C1.0.md)
-
-3. 去敏配置快照：
-- [V4.3.1 单群生产配置快照](skills/openclaw-feishu-multi-agent-deploy/templates/openclaw-v4-3-1-single-group-production.example.jsonc)
-
-其中最关键的两个命令是：
-
-```bash
-python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v431_single_group_runtime.py \
-  --db ~/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db \
-  init-db
-```
-
-```bash
-python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v431_single_group_hygiene.py \
-  --home ~/.openclaw \
-  --group-peer-id oc_f785e73d3c00954d4ccd5d49b63ef919 \
-  --include-workers \
-  --delete-transcripts
-```
-
-作用：
-1. `init-db`：初始化 SQLite 状态层
-2. `v431_single_group_hygiene.py`：在首次上线、协议变更或脏上下文后，一次性清理 `supervisor group/main + worker group` 会话，避免旧会话污染新任务
-
-## V4.3.1 跨平台部署路线
-
-`V4.3.1` 的核心运行模型一致，差异只在 watchdog 和服务托管方式。
-
-### Linux / WSL2
-
-- OpenClaw 主运行时：官方 CLI + `systemd --user`
-- watchdog：
-  - [systemd service 模板](skills/openclaw-feishu-multi-agent-deploy/templates/systemd/v4-3-watchdog.service)
-  - [systemd timer 模板](skills/openclaw-feishu-multi-agent-deploy/templates/systemd/v4-3-watchdog.timer)
-- 典型安装：
-
-```bash
-systemctl --user daemon-reload
-systemctl --user enable --now v4-3-watchdog.timer
-systemctl --user status v4-3-watchdog.timer
-```
-
-### macOS
-
-- OpenClaw 主运行时：官方 CLI + `launchd` / `LaunchAgent`
-- watchdog：
-  - [launchd 模板](skills/openclaw-feishu-multi-agent-deploy/templates/launchd/v4-3-watchdog.plist)
-- 典型安装：
-
-```bash
-mkdir -p ~/Library/LaunchAgents ~/.openclaw/logs
-cp skills/openclaw-feishu-multi-agent-deploy/templates/launchd/v4-3-watchdog.plist ~/Library/LaunchAgents/bot.molt.v4-3-watchdog.plist
-launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/bot.molt.v4-3-watchdog.plist 2>/dev/null || true
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/bot.molt.v4-3-watchdog.plist
-launchctl print gui/$(id -u)/bot.molt.v4-3-watchdog
-```
-
-### Windows
-
-- 默认推荐：`Windows + WSL2`，不要把 OpenClaw 主运行时直接放在 Windows 原生 service。
-- 参考文档：
-  - [Windows / WSL2 部署说明](skills/openclaw-feishu-multi-agent-deploy/references/windows-wsl2-deployment-notes.md)
-  - [WSL2 systemd 示例](skills/openclaw-feishu-multi-agent-deploy/templates/windows/wsl.conf.example)
-
-说明：
-- `openclaw gateway restart` 这条 CLI 命令在三条推荐路线中保持一致。
-- `WARMUP` 仍然是一次性初始化动作，不是最终用户日常操作。
 
 ## 飞书与 OpenClaw 信息采集（你现在最容易卡的点）
 
@@ -713,32 +706,26 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
 
 ## 主线版本与阅读顺序
 
-仓库主线已经收敛为 3 条：
+仓库公开主线已经收敛为 1 条：
 
 | 主线版本 | 定位 | 适合场景 | 核心入口 |
 |---|---|---|---|
-| `V3.1` | 跨群生产主线 | 主管群派单，销售/运营/财务分群执行并自动收口 | `references/codex-prompt-templates-v3.1.md` |
-| `V4.3.1` | 单群生产主线 | 一个群内主管 + worker 长期稳定运行 | `references/codex-prompt-templates-v4.3.1-single-group-production.md` |
-| `V5 Team Orchestrator` | 多群模板化主线 | 多个群并行、每群独立 team unit、可复制到 2/10 个团队 | `references/codex-prompt-templates-v5-team-orchestrator.md` |
+| `V5.1 Hardening` | 多群模板化主线 | 多个群并行、每群独立 team unit、可复制到 2/10 个团队 | `references/codex-prompt-templates-v51-team-orchestrator.md` |
 
 选择建议：
-1. 业务天然分群，且需要主管跨群调度，选 `V3.1`。
-2. 业务集中在一个群内，且要求真实长期上线，选 `V4.3.1`。
-3. 客户要多个团队群独立运行，并且后面还会持续扩群，直接上 `V5 Team Orchestrator`。
+1. 当前生产交付默认直接上 `V5.1 Hardening`。
+2. 如果客户后面还会持续扩群、增减机器人、替换角色提示词，仍然只用 `V5.1 Hardening`。
 
 推荐阅读顺序：
 1. `references/prerequisites-checklist.md`
 2. `templates/deployment-inputs.example.yaml`
-3. `references/codex-prompt-templates-v3.1.md` 或 `references/codex-prompt-templates-v4.3.1-single-group-production.md`
-4. 如果目标是多群模板化，再读 `references/codex-prompt-templates-v5-team-orchestrator.md`
-5. `templates/verification-checklist.md`
-6. `references/rollout-and-upgrade-playbook.md`
+3. `references/codex-prompt-templates-v51-team-orchestrator.md`
+4. `templates/verification-checklist.md`
+5. `references/rollout-and-upgrade-playbook.md`
 
 当前保留的最佳实践来源：
 - OpenClaw 官方文档与 Release 交叉验证：`references/source-cross-validation-2026-03-04.md`
 - OpenClaw / 飞书平台能力复核：`references/source-cross-validation-2026-03-05.md`
-- `V4.3.1` 单群生产稳定版交叉验证：`references/source-cross-validation-2026-03-07-v4-3-1.md`
-- `V4.3.1` 跨平台交叉验证：`references/source-cross-validation-2026-03-07-platforms.md`
 
 ## 维护约定
 

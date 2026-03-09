@@ -30,5 +30,5 @@
 
 ## 结论
 - 交付默认应使用官方 `@openclaw/feishu` 插件模式（`channel=feishu`）。
-- 旧 `chat-feishu` 只保留为 legacy 兼容路径。
+- 当前交付默认统一到 `channel=feishu` 的官方插件模式。
 - 免 @ 群触发必须联动敏感权限申请与多 Bot 风险控制。

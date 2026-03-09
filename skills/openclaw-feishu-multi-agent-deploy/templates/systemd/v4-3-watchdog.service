@@ -1,7 +1,0 @@
-[Unit]
-Description=OpenClaw V4.3.1 single-group watchdog
-After=network.target
-
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/env python3 %h/.openclaw/workspace-supervisor_agent/.openclaw/v431_single_group_runtime.py --db %h/.openclaw/workspace-supervisor_agent/.openclaw/team_jobs.db watchdog-tick --group-peer-id __TEAM_GROUP_PEER_ID__ --stale-seconds __STALE_SECONDS__

@@ -2,9 +2,9 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** 把 `V5 Team Orchestrator` 从“主要依赖 prompt 判断流程”升级为可长期复用的 `V5.1 Hardening`，通过确定性状态机彻底消除多群串线、阶段漏派、收口静默和 stale session 反复复发的问题。
+**Goal:** 把 `V5.1 Hardening` 从“主要依赖 prompt 判断流程”升级为可长期复用的 `V5.1 Hardening`，通过确定性状态机彻底消除多群串线、阶段漏派、收口静默和 stale session 反复复发的问题。
 
-**Architecture:** `V5.1 Hardening` 的核心原则是：`LLM 负责内容，代码负责流程`。`supervisor` 不再根据 prompt 自己理解“下一步派谁/该不该收口”，而是通过 registry 的确定性命令读取 `nextAction`，再按返回结果派单或收口。多群隔离仍然沿用 `V5 team unit`，但关键控制面改成 `Deterministic Orchestrator`，由 SQLite 状态层显式保存 `workflow/current_stage/waiting_for_agent/next_action`。
+**Architecture:** `V5.1 Hardening` 的核心原则是：`LLM 负责内容，代码负责流程`。`supervisor` 不再根据 prompt 自己理解“下一步派谁/该不该收口”，而是通过 registry 的确定性命令读取 `nextAction`，再按返回结果派单或收口。多群隔离仍然沿用 `V5.1 team unit`，但关键控制面改成 `Deterministic Orchestrator`，由 SQLite 状态层显式保存 `workflow/current_stage/waiting_for_agent/next_action`。
 
 **Tech Stack:** Python 3、SQLite、OpenClaw `@openclaw/feishu`、Markdown 文档、仓库内 `core_feishu_config_builder.py` 与 `core_job_registry.py`
 
@@ -12,7 +12,7 @@
 
 ## 问题复盘
 
-现有 `V5` 已经完成：
+现有 `V5.1` 已经完成：
 - 多群 team unit 隔离
 - 每群独立 hidden main
 - 真实双群 + 三机器人模板化
@@ -27,7 +27,7 @@
 
 ## 为什么 prompt 状态机会重复失效
 
-当前 `V5` 文档虽然写了严格串行，但真实约束仍主要存在于 `SOUL.md / systemPrompt`：
+当前 `V5.1` 文档虽然写了严格串行，但真实约束仍主要存在于 `SOUL.md / systemPrompt`：
 - 主管 prompt 负责理解 `workflow.stages`
 - 主管 prompt 负责判断当前该派谁
 - 主管 prompt 负责判断何时 `ready-to-rollup`
@@ -132,7 +132,7 @@ worker prompt 保持固定：
 
 ## 多群与持久记忆边界
 
-`V5.1 Hardening` 不改变 `V5` 的 team unit 隔离模型：
+`V5.1 Hardening` 不改变 `V5.1` 的 team unit 隔离模型：
 - 每个 team 仍然独立 `workspace / sessions / db / watchdog / hidden main`
 - 每个群继续用自己的 `groupPeerId`
 - memory 继续按 team workspace 隔离
@@ -152,7 +152,7 @@ worker prompt 保持固定：
 ## 回滚策略
 
 若 `V5.1 Hardening` 远端验证失败：
-- 保留 `V5` 旧 prompt 和旧 runtime manifest 备份
+- 保留 `V5.1` 旧 prompt 和旧 runtime manifest 备份
 - 回滚 `openclaw.json`
 - 回滚 `core_job_registry.py`
 - 回滚 team workspace 下的 `SOUL.md`

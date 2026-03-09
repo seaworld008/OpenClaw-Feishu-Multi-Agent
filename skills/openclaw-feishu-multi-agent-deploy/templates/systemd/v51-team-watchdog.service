@@ -1,5 +1,5 @@
 [Unit]
-Description=OpenClaw V5 team watchdog (__TEAM_KEY__)
+Description=OpenClaw V5.1 team watchdog (__TEAM_KEY__)
 After=network.target
 
 [Service]
