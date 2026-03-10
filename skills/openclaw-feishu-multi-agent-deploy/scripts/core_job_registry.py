@@ -4,19 +4,67 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import re
+import secrets
+import shlex
 import sqlite3
+import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+
+def load_runtime_store_module():
+    script_path = Path(__file__).with_name("core_runtime_store.py")
+    spec = importlib.util.spec_from_file_location(script_path.stem, script_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"unable to load runtime store module from {script_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
-def today_prefix() -> str:
-    return datetime.now(timezone.utc).strftime("TG-%Y%m%d")
+ULID_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+ULID_RANDOM_BITS = 80
+ULID_RANDOM_MAX = (1 << ULID_RANDOM_BITS) - 1
+ULID_LOCK = threading.Lock()
+ULID_LAST_TIMESTAMP_MS = -1
+ULID_LAST_RANDOM = 0
+
+
+def encode_crockford_base32(value: int, length: int) -> str:
+    chars: list[str] = []
+    for _ in range(length):
+        chars.append(ULID_ALPHABET[value & 0b11111])
+        value >>= 5
+    return "".join(reversed(chars))
+
+
+def generate_ulid() -> str:
+    global ULID_LAST_RANDOM, ULID_LAST_TIMESTAMP_MS
+
+    with ULID_LOCK:
+        timestamp_ms = time.time_ns() // 1_000_000
+        if timestamp_ms > ULID_LAST_TIMESTAMP_MS:
+            ULID_LAST_TIMESTAMP_MS = timestamp_ms
+            ULID_LAST_RANDOM = int.from_bytes(secrets.token_bytes(10), "big")
+        else:
+            timestamp_ms = ULID_LAST_TIMESTAMP_MS
+            if ULID_LAST_RANDOM >= ULID_RANDOM_MAX:
+                ULID_LAST_TIMESTAMP_MS += 1
+                ULID_LAST_RANDOM = int.from_bytes(secrets.token_bytes(10), "big")
+            else:
+                ULID_LAST_RANDOM += 1
+            timestamp_ms = ULID_LAST_TIMESTAMP_MS
+
+        ulid_value = (timestamp_ms << ULID_RANDOM_BITS) | ULID_LAST_RANDOM
+        return encode_crockford_base32(ulid_value, 26)
 
 
 SCHEMA = """
@@ -87,6 +135,7 @@ WHERE status = 'active';
 """
 
 JOB_EXTRA_COLUMNS = {
+    "team_key": "TEXT",
     "workflow_json": "TEXT",
     "orchestrator_version": "TEXT",
     "request_text": "TEXT",
@@ -123,6 +172,7 @@ def connect(db_path: Path) -> sqlite3.Connection:
 
 def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    load_runtime_store_module().initialize_runtime_store_schema(conn)
     existing_jobs_columns = {
         row["name"] if isinstance(row, sqlite3.Row) else row[1]
         for row in conn.execute("PRAGMA table_info(jobs)").fetchall()
@@ -141,15 +191,12 @@ def init_db(conn: sqlite3.Connection) -> None:
 
 
 def next_job_ref(conn: sqlite3.Connection) -> str:
-    prefix = today_prefix()
-    row = conn.execute(
-        "SELECT job_ref FROM jobs WHERE job_ref LIKE ? ORDER BY job_ref DESC LIMIT 1",
-        (f"{prefix}-%",),
-    ).fetchone()
-    if not row:
-        return f"{prefix}-001"
-    seq = int(row["job_ref"].split("-")[-1]) + 1
-    return f"{prefix}-{seq:03d}"
+    for _ in range(8):
+        candidate = f"TG-{generate_ulid()}"
+        row = conn.execute("SELECT 1 FROM jobs WHERE job_ref = ? LIMIT 1", (candidate,)).fetchone()
+        if not row:
+            return candidate
+    raise RuntimeError("failed to allocate a unique TG job_ref")
 
 
 def emit(payload: dict) -> None:
@@ -160,10 +207,115 @@ def flag_value(value) -> bool:
     return bool(int(value or 0))
 
 
-def get_active_job(conn: sqlite3.Connection, group_peer_id: str):
+def normalize_source_message_id(raw: str | None) -> str:
+    return str(raw or "").strip()
+
+
+def normalize_group_peer_id(raw: str | None) -> str:
+    value = str(raw or "").strip()
+    while value.startswith("chat:"):
+        value = value[len("chat:") :].strip()
+    return value
+
+
+def group_peer_id_aliases(raw: str | None) -> tuple[str, ...]:
+    raw_value = str(raw or "").strip()
+    canonical = normalize_group_peer_id(raw_value)
+    ordered: list[str] = []
+    for candidate in (canonical, f"chat:{canonical}" if canonical else "", raw_value):
+        if candidate and candidate not in ordered:
+            ordered.append(candidate)
+    return tuple(ordered)
+
+
+def normalize_entry_target(raw: str | None, group_peer_id: str | None = None) -> str:
+    value = str(raw or "").strip()
+    canonical_group = normalize_group_peer_id(group_peer_id)
+    if not value:
+        return f"chat:{canonical_group}" if canonical_group else ""
+    if value.startswith("chat:"):
+        peer = normalize_group_peer_id(value)
+        return f"chat:{peer}" if peer else ""
+    if value.startswith("oc_"):
+        return f"chat:{normalize_group_peer_id(value)}"
+    if canonical_group and normalize_group_peer_id(value) == canonical_group:
+        return f"chat:{canonical_group}"
+    return value
+
+
+def canonical_group_peer_id_for_row(row: sqlite3.Row) -> str:
+    return normalize_group_peer_id(row["group_peer_id"]) if row and "group_peer_id" in row.keys() else ""
+
+
+def find_job_by_source_message(
+    conn: sqlite3.Connection,
+    source_message_id: str | None,
+    *,
+    group_peer_id: str | None = None,
+) -> sqlite3.Row | None:
+    source = normalize_source_message_id(source_message_id)
+    if not source:
+        return None
+    aliases = group_peer_id_aliases(group_peer_id)
+    if aliases:
+        placeholders = ", ".join("?" for _ in aliases)
+        row = conn.execute(
+            f"""
+            SELECT *
+            FROM jobs
+            WHERE source_message_id = ? AND group_peer_id IN ({placeholders})
+            ORDER BY
+              CASE status WHEN 'active' THEN 0 WHEN 'queued' THEN 1 ELSE 2 END,
+              updated_at DESC,
+              created_at DESC
+            LIMIT 1
+            """,
+            (source, *aliases),
+        ).fetchone()
+        if row:
+            return row
     return conn.execute(
-        "SELECT * FROM jobs WHERE group_peer_id = ? AND status = 'active' LIMIT 1",
-        (group_peer_id,),
+        """
+        SELECT *
+        FROM jobs
+        WHERE source_message_id = ?
+        ORDER BY
+          CASE status WHEN 'active' THEN 0 WHEN 'queued' THEN 1 ELSE 2 END,
+          updated_at DESC,
+          created_at DESC
+        LIMIT 1
+        """,
+        (source,),
+    ).fetchone()
+
+
+def start_job_emit_payload(row: sqlite3.Row, *, idempotent: bool = False) -> dict:
+    payload = {
+        "jobRef": row["job_ref"],
+        "status": row["status"],
+        "queuePosition": row["queue_position"],
+        "title": row["title"],
+        "groupPeerId": canonical_group_peer_id_for_row(row),
+    }
+    if idempotent:
+        payload["idempotent"] = True
+    return payload
+
+
+def get_active_job(conn: sqlite3.Connection, group_peer_id: str):
+    aliases = group_peer_id_aliases(group_peer_id)
+    if not aliases:
+        return None
+    placeholders = ", ".join("?" for _ in aliases)
+    return conn.execute(
+        f"""
+        SELECT *
+        FROM jobs
+        WHERE group_peer_id IN ({placeholders}) AND status = 'active'
+        ORDER BY updated_at DESC, created_at DESC
+        LIMIT 1
+        """,
+        aliases,
     ).fetchone()
 
 
@@ -211,7 +363,7 @@ def participant_map(conn: sqlite3.Connection, job_ref: str) -> dict[str, sqlite3
 
 def validate_participants_payload(raw: str | None, workflow: dict) -> list[dict]:
     if not raw:
-        return []
+        raise ValueError("participants_json is required in V5.1 Hardening")
     try:
         decoded = json.loads(raw)
     except json.JSONDecodeError as exc:
@@ -228,8 +380,11 @@ def validate_participants_payload(raw: str | None, workflow: dict) -> list[dict]
         agent_id = str(item.get("agentId") or "").strip()
         account_id = str(item.get("accountId") or "").strip()
         role = str(item.get("role") or "").strip()
+        visible_label = str(item.get("visibleLabel") or "").strip()
         if not agent_id or not account_id or not role:
             raise ValueError(f"participants_json[{idx}] requires agentId, accountId and role")
+        if not visible_label:
+            raise ValueError(f"participants_json[{idx}].visibleLabel is required")
         if agent_id not in stage_agent_ids:
             raise ValueError(f"participants_json[{idx}].agentId must exist in workflow.stages: {agent_id}")
         if agent_id in seen_agent_ids:
@@ -240,7 +395,7 @@ def validate_participants_payload(raw: str | None, workflow: dict) -> list[dict]
                 "agentId": agent_id,
                 "accountId": account_id,
                 "role": role,
-                "visibleLabel": str(item.get("visibleLabel") or "").strip(),
+                "visibleLabel": visible_label,
             }
         )
 
@@ -256,9 +411,6 @@ def validate_participants_payload(raw: str | None, workflow: dict) -> list[dict]
 def validate_workflow_payload(workflow: dict) -> dict:
     if not isinstance(workflow, dict):
         raise ValueError("workflow must be an object")
-    mode = str(workflow.get("mode") or "serial").strip()
-    if mode != "serial":
-        raise ValueError("only serial workflow is supported in V5.1 Hardening")
     stages = workflow.get("stages")
     if not isinstance(stages, list) or not stages:
         raise ValueError("workflow.stages must be a non-empty array")
@@ -268,16 +420,65 @@ def validate_workflow_payload(workflow: dict) -> dict:
     for idx, stage in enumerate(stages):
         if not isinstance(stage, dict):
             raise ValueError(f"workflow.stages[{idx}] must be an object")
-        agent_id = str(stage.get("agentId") or "").strip()
-        if not agent_id:
-            raise ValueError(f"workflow.stages[{idx}].agentId is required")
-        if agent_id in seen_agent_ids:
-            raise ValueError(f"workflow.stages contains duplicate agentId: {agent_id}")
-        seen_agent_ids.add(agent_id)
-        normalized_stages.append({"agentId": agent_id})
+        if stage.get("agentId"):
+            agent_id = str(stage.get("agentId") or "").strip()
+            if agent_id in seen_agent_ids:
+                raise ValueError(f"workflow.stages contains duplicate agentId: {agent_id}")
+            seen_agent_ids.add(agent_id)
+            normalized_stages.append(
+                {
+                    "stageKey": f"stage_{idx}",
+                    "mode": "serial",
+                    "agents": [{"agentId": agent_id}],
+                    "publishOrder": [agent_id],
+                }
+            )
+            continue
+
+        stage_key = str(stage.get("stageKey") or f"stage_{idx}").strip()
+        mode = str(stage.get("mode") or "serial").strip()
+        if mode not in {"serial", "parallel"}:
+            raise ValueError(f"workflow.stages[{idx}].mode must be serial or parallel")
+        raw_agents = stage.get("agents")
+        if not isinstance(raw_agents, list) or not raw_agents:
+            raise ValueError(f"workflow.stages[{idx}].agents must be a non-empty array")
+        normalized_agents = []
+        stage_agent_ids: list[str] = []
+        for agent_idx, agent in enumerate(raw_agents):
+            if not isinstance(agent, dict):
+                raise ValueError(f"workflow.stages[{idx}].agents[{agent_idx}] must be an object")
+            agent_id = str(agent.get("agentId") or "").strip()
+            if not agent_id:
+                raise ValueError(f"workflow.stages[{idx}].agents[{agent_idx}].agentId is required")
+            if agent_id in seen_agent_ids:
+                raise ValueError(f"workflow.stages contains duplicate agentId: {agent_id}")
+            seen_agent_ids.add(agent_id)
+            stage_agent_ids.append(agent_id)
+            normalized_agents.append({"agentId": agent_id})
+        if mode == "serial" and len(normalized_agents) != 1:
+            raise ValueError(f"workflow.stages[{idx}] serial stage must contain exactly one agent")
+        publish_order = stage.get("publishOrder")
+        if mode == "parallel":
+            if not isinstance(publish_order, list) or not publish_order:
+                raise ValueError(f"workflow.stages[{idx}].publishOrder is required for parallel stage")
+            normalized_publish_order = [str(item).strip() for item in publish_order if str(item).strip()]
+            if normalized_publish_order != stage_agent_ids and set(normalized_publish_order) != set(stage_agent_ids):
+                raise ValueError(f"workflow.stages[{idx}].publishOrder must contain each parallel agent exactly once")
+            if len(normalized_publish_order) != len(stage_agent_ids) or len(set(normalized_publish_order)) != len(stage_agent_ids):
+                raise ValueError(f"workflow.stages[{idx}].publishOrder must contain each parallel agent exactly once")
+        else:
+            normalized_publish_order = [normalized_agents[0]["agentId"]]
+        normalized_stages.append(
+            {
+                "stageKey": stage_key,
+                "mode": mode,
+                "agents": normalized_agents,
+                "publishOrder": normalized_publish_order,
+            }
+        )
 
     return {
-        "mode": mode,
+        "mode": "parallel" if any(stage["mode"] == "parallel" for stage in normalized_stages) else "serial",
         "stages": normalized_stages,
     }
 
@@ -298,11 +499,26 @@ def parse_workflow_json(raw: str | None) -> dict | None:
 def workflow_stage_agent_ids(workflow: dict | None) -> list[str]:
     if not workflow:
         return []
-    return [str(stage["agentId"]) for stage in workflow.get("stages", [])]
+    agents: list[str] = []
+    for stage in workflow.get("stages", []):
+        if isinstance(stage, dict) and isinstance(stage.get("agents"), list):
+            agents.extend(str(agent["agentId"]) for agent in stage["agents"])
+        elif isinstance(stage, dict) and stage.get("agentId"):
+            agents.append(str(stage["agentId"]))
+    return agents
+
+
+def workflow_stage_groups(workflow: dict | None) -> list[dict]:
+    if not workflow:
+        return []
+    return [stage for stage in workflow.get("stages", []) if isinstance(stage, dict)]
 
 
 def workflow_initial_state(workflow: dict) -> tuple[int, str, str]:
-    first_agent_id = workflow_stage_agent_ids(workflow)[0]
+    first_stage = workflow_stage_groups(workflow)[0]
+    if str(first_stage.get("mode") or "serial") == "parallel":
+        return 0, "", "dispatch"
+    first_agent_id = str(first_stage["agents"][0]["agentId"])
     return 0, first_agent_id, "dispatch"
 
 
@@ -368,7 +584,7 @@ def build_stage_packets(conn: sqlite3.Connection, job_ref: str, workflow: dict |
             {
                 "stageIndex": idx,
                 "agentId": agent_id,
-                "visibleLabel": participant_visible_label(participant, agent_id) if participant else "",
+                "visibleLabel": str(participant["visible_label"] or "").strip() if participant else "",
                 "status": participant["status"] if participant else None,
                 "progressMessageId": participant["progress_message_id"] if participant else None,
                 "finalMessageId": participant["final_message_id"] if participant else None,
@@ -404,7 +620,11 @@ def job_ready_to_rollup(conn: sqlite3.Connection, job_ref: str) -> tuple[bool, d
     payload = {
         agent: {
             "status": by_agent[agent]["status"],
-            "visibleLabel": participant_visible_label(by_agent[agent], agent),
+            "visibleLabel": (
+                str(by_agent[agent]["visible_label"] or "").strip()
+                if workflow
+                else participant_visible_label(by_agent[agent], agent)
+            ),
             "dispatchStatus": by_agent[agent]["dispatch_status"],
             "progressMessageId": by_agent[agent]["progress_message_id"],
             "finalMessageId": by_agent[agent]["final_message_id"],
@@ -437,10 +657,14 @@ def latest_completion_packets(conn: sqlite3.Connection, job_ref: str) -> dict[st
 
 
 def next_queue_position(conn: sqlite3.Connection, group_peer_id: str) -> int:
+    aliases = group_peer_id_aliases(group_peer_id)
+    if not aliases:
+        return 1
+    placeholders = ", ".join("?" for _ in aliases)
     row = conn.execute(
-        "SELECT COALESCE(MAX(queue_position), 0) AS max_pos "
-        "FROM jobs WHERE group_peer_id = ? AND status = 'queued'",
-        (group_peer_id,),
+        f"SELECT COALESCE(MAX(queue_position), 0) AS max_pos "
+        f"FROM jobs WHERE group_peer_id IN ({placeholders}) AND status = 'queued'",
+        aliases,
     ).fetchone()
     return int(row["max_pos"]) + 1
 
@@ -453,14 +677,18 @@ def insert_event(conn: sqlite3.Connection, job_ref: str, event_type: str, actor:
 
 
 def promote_next_queued_job(conn: sqlite3.Connection, group_peer_id: str, promoted_at: str):
+    aliases = group_peer_id_aliases(group_peer_id)
+    if not aliases:
+        return None
+    placeholders = ", ".join("?" for _ in aliases)
     next_row = conn.execute(
-        """
+        f"""
         SELECT * FROM jobs
-        WHERE group_peer_id = ? AND status = 'queued'
+        WHERE group_peer_id IN ({placeholders}) AND status = 'queued'
         ORDER BY queue_position ASC, created_at ASC
         LIMIT 1
         """,
-        (group_peer_id,),
+        aliases,
     ).fetchone()
     if not next_row:
         return None
@@ -524,7 +752,10 @@ def hidden_main_agent_id(hidden_main_session_key: str | None) -> str:
 def visible_delivery_for_row(row: sqlite3.Row) -> dict | None:
     channel = str(row["entry_channel"] or "").strip() if "entry_channel" in row.keys() else ""
     account_id = str(row["entry_account_id"] or "").strip() if "entry_account_id" in row.keys() else ""
-    target = str(row["entry_target"] or "").strip() if "entry_target" in row.keys() else ""
+    target = normalize_entry_target(
+        str(row["entry_target"] or "").strip() if "entry_target" in row.keys() else "",
+        row["group_peer_id"] if "group_peer_id" in row.keys() else "",
+    )
     if channel and account_id and target:
         return {
             "channel": channel,
@@ -544,7 +775,10 @@ def visible_delivery_for_row(row: sqlite3.Row) -> dict | None:
         return {
             "channel": decoded["channel"],
             "accountId": decoded["accountId"],
-            "target": decoded["target"],
+            "target": normalize_entry_target(
+                decoded["target"],
+                row["group_peer_id"] if "group_peer_id" in row.keys() else "",
+            ),
         }
     return None
 
@@ -553,6 +787,22 @@ def current_stage_participant(conn: sqlite3.Connection, row: sqlite3.Row) -> sql
     if not row["waiting_for_agent_id"]:
         return None
     return participant_map(conn, row["job_ref"]).get(str(row["waiting_for_agent_id"]))
+
+
+def workflow_visible_snapshot_error(conn: sqlite3.Connection, row: sqlite3.Row) -> str | None:
+    workflow = parse_workflow_json(row["workflow_json"]) if "workflow_json" in row.keys() else None
+    if not workflow:
+        return None
+    if not str(row["supervisor_visible_label"] or "").strip():
+        return "workflow supervisor visibleLabel snapshot is required"
+    participants = participant_map(conn, row["job_ref"])
+    for agent_id in workflow_stage_agent_ids(workflow):
+        participant = participants.get(agent_id)
+        if participant is None:
+            return f"workflow participant snapshot missing: {agent_id}"
+        if not str(participant["visible_label"] or "").strip():
+            return f"workflow participant visibleLabel snapshot is required: {agent_id}"
+    return None
 
 
 def dispatch_record_exists(participant: sqlite3.Row | None) -> bool:
@@ -645,11 +895,24 @@ def worker_visible_contract(
         role=role,
         kind="worker",
     )
+    related_labels = {
+        "主管": ("运营", "财务", "法务", "销售", "客服", "产品", "数据", "人力", "财审", "增长"),
+        "运营": ("主管", "财务", "法务", "销售", "客服", "产品", "数据", "人力", "财审"),
+        "增长": ("主管", "财务", "法务", "销售", "客服", "产品", "数据", "人力", "运营", "财审"),
+        "财务": ("主管", "运营", "法务", "销售", "客服", "产品", "数据", "人力", "增长"),
+        "财审": ("主管", "运营", "法务", "销售", "客服", "产品", "数据", "人力", "增长"),
+        "法务": ("主管", "运营", "财务", "销售", "客服", "产品", "数据", "人力", "财审", "增长"),
+    }
+    forbidden_labels = ",".join(related_labels.get(label, ("主管",)))
     return {
         "roleLabel": label,
+        "scopeLabel": label,
         "progressTitle": f"【{label}进度｜{job_ref}】",
         "finalTitle": f"【{label}结论｜{job_ref}】",
-        "callbackMustInclude": "summary,details,risks,actionItems",
+        "callbackMustInclude": "progressDraft,finalDraft,summary,details,risks,actionItems",
+        "forbiddenRoleLabels": forbidden_labels,
+        "forbiddenSectionKeywords": "统一收口,最终统一收口,总方案,总体方案",
+        "finalScopeRule": f"finalVisibleText must stay in {label} scope only",
     }
 
 
@@ -716,6 +979,118 @@ def format_chinese_join(items: list[str]) -> str:
     return f"{'、'.join(items[:-1])}和{items[-1]}"
 
 
+def parse_structured_lines(raw: Any) -> list[str]:
+    if raw is None:
+        return []
+    if isinstance(raw, list):
+        out: list[str] = []
+        for item in raw:
+            text = str(item or "").strip()
+            if text:
+                out.append(text)
+        return out
+    text = str(raw or "").strip()
+    if not text:
+        return []
+    if text.startswith("[") and text.endswith("]"):
+        try:
+            decoded = json.loads(text)
+        except json.JSONDecodeError:
+            decoded = None
+        if isinstance(decoded, list):
+            return parse_structured_lines(decoded)
+    return normalize_lines(text)
+
+
+def unique_preserve_order(items: list[str]) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        text = str(item or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        out.append(text)
+    return out
+
+
+def fallback_summary_from_final_visible_text(final_visible_text: str, label: str) -> list[str]:
+    plan_lines = normalize_visible_plan_lines(final_visible_text)
+    if not plan_lines:
+        return [f"{label}已完成当前阶段方案输出。"]
+    summary_lines: list[str] = []
+    for line in plan_lines:
+        if line.startswith(("一、", "二、", "三、", "四、", "五、", "六、", "七、", "八、", "九、", "十、")):
+            continue
+        summary_lines.append(line)
+        if len(summary_lines) >= 2:
+            break
+    return summary_lines or [plan_lines[0]]
+
+
+def build_dynamic_rollup_sections(
+    row: sqlite3.Row,
+    conn: sqlite3.Connection | None = None,
+) -> dict[str, Any]:
+    job_ref = row["job_ref"]
+    workflow = parse_workflow_json(row["workflow_json"]) if "workflow_json" in row.keys() else None
+    participants = participant_map(conn, job_ref) if conn is not None else {}
+    completion_packets = latest_completion_packets(conn, job_ref) if conn is not None else {}
+    stage_agent_ids = workflow_stage_agent_ids(workflow) if workflow else list(participants.keys())
+
+    role_labels: list[str] = []
+    role_summary_lines: list[str] = []
+    unified_plan_lines: list[str] = []
+    risk_lines: list[str] = []
+    action_lines: list[str] = []
+
+    for agent_id in stage_agent_ids:
+        participant = participants.get(agent_id)
+        packet = completion_packets.get(agent_id, {})
+        label = participant_visible_label(participant, agent_id)
+        if label:
+            role_labels.append(label)
+        summary = str(packet.get("summary") or (participant["summary"] if participant else "") or "").strip()
+        details_lines = parse_structured_lines(packet.get("details"))
+        risks_lines = parse_structured_lines(packet.get("risks"))
+        action_item_lines = parse_structured_lines(packet.get("actionItems") or packet.get("action_items"))
+        final_visible_text = str(packet.get("finalVisibleText") or packet.get("final_visible_text") or "").strip()
+
+        if summary:
+            role_summary_lines.append(f"- {label}：{summary}")
+        else:
+            for line in fallback_summary_from_final_visible_text(final_visible_text, label):
+                role_summary_lines.append(f"- {label}：{line}")
+
+        for line in details_lines or fallback_summary_from_final_visible_text(final_visible_text, label):
+            unified_plan_lines.append(f"- {label}：{line}")
+        for line in risks_lines:
+            risk_lines.append(f"- {label}：{line}")
+        for line in action_item_lines:
+            action_lines.append(f"- {label}：{line}")
+
+    role_labels = unique_preserve_order(role_labels)
+    role_summary_lines = unique_preserve_order(role_summary_lines)
+    unified_plan_lines = unique_preserve_order(unified_plan_lines)
+    risk_lines = unique_preserve_order(risk_lines)
+    action_lines = unique_preserve_order(action_lines)
+
+    combined_roles = format_chinese_join(role_labels)
+    summary_intro = (
+        f"已综合{combined_roles}的阶段结论，形成以下统一可执行方案。"
+        if combined_roles
+        else "已综合当前各阶段结论，形成以下统一可执行方案。"
+    )
+    return {
+        "summaryIntro": summary_intro,
+        "roleSummaryLines": role_summary_lines or ["- 当前尚未收集到可汇总的角色结论。"],
+        "unifiedPlanLines": unified_plan_lines or ["- 先按既有阶段结论推进，并尽快补齐统一执行方案。"],
+        "riskLines": risk_lines or ["- 当前未上报新增风险，请继续按各角色结论中的红线执行。"],
+        "actionLines": action_lines or ["- 先按上述统一方案推进，并在首轮执行后回收数据复盘。"],
+        "completionPackets": completion_packets,
+    }
+
+
 def ack_worker_role_summary(row: sqlite3.Row, conn: sqlite3.Connection | None = None) -> str:
     if conn is None or "workflow_json" not in row.keys():
         return ""
@@ -730,12 +1105,12 @@ def ack_worker_role_summary(row: sqlite3.Row, conn: sqlite3.Connection | None = 
         participant = participants.get(agent_id)
         if participant is None:
             return ""
-        role = str(participant["visible_label"] or participant["role"] or "").strip()
-        if not role:
+        visible_label = str(participant["visible_label"] or "").strip()
+        if not visible_label:
             return ""
-        if role not in seen_roles:
-            seen_roles.add(role)
-            ordered_roles.append(role)
+        if visible_label not in seen_roles:
+            seen_roles.add(visible_label)
+            ordered_roles.append(visible_label)
     return format_chinese_join(ordered_roles)
 
 
@@ -748,67 +1123,26 @@ def visible_message_text(kind: str, row: sqlite3.Row, conn: sqlite3.Connection |
             return f"【{supervisor_label}已接单｜{job_ref}】任务已受理，正分配给{role_summary}处理，请稍候查看进度。"
         return f"【{supervisor_label}已接单｜{job_ref}】任务已受理，按固定顺序推进，请稍候查看进度。"
     if kind == "rollup":
-        workflow = parse_workflow_json(row["workflow_json"]) if "workflow_json" in row.keys() else None
-        participants = participant_map(conn, job_ref) if conn is not None else {}
-        completion_packets = latest_completion_packets(conn, job_ref) if conn is not None else {}
-        stage_agent_ids = workflow_stage_agent_ids(workflow) if workflow else list(participants.keys())
+        rollup_sections = build_dynamic_rollup_sections(row, conn)
         lines = [
             f"【{supervisor_label}最终统一收口｜{job_ref}】",
             f"任务主题：{row['title']}",
             "",
-            f"一、{supervisor_label}统一终案",
-            "以下终案已结合各角色完整结论整理，可直接作为执行底稿。",
+            "一、主管综合判断",
+            rollup_sections["summaryIntro"],
+            "",
+            "二、各角色关键结论",
+            *rollup_sections["roleSummaryLines"],
+            "",
+            "三、统一执行方案",
+            *rollup_sections["unifiedPlanLines"],
+            "",
+            "四、联合风险与红线",
+            *rollup_sections["riskLines"],
+            "",
+            "五、下一步行动",
+            *rollup_sections["actionLines"],
         ]
-        risk_lines: list[str] = []
-        action_lines: list[str] = []
-        section_index = 2
-        for agent_id in stage_agent_ids:
-            participant = participants.get(agent_id)
-            packet = completion_packets.get(agent_id, {})
-            label = participant_visible_label(participant, agent_id)
-            final_visible_text = str(packet.get("finalVisibleText") or packet.get("final_visible_text") or "").strip()
-            summary = str(packet.get("summary") or (participant["summary"] if participant else "") or "").strip()
-            details = str(packet.get("details") or "").strip()
-            risks = str(packet.get("risks") or "").strip()
-            action_items = str(packet.get("actionItems") or packet.get("action_items") or "").strip()
-            section_lines = normalize_visible_plan_lines(final_visible_text)
-            if section_lines:
-                lines.extend(
-                    [
-                        "",
-                        f"{chinese_section(section_index)}、{label}终案方案",
-                        *section_lines,
-                    ]
-                )
-            else:
-                fallback_lines = normalize_lines(summary)
-                for line in normalize_lines(details):
-                    if line not in fallback_lines:
-                        fallback_lines.append(line)
-                if not fallback_lines:
-                    fallback_lines.append(f"{label}已完成当前阶段方案输出，详见对应角色结论消息。")
-                lines.extend(
-                    [
-                        "",
-                        f"{chinese_section(section_index)}、{label}结论",
-                        *[f"- {line}" for line in fallback_lines],
-                    ]
-                )
-            section_index += 1
-            if risks:
-                risk_lines.extend(f"{label}：{line}" for line in normalize_lines(risks))
-            if action_items:
-                action_lines.extend(f"{label}：{line}" for line in normalize_lines(action_items))
-        lines.extend(
-            [
-                "",
-                f"{chinese_section(section_index)}、联合风险与红线",
-                *([f"- {line}" for line in risk_lines] if risk_lines else ["- 当前未上报新增风险，请继续按各角色结论中的红线执行。"]),
-                "",
-                f"{chinese_section(section_index + 1)}、明日三件事",
-                *([f"- {line}" for line in action_lines] if action_lines else ["- 先按上述统一方案推进，并在首轮执行后回收数据复盘。"]),
-            ]
-        )
         return "\n".join(lines)
     raise ValueError(f"unsupported visible message kind: {kind}")
 
@@ -848,6 +1182,15 @@ def workflow_repair_status(conn: sqlite3.Connection, row: sqlite3.Row) -> dict |
     return None
 
 
+def visible_snapshot_status_payload(snapshot_error: str | None) -> dict:
+    if not snapshot_error:
+        return {}
+    return {
+        "snapshotStatus": "invalid_visible_label",
+        "snapshotError": snapshot_error,
+    }
+
+
 def build_job_control_state(row: sqlite3.Row) -> dict:
     workflow = parse_workflow_json(row["workflow_json"]) if "workflow_json" in row.keys() else None
     payload = {
@@ -866,11 +1209,15 @@ def build_job_control_state(row: sqlite3.Row) -> dict:
     if "entry_channel" in row.keys() and row["entry_channel"]:
         payload["entryChannel"] = row["entry_channel"]
     if "entry_target" in row.keys() and row["entry_target"]:
-        payload["entryTarget"] = row["entry_target"]
+        payload["entryTarget"] = normalize_entry_target(row["entry_target"], row["group_peer_id"] if "group_peer_id" in row.keys() else "")
     if "hidden_main_session_key" in row.keys() and row["hidden_main_session_key"]:
         payload["hiddenMainSessionKey"] = row["hidden_main_session_key"]
     if "supervisor_visible_label" in row.keys():
-        payload["supervisorVisibleLabel"] = supervisor_visible_label_for_row(row)
+        payload["supervisorVisibleLabel"] = (
+            str(row["supervisor_visible_label"] or "").strip()
+            if workflow
+            else supervisor_visible_label_for_row(row)
+        )
     return payload
 
 
@@ -884,12 +1231,18 @@ def cmd_init_db(args: argparse.Namespace) -> int:
 def cmd_start_job(args: argparse.Namespace) -> int:
     conn = connect(Path(args.db))
     init_db(conn)
-    active = get_active_job(conn, args.group_peer_id)
+    group_peer_id = normalize_group_peer_id(args.group_peer_id)
+    source_message_id = normalize_source_message_id(args.source_message_id)
+    existing = find_job_by_source_message(conn, source_message_id, group_peer_id=group_peer_id)
+    if existing is not None:
+        emit(start_job_emit_payload(existing, idempotent=True))
+        return 0
+    active = get_active_job(conn, group_peer_id)
     job_ref = next_job_ref(conn)
     created_at = now_iso()
     if active:
         status = "queued"
-        queue_position = next_queue_position(conn, args.group_peer_id)
+        queue_position = next_queue_position(conn, group_peer_id)
     else:
         status = "active"
         queue_position = None
@@ -898,9 +1251,9 @@ def cmd_start_job(args: argparse.Namespace) -> int:
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             job_ref,
-            args.group_peer_id,
+            group_peer_id,
             args.requested_by,
-            args.source_message_id,
+            source_message_id,
             args.title,
             status,
             queue_position,
@@ -916,15 +1269,7 @@ def cmd_start_job(args: argparse.Namespace) -> int:
         {"title": args.title, "status": status, "queuePosition": queue_position},
     )
     conn.commit()
-    emit(
-        {
-            "jobRef": job_ref,
-            "status": status,
-            "queuePosition": queue_position,
-            "title": args.title,
-            "groupPeerId": args.group_peer_id,
-        }
-    )
+    emit(start_job_emit_payload(get_job(conn, job_ref)))
     return 0
 
 
@@ -937,13 +1282,28 @@ def cmd_start_job_with_workflow(args: argparse.Namespace) -> int:
     except (json.JSONDecodeError, ValueError) as exc:
         emit({"status": "invalid_workflow", "error": str(exc)})
         return 2
-    active = get_active_job(conn, args.group_peer_id)
+    supervisor_visible_label = str(args.supervisor_visible_label or "").strip()
+    if not supervisor_visible_label:
+        emit({"status": "invalid_workflow", "error": "supervisor_visible_label is required in V5.1 Hardening"})
+        return 2
+    group_peer_id = normalize_group_peer_id(args.group_peer_id)
+    source_message_id = normalize_source_message_id(args.source_message_id)
+    existing = find_job_by_source_message(conn, source_message_id, group_peer_id=group_peer_id)
+    if existing is not None:
+        emit(
+            {
+                **start_job_emit_payload(existing, idempotent=True),
+                **build_job_control_state(existing),
+            }
+        )
+        return 0
+    active = get_active_job(conn, group_peer_id)
     job_ref = next_job_ref(conn)
     created_at = now_iso()
 
     if active:
         status = "queued"
-        queue_position = next_queue_position(conn, args.group_peer_id)
+        queue_position = next_queue_position(conn, group_peer_id)
         current_stage_index = 0
         waiting_for_agent_id = workflow_stage_agent_ids(workflow)[0]
         next_action = "queued"
@@ -951,23 +1311,17 @@ def cmd_start_job_with_workflow(args: argparse.Namespace) -> int:
         status = "active"
         queue_position = None
         current_stage_index, waiting_for_agent_id, next_action = workflow_initial_state(workflow)
+    entry_target = normalize_entry_target(args.entry_target, group_peer_id)
     entry_delivery = {
         "channel": args.entry_channel,
         "accountId": args.entry_account_id,
-        "target": args.entry_target,
+        "target": entry_target,
     }
     entry_delivery_json = (
         json.dumps(entry_delivery, ensure_ascii=False)
         if entry_delivery["channel"] and entry_delivery["accountId"] and entry_delivery["target"]
         else args.entry_delivery_json
     )
-    supervisor_visible_label = resolved_visible_label(
-        explicit_label=args.supervisor_visible_label,
-        agent_id=hidden_main_agent_id(args.hidden_main_session_key),
-        role="主管",
-        kind="supervisor",
-    )
-
     conn.execute(
         """
         INSERT INTO jobs (
@@ -980,9 +1334,9 @@ def cmd_start_job_with_workflow(args: argparse.Namespace) -> int:
         """,
         (
             job_ref,
-            args.group_peer_id,
+            group_peer_id,
             args.requested_by,
-            args.source_message_id,
+            source_message_id,
             args.title,
             status,
             queue_position,
@@ -992,7 +1346,7 @@ def cmd_start_job_with_workflow(args: argparse.Namespace) -> int:
             supervisor_visible_label,
             args.entry_account_id,
             args.entry_channel,
-            args.entry_target,
+            entry_target,
             entry_delivery_json,
             args.hidden_main_session_key,
             current_stage_index,
@@ -1045,11 +1399,7 @@ def cmd_start_job_with_workflow(args: argparse.Namespace) -> int:
     row = get_job(conn, job_ref)
     emit(
         {
-            "jobRef": job_ref,
-            "status": status,
-            "queuePosition": queue_position,
-            "title": args.title,
-            "groupPeerId": args.group_peer_id,
+            **start_job_emit_payload(row),
             **build_job_control_state(row),
         }
     )
@@ -1061,7 +1411,7 @@ def cmd_append_note(args: argparse.Namespace) -> int:
     init_db(conn)
     active = get_active_job(conn, args.group_peer_id)
     if not active:
-        emit({"status": "no_active_job", "groupPeerId": args.group_peer_id})
+        emit({"status": "no_active_job", "groupPeerId": normalize_group_peer_id(args.group_peer_id)})
         return 2
     conn.execute(
         "UPDATE jobs SET updated_at = ? WHERE job_ref = ?",
@@ -1079,7 +1429,7 @@ def cmd_append_note(args: argparse.Namespace) -> int:
         {
             "jobRef": active["job_ref"],
             "status": "appended",
-            "groupPeerId": args.group_peer_id,
+            "groupPeerId": canonical_group_peer_id_for_row(active),
         }
     )
     return 0
@@ -1105,19 +1455,32 @@ def cmd_mark_worker_complete(args: argparse.Namespace) -> int:
         "SELECT account_id, role, visible_label, dispatch_run_id, dispatch_status FROM job_participants WHERE job_ref = ? AND agent_id = ?",
         (args.job_ref, args.agent_id),
     ).fetchone()
-    defaults = {
-        "ops_agent": {"account_id": "xiaolongxia", "role": "运营执行"},
-        "finance_agent": {"account_id": "yiran_yibao", "role": "财务执行"},
-        "sales_agent": {"account_id": "aoteman", "role": "销售执行"},
-    }
-    account_id = args.account_id or (existing["account_id"] if existing and existing["account_id"] else defaults.get(args.agent_id, {}).get("account_id", ""))
-    role = args.role or (existing["role"] if existing and existing["role"] else defaults.get(args.agent_id, {}).get("role", ""))
-    visible_label = resolved_visible_label(
-        explicit_label=args.visible_label or (existing["visible_label"] if existing and existing["visible_label"] else ""),
-        agent_id=args.agent_id,
-        role=role,
-        kind="worker",
-    )
+    account_id = args.account_id or (existing["account_id"] if existing and existing["account_id"] else "")
+    role = args.role or (existing["role"] if existing and existing["role"] else "")
+    explicit_visible_label = str(args.visible_label or (existing["visible_label"] if existing and existing["visible_label"] else "")).strip()
+    if not account_id or not role:
+        emit(
+            {
+                "status": "participant_identity_missing",
+                "jobRef": args.job_ref,
+                "agentId": args.agent_id,
+                "error": "participant accountId and role are required",
+            }
+        )
+        return 2
+    if not explicit_visible_label:
+        emit(
+            {
+                "status": "invalid_visible_label",
+                "jobRef": args.job_ref,
+                "agentId": args.agent_id,
+                "error": "workflow participant visibleLabel snapshot is required"
+                if workflow
+                else "participant visibleLabel snapshot is required",
+            }
+        )
+        return 2
+    visible_label = explicit_visible_label
     dispatch_run_id = args.dispatch_run_id or (existing["dispatch_run_id"] if existing and existing["dispatch_run_id"] else "")
     dispatch_status = args.dispatch_status or (existing["dispatch_status"] if existing and existing["dispatch_status"] else "accepted")
     conn.execute(
@@ -1225,6 +1588,25 @@ def cmd_mark_dispatch(args: argparse.Namespace) -> int:
         expected_agent_id = job["waiting_for_agent_id"]
         if expected_agent_id and args.agent_id != expected_agent_id:
             return emit_workflow_out_of_order(args.job_ref, expected_agent_id, args.agent_id)
+    existing = conn.execute(
+        "SELECT visible_label FROM job_participants WHERE job_ref = ? AND agent_id = ?",
+        (args.job_ref, args.agent_id),
+    ).fetchone()
+    explicit_visible_label = str(
+        args.visible_label or (existing["visible_label"] if existing and existing["visible_label"] else "")
+    ).strip()
+    if not explicit_visible_label:
+        emit(
+            {
+                "status": "invalid_visible_label",
+                "jobRef": args.job_ref,
+                "agentId": args.agent_id,
+                "error": "workflow participant visibleLabel snapshot is required"
+                if workflow
+                else "participant visibleLabel snapshot is required",
+            }
+        )
+        return 2
 
     dispatched_at = now_iso()
     conn.execute(
@@ -1246,12 +1628,7 @@ def cmd_mark_dispatch(args: argparse.Namespace) -> int:
             args.agent_id,
             args.account_id,
             args.role,
-            resolved_visible_label(
-                explicit_label=args.visible_label,
-                agent_id=args.agent_id,
-                role=args.role,
-                kind="worker",
-            ),
+            explicit_visible_label,
             args.status,
             args.dispatch_run_id,
             args.dispatch_status,
@@ -1306,26 +1683,31 @@ def cmd_get_active(args: argparse.Namespace) -> int:
     init_db(conn)
     active = get_active_job(conn, args.group_peer_id)
     if not active:
-        emit({"active": None, "groupPeerId": args.group_peer_id})
+        emit({"active": None, "groupPeerId": normalize_group_peer_id(args.group_peer_id)})
         return 0
     stats = participant_stats(conn, active["job_ref"])
     ready, participants = job_ready_to_rollup(conn, active["job_ref"])
-    emit(
-        {
-            "active": {
-                "jobRef": active["job_ref"],
-                "title": active["title"],
-                "status": active["status"],
-                "createdAt": active["created_at"],
-                "updatedAt": active["updated_at"],
-                "ageSeconds": job_age_seconds(active),
-                "readyToRollup": ready,
-                "participants": participants,
-                **build_job_control_state(active),
-                **stats,
-            }
+    snapshot_error = workflow_visible_snapshot_error(conn, active)
+    payload = {
+        "active": {
+            "jobRef": active["job_ref"],
+            "title": active["title"],
+            "status": active["status"],
+            "createdAt": active["created_at"],
+            "updatedAt": active["updated_at"],
+            "ageSeconds": job_age_seconds(active),
+            "groupPeerId": canonical_group_peer_id_for_row(active),
+            "readyToRollup": ready,
+            "participants": participants,
+            **build_job_control_state(active),
+            **visible_snapshot_status_payload(snapshot_error),
+            **stats,
         }
-    )
+    }
+    if snapshot_error:
+        payload["status"] = "invalid_visible_label"
+        payload["error"] = snapshot_error
+    emit(payload)
     return 0
 
 
@@ -1337,51 +1719,60 @@ def cmd_get_job(args: argparse.Namespace) -> int:
         emit({"job": None, "jobRef": args.job_ref})
         return 2
     ready, participants = job_ready_to_rollup(conn, args.job_ref)
-    emit(
-        {
-            "job": {
-                "jobRef": row["job_ref"],
-                "groupPeerId": row["group_peer_id"],
-                "requestedBy": row["requested_by"],
-                "sourceMessageId": row["source_message_id"],
-                "title": row["title"],
-                "status": row["status"],
-                "queuePosition": row["queue_position"],
-                "createdAt": row["created_at"],
-                "updatedAt": row["updated_at"],
-                "closedAt": row["closed_at"],
-                "ageSeconds": job_age_seconds(row),
-                "readyToRollup": ready,
-                "participants": participants,
-                "completionPackets": latest_completion_packets(conn, args.job_ref),
-                "stagePackets": build_stage_packets(
-                    conn,
-                    args.job_ref,
-                    parse_workflow_json(row["workflow_json"]) if "workflow_json" in row.keys() else None,
-                ),
-                **build_job_control_state(row),
-                **participant_stats(conn, args.job_ref),
-            }
+    snapshot_error = workflow_visible_snapshot_error(conn, row)
+    payload = {
+        "job": {
+            "jobRef": row["job_ref"],
+            "groupPeerId": canonical_group_peer_id_for_row(row),
+            "requestedBy": row["requested_by"],
+            "sourceMessageId": row["source_message_id"],
+            "title": row["title"],
+            "status": row["status"],
+            "queuePosition": row["queue_position"],
+            "createdAt": row["created_at"],
+            "updatedAt": row["updated_at"],
+            "closedAt": row["closed_at"],
+            "ageSeconds": job_age_seconds(row),
+            "readyToRollup": ready,
+            "participants": participants,
+            "completionPackets": latest_completion_packets(conn, args.job_ref),
+            "stagePackets": build_stage_packets(
+                conn,
+                args.job_ref,
+                parse_workflow_json(row["workflow_json"]) if "workflow_json" in row.keys() else None,
+            ),
+            **build_job_control_state(row),
+            **visible_snapshot_status_payload(snapshot_error),
+            **participant_stats(conn, args.job_ref),
         }
-    )
+    }
+    if snapshot_error:
+        payload["status"] = "invalid_visible_label"
+        payload["error"] = snapshot_error
+    emit(payload)
     return 0
 
 
 def cmd_list_queue(args: argparse.Namespace) -> int:
     conn = connect(Path(args.db))
     init_db(conn)
-    rows = conn.execute(
-        """
-        SELECT job_ref, title, status, queue_position, requested_by, created_at, updated_at
-        FROM jobs
-        WHERE group_peer_id = ? AND status = 'queued'
-        ORDER BY queue_position ASC, created_at ASC
-        """,
-        (args.group_peer_id,),
-    ).fetchall()
+    aliases = group_peer_id_aliases(args.group_peer_id)
+    if aliases:
+        placeholders = ", ".join("?" for _ in aliases)
+        rows = conn.execute(
+            f"""
+            SELECT job_ref, title, status, queue_position, requested_by, created_at, updated_at
+            FROM jobs
+            WHERE group_peer_id IN ({placeholders}) AND status = 'queued'
+            ORDER BY queue_position ASC, created_at ASC
+            """,
+            aliases,
+        ).fetchall()
+    else:
+        rows = []
     emit(
         {
-            "groupPeerId": args.group_peer_id,
+            "groupPeerId": normalize_group_peer_id(args.group_peer_id),
             "queuedJobs": [
                 {
                     "jobRef": row["job_ref"],
@@ -1446,6 +1837,27 @@ def cmd_build_dispatch_payload(args: argparse.Namespace) -> int:
     if not workflow:
         emit({"status": "workflow_missing", "jobRef": args.job_ref})
         return 2
+    current_action = str(row["next_action"] or "").strip()
+    if not args.force and current_action != "dispatch":
+        emit(
+            {
+                "status": "dispatch_not_ready",
+                "jobRef": args.job_ref,
+                "currentAction": current_action,
+                "waitingForAgentId": row["waiting_for_agent_id"],
+            }
+        )
+        return 2
+    if args.force and current_action not in {"dispatch", "wait_worker"}:
+        emit(
+            {
+                "status": "dispatch_not_ready",
+                "jobRef": args.job_ref,
+                "currentAction": current_action,
+                "waitingForAgentId": row["waiting_for_agent_id"],
+            }
+        )
+        return 2
     agent_id = str(args.agent_id or row["waiting_for_agent_id"] or "").strip()
     if not agent_id:
         emit({"status": "dispatch_agent_missing", "jobRef": args.job_ref})
@@ -1454,39 +1866,106 @@ def cmd_build_dispatch_payload(args: argparse.Namespace) -> int:
     if participant is None:
         emit({"status": "dispatch_participant_missing", "jobRef": args.job_ref, "agentId": agent_id})
         return 2
-    callback_session_key = str(row["hidden_main_session_key"] or "").strip() if "hidden_main_session_key" in row.keys() else ""
-    if not callback_session_key:
-        emit({"status": "callback_session_missing", "jobRef": args.job_ref, "agentId": agent_id})
+    if not args.force and dispatch_record_exists(participant):
+        emit(
+            {
+                "status": "dispatch_not_ready",
+                "jobRef": args.job_ref,
+                "agentId": agent_id,
+                "currentAction": current_action,
+                "participantStatus": participant["status"],
+                "dispatchRunId": participant["dispatch_run_id"],
+            }
+        )
         return 2
+    if str(participant["status"] or "") == "done":
+        emit(
+            {
+                "status": "dispatch_stage_already_completed",
+                "jobRef": args.job_ref,
+                "agentId": agent_id,
+            }
+        )
+        return 2
+    explicit_visible_label = str(participant["visible_label"] or "").strip()
+    if not explicit_visible_label:
+        emit(
+            {
+                "status": "invalid_visible_label",
+                "jobRef": args.job_ref,
+                "agentId": agent_id,
+                "error": "workflow participant visibleLabel snapshot is required",
+            }
+        )
+        return 2
+    callback_session_key = str(row["hidden_main_session_key"] or "").strip() if "hidden_main_session_key" in row.keys() else ""
+    supervisor_agent_id = hidden_main_agent_id(callback_session_key) or "controller"
     visible_contract = worker_visible_contract(
         args.job_ref,
         agent_id,
         participant["role"],
-        participant["visible_label"] if "visible_label" in participant.keys() else "",
+        explicit_visible_label,
+    )
+    team_key = str(row["team_key"] or "").strip() if "team_key" in row.keys() else ""
+    if not team_key:
+        team_key = canonical_group_peer_id_for_row(row)
+    runtime_script = str((Path(__file__).resolve().parent / "v51_team_orchestrator_runtime.py"))
+    stage_index = int(row["current_stage_index"] or 0) if "current_stage_index" in row.keys() else 0
+    callback_sink_args = {
+        "db": str(args.db),
+        "jobRef": args.job_ref,
+        "teamKey": team_key,
+        "stageIndex": stage_index,
+        "agentId": agent_id,
+    }
+    callback_sink_command = " ".join(
+        [
+            "python3",
+            shlex.quote(runtime_script),
+            "ingest-callback",
+            "--db",
+            shlex.quote(str(args.db)),
+            "--job-ref",
+            shlex.quote(args.job_ref),
+            "--team-key",
+            shlex.quote(team_key),
+            "--stage-index",
+            shlex.quote(str(stage_index)),
+            "--agent-id",
+            shlex.quote(agent_id),
+            "--payload",
+        ]
     )
     payload = {
         "jobRef": args.job_ref,
-        "groupPeerId": row["group_peer_id"],
+        "teamKey": team_key,
+        "groupPeerId": canonical_group_peer_id_for_row(row),
         "agentId": agent_id,
         "accountId": participant["account_id"],
         "role": participant["role"],
-        "callbackSessionKey": callback_session_key,
-        "mustSend": "progress,final,callback",
+        "callbackSinkRuntime": runtime_script,
+        "callbackSinkArgs": callback_sink_args,
+        "callbackSinkCommand": callback_sink_command,
+        "mustSend": "progress,final,structured_callback",
         **visible_contract,
         "title": row["title"],
         "requestText": row["request_text"] or row["title"],
         "packet": (
             "TASK_DISPATCH|"
             f"jobRef={args.job_ref}|"
-            f"from={hidden_main_agent_id(callback_session_key)}|"
+            f"from={supervisor_agent_id}|"
             f"to={agent_id}|"
             f"title={row['title']}|"
             f"request={row['request_text'] or row['title']}|"
-            f"callbackSessionKey={callback_session_key}|"
-            "mustSend=progress,final,callback|"
+            "mustSend=progress,final,structured_callback|"
+            f"callbackCommand={callback_sink_command}|"
+            f"scopeLabel={visible_contract['scopeLabel']}|"
             f"progressTitle={visible_contract['progressTitle']}|"
             f"finalTitle={visible_contract['finalTitle']}|"
-            f"callbackMustInclude={visible_contract['callbackMustInclude']}"
+            f"callbackMustInclude={visible_contract['callbackMustInclude']}|"
+            f"forbiddenLabels={visible_contract['forbiddenRoleLabels']}|"
+            f"forbiddenSections={visible_contract['forbiddenSectionKeywords']}|"
+            f"finalScopeRule={visible_contract['finalScopeRule']}"
         ),
     }
     emit(payload)
@@ -1500,9 +1979,16 @@ def cmd_build_visible_ack(args: argparse.Namespace) -> int:
     if not row:
         emit({"status": "job_missing", "jobRef": args.job_ref})
         return 2
+    if flag_value(row["ack_visible_sent"] if "ack_visible_sent" in row.keys() else 0):
+        emit({"status": "ack_already_sent", "jobRef": args.job_ref, "messageId": row["ack_visible_message_id"]})
+        return 2
     delivery = visible_delivery_for_row(row)
     if not delivery:
         emit({"status": "entry_delivery_missing", "jobRef": args.job_ref})
+        return 2
+    snapshot_error = workflow_visible_snapshot_error(conn, row)
+    if snapshot_error:
+        emit({"status": "invalid_visible_label", "jobRef": args.job_ref, "error": snapshot_error})
         return 2
     emit(
         {
@@ -1522,11 +2008,15 @@ def cmd_build_rollup_context(args: argparse.Namespace) -> int:
     if not row:
         emit({"job": None, "jobRef": args.job_ref})
         return 2
+    snapshot_error = workflow_visible_snapshot_error(conn, row)
+    if snapshot_error:
+        emit({"status": "invalid_visible_label", "jobRef": args.job_ref, "error": snapshot_error})
+        return 2
     workflow = parse_workflow_json(row["workflow_json"]) if "workflow_json" in row.keys() else None
     emit(
         {
             "jobRef": args.job_ref,
-            "groupPeerId": row["group_peer_id"],
+            "groupPeerId": canonical_group_peer_id_for_row(row),
             "workflow": workflow,
             "stagePackets": build_stage_packets(conn, args.job_ref, workflow),
             "completionPackets": latest_completion_packets(conn, args.job_ref),
@@ -1557,6 +2047,10 @@ def cmd_build_rollup_visible_message(args: argparse.Namespace) -> int:
         return 2
     if str(row["status"] or "") != "active":
         emit({"status": "job_not_active", "jobRef": args.job_ref, "currentStatus": row["status"]})
+        return 2
+    snapshot_error = workflow_visible_snapshot_error(conn, row)
+    if snapshot_error:
+        emit({"status": "invalid_visible_label", "jobRef": args.job_ref, "error": snapshot_error})
         return 2
     ready, _participants = job_ready_to_rollup(conn, args.job_ref)
     if not ready:
@@ -1597,6 +2091,21 @@ def cmd_record_visible_message(args: argparse.Namespace) -> int:
     row = get_job(conn, args.job_ref)
     if not row:
         emit({"status": "job_missing", "jobRef": args.job_ref})
+        return 2
+    sent_column = "ack_visible_sent" if args.kind == "ack" else "rollup_visible_sent"
+    message_id_column = "ack_visible_message_id" if args.kind == "ack" else "rollup_visible_message_id"
+    if flag_value(row[sent_column] if sent_column in row.keys() else 0):
+        existing_message_id = str(row[message_id_column] or "").strip() if message_id_column in row.keys() else ""
+        payload = {
+            "status": f"{args.kind}_already_recorded",
+            "jobRef": args.job_ref,
+            "kind": args.kind,
+            "messageId": existing_message_id or None,
+        }
+        if existing_message_id and existing_message_id == args.message_id:
+            emit({**payload, "idempotent": True, **build_job_control_state(row)})
+            return 0
+        emit(payload)
         return 2
     recorded_at = now_iso()
     if args.kind == "ack":
@@ -1679,13 +2188,27 @@ def cmd_recover_stale(args: argparse.Namespace) -> int:
     init_db(conn)
     active = get_active_job(conn, args.group_peer_id)
     if not active:
-        emit({"status": "no_active_job", "groupPeerId": args.group_peer_id})
+        emit({"status": "no_active_job", "groupPeerId": normalize_group_peer_id(args.group_peer_id)})
         return 0
 
     stats = participant_stats(conn, active["job_ref"])
     ready, participants = job_ready_to_rollup(conn, active["job_ref"])
     age_seconds = job_age_seconds(active)
+    snapshot_error = workflow_visible_snapshot_error(conn, active)
     repair_status = workflow_repair_status(conn, active)
+
+    if snapshot_error:
+        emit(
+            {
+                "status": "invalid_visible_label",
+                "jobRef": active["job_ref"],
+                "ageSeconds": age_seconds,
+                "participants": participants,
+                "error": snapshot_error,
+                **stats,
+            }
+        )
+        return 0
 
     if repair_status:
         emit(
@@ -1753,7 +2276,8 @@ def cmd_begin_turn(args: argparse.Namespace) -> int:
         stats = participant_stats(conn, active["job_ref"])
         ready, participants = job_ready_to_rollup(conn, active["job_ref"])
         age_seconds = job_age_seconds(active)
-        if not ready and age_seconds >= args.stale_seconds:
+        snapshot_error = workflow_visible_snapshot_error(conn, active)
+        if not ready and not snapshot_error and age_seconds >= args.stale_seconds:
             result = fail_job_and_promote(
                 conn,
                 active["job_ref"],
@@ -1772,14 +2296,25 @@ def cmd_begin_turn(args: argparse.Namespace) -> int:
 
     active = get_active_job(conn, args.group_peer_id)
     if not active:
-        emit({"recover": recovered, "active": None, "groupPeerId": args.group_peer_id})
+        emit({"recover": recovered, "active": None, "groupPeerId": normalize_group_peer_id(args.group_peer_id)})
         return 0
 
     stats = participant_stats(conn, active["job_ref"])
     ready, participants = job_ready_to_rollup(conn, active["job_ref"])
+    snapshot_error = workflow_visible_snapshot_error(conn, active)
     repair_status = workflow_repair_status(conn, active)
     recover_payload = recovered
-    if repair_status and recover_payload is None:
+    if snapshot_error and recover_payload is None:
+        recover_payload = {
+            "status": "invalid_visible_label",
+            "jobRef": active["job_ref"],
+            "ageSeconds": job_age_seconds(active),
+            "readyToRollup": ready,
+            "participants": participants,
+            "error": snapshot_error,
+            **stats,
+        }
+    elif repair_status and recover_payload is None:
         recover_payload = {
             "ageSeconds": job_age_seconds(active),
             "readyToRollup": ready,
@@ -1805,11 +2340,13 @@ def cmd_begin_turn(args: argparse.Namespace) -> int:
                 "createdAt": active["created_at"],
                 "updatedAt": active["updated_at"],
                 "ageSeconds": job_age_seconds(active),
+                "groupPeerId": canonical_group_peer_id_for_row(active),
                 "readyToRollup": ready,
                 "participants": participants,
+                **visible_snapshot_status_payload(snapshot_error),
                 **stats,
             },
-            "groupPeerId": args.group_peer_id,
+            "groupPeerId": canonical_group_peer_id_for_row(active),
         }
     )
     return 0
@@ -1820,13 +2357,27 @@ def cmd_watchdog_tick(args: argparse.Namespace) -> int:
     init_db(conn)
     active = get_active_job(conn, args.group_peer_id)
     if not active:
-        emit({"status": "no_active_job", "groupPeerId": args.group_peer_id})
+        emit({"status": "no_active_job", "groupPeerId": normalize_group_peer_id(args.group_peer_id)})
         return 0
 
     stats = participant_stats(conn, active["job_ref"])
     ready, participants = job_ready_to_rollup(conn, active["job_ref"])
     age_seconds = job_age_seconds(active)
+    snapshot_error = workflow_visible_snapshot_error(conn, active)
     repair_status = workflow_repair_status(conn, active)
+
+    if snapshot_error:
+        emit(
+            {
+                "status": "invalid_visible_label",
+                "jobRef": active["job_ref"],
+                "ageSeconds": age_seconds,
+                "participants": participants,
+                "error": snapshot_error,
+                **stats,
+            }
+        )
+        return 0
 
     if repair_status:
         emit(
@@ -1962,6 +2513,7 @@ def build_parser() -> argparse.ArgumentParser:
     build_dispatch = sub.add_parser("build-dispatch-payload")
     build_dispatch.add_argument("--job-ref", required=True)
     build_dispatch.add_argument("--agent-id", default="")
+    build_dispatch.add_argument("--force", action="store_true")
 
     build_ack = sub.add_parser("build-visible-ack")
     build_ack.add_argument("--job-ref", required=True)
@@ -1996,9 +2548,9 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     handlers = {
         "init-db": cmd_init_db,
         "start-job": cmd_start_job,

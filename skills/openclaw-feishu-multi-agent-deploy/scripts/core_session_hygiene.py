@@ -7,37 +7,7 @@ import argparse
 import json
 from pathlib import Path
 
-
-def load_sessions_index(path: Path) -> dict:
-    if not path.exists():
-        return {}
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def dump_sessions_index(path: Path, payload: dict) -> None:
-    path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-
-
-def session_id_for(entry) -> str | None:
-    if isinstance(entry, str):
-        return entry
-    if isinstance(entry, dict):
-        return entry.get("sessionId")
-    return None
-
-
-def session_file_for(base_dir: Path, entry) -> Path | None:
-    if isinstance(entry, dict):
-        raw = entry.get("sessionFile")
-        if raw:
-            return Path(raw).expanduser()
-    session_id = session_id_for(entry)
-    if not session_id:
-        return None
-    return base_dir / f"{session_id}.jsonl"
+from core_openclaw_adapter import OpenClawAdapter, SessionTarget
 
 
 def target_keys(
@@ -67,57 +37,13 @@ def remove_session_keys(
     delete_transcripts: bool = False,
     dry_run: bool = False,
 ) -> list[dict]:
-    results: list[dict] = []
-
-    for agent_id, session_key in keys:
-        session_dir = openclaw_home / "agents" / agent_id / "sessions"
-        index_path = session_dir / "sessions.json"
-        if not index_path.exists():
-            results.append(
-                {
-                    "agentId": agent_id,
-                    "sessionKey": session_key,
-                    "status": "index_missing",
-                }
-            )
-            continue
-
-        index_payload = load_sessions_index(index_path)
-        entry = index_payload.get(session_key)
-        if entry is None:
-            results.append(
-                {
-                    "agentId": agent_id,
-                    "sessionKey": session_key,
-                    "status": "mapping_missing",
-                }
-            )
-            continue
-
-        transcript_path = session_file_for(session_dir, entry)
-        result = {
-            "agentId": agent_id,
-            "sessionKey": session_key,
-            "status": "removed" if not dry_run else "would_remove",
-            "sessionId": session_id_for(entry),
-        }
-
-        if transcript_path is not None:
-            result["transcript"] = str(transcript_path)
-            if delete_transcripts and transcript_path.exists():
-                result["transcriptStatus"] = "deleted" if not dry_run else "would_delete"
-            elif delete_transcripts:
-                result["transcriptStatus"] = "missing"
-
-        if not dry_run:
-            index_payload.pop(session_key, None)
-            dump_sessions_index(index_path, index_payload)
-            if delete_transcripts and transcript_path is not None and transcript_path.exists():
-                transcript_path.unlink()
-
-        results.append(result)
-
-    return results
+    adapter = OpenClawAdapter(openclaw_home=openclaw_home)
+    return adapter.inspect_or_reset_session(
+        targets=[SessionTarget(agent_id=agent_id, session_key=session_key) for agent_id, session_key in keys],
+        action="reset",
+        delete_transcripts=delete_transcripts,
+        dry_run=dry_run,
+    )
 
 
 def main() -> int:

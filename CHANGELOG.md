@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.6.3] - 2026-03-11
+
+### Changed
+- `V5.1 Hardening` 正式支持 `parallel stage + publishOrder`：
+  - worker 可并行分析
+  - 群内消息统一由 `controller -> outbox -> sender` 按顺序发布
+- worker 协议收口为 `draft-only callback`：
+  - 主协议提交 `progressDraft / finalDraft / summary / details / risks / actionItems`
+  - worker 不再直接向群发送 `progress/final`
+  - 完整 callback 结束标记改为 `CALLBACK_OK`
+- 统一入口模板、README、SKILL、SOP 与交付模板同步切到最新并行控制面模型。
+- 新增 SeaWorld 双群并行验收记录：
+  - `docs/plans/2026-03-11-seaworld-parallel-validation.md`
+- `VERSION` 与 README 当前版本头同步到 `1.6.3 / 2026-03-11`。
+
+### Fixed
+- 修复 parallel workflow 建单时 worker metadata 退化成纯 `agentId`，导致远端错误 `accountId` 的问题。
+- 修复外部群 worker 与 controller/outbox 双写可见消息导致的重复发送问题。
+- 修复 gateway 重启后持续恢复历史 `delivery-queue` 坏消息的噪音问题。
+- 修复 worker 提前提交空 `finalText` callback 导致 stage 卡死的问题。
+
+## [1.6.2] - 2026-03-09
+
+### Changed
+- README 和 `openclaw-feishu-multi-agent-deploy/SKILL.md` 进一步收口为统一入口口径：
+  - 主线只强调 `accounts + roleCatalog + teams`
+  - `channels.feishu`、`bindings`、必要的 `agents.list` 和 `v51 runtime manifest` 明确为 builder 派生产物
+  - `single-bot / multi-bot` 降级为部署拓扑背景，不再像第二套并列配置入口
+- README 中的“飞书与 OpenClaw 信息采集”与“真实 Codex 提示词”统一到 `V5.1 Hardening` 双群 team-orchestrator 结构。
+- `VERSION` 与 README 当前版本头同步到 `1.6.2 / 2026-03-09`。
+
+### Fixed
+- 修复 README 前半段仍可能把用户带回旧 route-first 心智的问题。
+- 修复公开入口文档与当前版本元信息不完全同步的问题。
+
 ## [1.6.1] - 2026-03-08
 
 ### Added
