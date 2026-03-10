@@ -1,120 +1,68 @@
-# 客户首次使用真实案例
-
-这份案例不是抽象骨架，而是当前测试/交付环境的真实结构化案例。你可以直接复制，再把需要替换的字段换成客户真实值。
-
-当前仓库另外保留了两份配套 JSON：
-
-- 可提交到仓库的真实案例输入：`references/input-template-v51-seaworld-real-case.json`
-- 仅用于部署的 live 输入：`references/generated/remote-seaworld-v51-live-input-20260310.json`
-
-边界说明：
-
-- 仓库案例 JSON 保留真实 `teamKey / accountId / peerId / appId`，但把 `appSecret` 改成占位，避免把 live secret 固化到 git 历史。
-- live 输入位于 `generated/`，默认不进 git，可以直接作为 brownfield clean redeploy 的统一入口输入。
-
-## 这份案例解决什么问题
-
-它一次性给出 4 类信息：
-
-1. 当前正式双群、三个正式机器人和真实 `appId/appSecret`
-2. 当前主线 canonical schema：`accounts + roleCatalog + teams(profileId + override)`
-3. 真实 supervisor / worker `systemPrompt`
-4. 后续扩容和裁剪时具体改哪里
-
-## 当前真实基线
-
-### 正式 teamKey
-
-- `internal_main`
-- `external_main`
-
-### 正式群 peerId
-
-- 内部团队群：`oc_f785e73d3c00954d4ccd5d49b63ef919`
-- 外部团队群：`oc_7121d87961740dbd72bd8e50e48ba5e3`
-
-### 正式机器人账号
-
-- `aoteman`
-  - `appId`: `cli_a923c749bab6dcba`
-  - `appSecret`: `TWpD207Ri2g1Qqmw4R5YhfkPRhOokCGX`
-- `xiaolongxia`
-  - `appId`: `cli_a9f1849b67f9dcc2`
-  - `appSecret`: `g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr`
-- `yiran_yibao`
-  - `appId`: `cli_a923c71498b8dcc9`
-  - `appSecret`: `swscrlPKYCwAehOyyoLrlesLTsuYY6nl`
-
-### 固定角色映射
-
-- `aoteman -> supervisor`
-- `xiaolongxia -> ops`
-- `yiran_yibao -> finance`
-
-### 当前主线输入模型
-
-当前主线输入采用 `accounts + roleCatalog + teams(profileId + override)`。
-
-当前主线路径统一按下面 4 条理解：
-
-- 正常路径：ingress -> controller -> outbox -> sender -> callback sink
-- ingress transcript 扫描仅用于建单 repair；callback 不再走 hidden main / transcript recovery
-- `teamKey` 是唯一内部隔离主键；`group peerId` 只是入口地址
-- 插件与 OpenClaw 之间只依赖窄 adapter
-
-含义是：
-
-- `roleCatalog` 统一维护角色默认定义
-- `teams[]` 只负责引用这些 profile，并声明该 team 的 `agentId`、群信息和 `workflow.stages`
-- 如果某个群要对同一角色做局部特化，再在该 team 内覆盖
-
-## 真实可替换输入示例
-
-```json
 {
   "mode": "plugin",
-  "defaultAccount": "aoteman",
   "connectionMode": "websocket",
   "domain": "feishu",
+  "defaultAccount": "aoteman",
   "messages": {
+    "ackReactionScope": "group-mentions",
     "groupChat": {
-      "mentionPatterns": ["@奥特曼", "奥特曼", "主管机器人"]
-    }
-  },
-  "tools": {
-    "allow": ["group:fs", "group:runtime", "group:web", "group:messaging", "group:sessions"],
-    "sessions": {
-      "visibility": "all"
-    }
-  },
-  "session": {
-    "sendPolicy": {
-      "default": "allow"
+      "mentionPatterns": [
+        "@奥特曼",
+        "奥特曼",
+        "主管机器人"
+      ]
     }
   },
   "accounts": [
     {
       "accountId": "aoteman",
       "appId": "cli_a923c749bab6dcba",
-      "appSecret": "TWpD207Ri2g1Qqmw4R5YhfkPRhOokCGX",
-      "encryptKey": "<替换为客户自己的真实值>",
-      "verificationToken": "<替换为客户自己的真实值>"
+      "appSecret": "<from-remote-live-secret>"
     },
     {
       "accountId": "xiaolongxia",
       "appId": "cli_a9f1849b67f9dcc2",
-      "appSecret": "g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr",
-      "encryptKey": "<替换为客户自己的真实值>",
-      "verificationToken": "<替换为客户自己的真实值>"
+      "appSecret": "<from-remote-live-secret>"
     },
     {
       "accountId": "yiran_yibao",
       "appId": "cli_a923c71498b8dcc9",
-      "appSecret": "swscrlPKYCwAehOyyoLrlesLTsuYY6nl",
-      "encryptKey": "<替换为客户自己的真实值>",
-      "verificationToken": "<替换为客户自己的真实值>"
+      "appSecret": "<from-remote-live-secret>"
     }
   ],
+  "agentToAgent": {
+    "enabled": true
+  },
+  "tools": {
+    "allow": [
+      "group:fs",
+      "group:runtime",
+      "group:web",
+      "group:messaging",
+      "group:sessions"
+    ],
+    "sessions": {
+      "visibility": "all"
+    }
+  },
+  "session": {
+    "resetTriggers": [
+      "/reset",
+      "/new"
+    ],
+    "resetByType": {
+      "group": {
+        "mode": "idle",
+        "idleMinutes": 1440
+      }
+    },
+    "sendPolicy": {
+      "default": "allow"
+    },
+    "agentToAgent": {
+      "maxPingPongTurns": 0
+    }
+  },
   "roleCatalog": {
     "supervisor_internal_default": {
       "kind": "supervisor",
@@ -130,7 +78,11 @@
         "theme": "steady orchestrator",
         "emoji": "🧭"
       },
-      "mentionPatterns": ["@奥特曼", "奥特曼", "主管机器人"],
+      "mentionPatterns": [
+        "@奥特曼",
+        "奥特曼",
+        "主管机器人"
+      ],
       "systemPrompt": "你是内部团队主管 Agent，运行 V5.1 Hardening。你的群会话现在是 ingress-only，不再直接建单、发接单、派单或最终统一收口。真实用户在群里 @ 你且不是 WARMUP/闲聊时，首轮 assistant 响应必须直接输出 `NO_REPLY`；禁止调用 `start-job-with-workflow`、`build-visible-ack`、`build-dispatch-payload`、`build-rollup-visible-message`、`record-visible-message`，禁止使用 message 工具向群发送 `JOB-*`、`TG-*` 接单或其他可见业务文本，禁止 `sessions_spawn`。真正的流程由 `v51_team_orchestrator_reconcile.py resume-job` 从 ingress/store/outbox 建单，再由 `controller -> outbox -> sender` 统一发送 `【{visibleLabel}已接单｜<jobRef>】` 与 `【{visibleLabel}最终统一收口｜<jobRef>】`。workflow.stages 必须覆盖当前 team 全部 worker。hidden main 固定为 agent:supervisor_internal_main:main，但它只保留控制面 mailbox/announce，不再承担 worker callback 协议；hidden main / announce 回合只允许输出 `NO_REPLY` 或 `ANNOUNCE_SKIP`。若群会话对真实消息发生 read/exec/sessions_spawn 漂移，timer 会在 claim inbound 后清理这条消息之后 supervisor 漂移出来的子会话。核心原则：LLM 负责内容，代码负责流程。"
     },
     "supervisor_external_default": {
@@ -147,7 +99,11 @@
         "theme": "client-facing orchestrator",
         "emoji": "🧭"
       },
-      "mentionPatterns": ["@奥特曼", "奥特曼", "主管机器人"],
+      "mentionPatterns": [
+        "@奥特曼",
+        "奥特曼",
+        "主管机器人"
+      ],
       "systemPrompt": "你是外部团队主管 Agent，运行 V5.1 Hardening。你的群会话现在是 ingress-only，不再直接建单、发接单、派单或最终统一收口。真实用户在群里 @ 你且不是 WARMUP/闲聊时，首轮 assistant 响应必须直接输出 `NO_REPLY`；禁止调用 `start-job-with-workflow`、`build-visible-ack`、`build-dispatch-payload`、`build-rollup-visible-message`、`record-visible-message`，禁止使用 message 工具向群发送 `JOB-*`、`TG-*` 接单或其他可见业务文本，禁止 `sessions_spawn`。真正的流程由 `v51_team_orchestrator_reconcile.py resume-job` 从 ingress/store/outbox 建单，再由 `controller -> outbox -> sender` 统一发送 `【{visibleLabel}已接单｜<jobRef>】` 与 `【{visibleLabel}最终统一收口｜<jobRef>】`。workflow.stages 必须覆盖当前 team 全部 worker。hidden main 固定为 agent:supervisor_external_main:main，但它只保留控制面 mailbox/announce，不再承担 worker callback 协议；hidden main / announce 回合只允许输出 `NO_REPLY` 或 `ANNOUNCE_SKIP`。若群会话对真实消息发生 read/exec/sessions_spawn 漂移，timer 会在 claim inbound 后清理这条消息之后 supervisor 漂移出来的子会话。核心原则：LLM 负责内容，代码负责流程。"
     },
     "ops_default": {
@@ -207,10 +163,24 @@
         }
       ],
       "workflow": {
-        "mode": "serial",
+        "mode": "parallel",
         "stages": [
-          { "agentId": "ops_internal_main" },
-          { "agentId": "finance_internal_main" }
+          {
+            "stageKey": "analysis",
+            "mode": "parallel",
+            "agents": [
+              {
+                "agentId": "ops_internal_main"
+              },
+              {
+                "agentId": "finance_internal_main"
+              }
+            ],
+            "publishOrder": [
+              "ops_internal_main",
+              "finance_internal_main"
+            ]
+          }
         ]
       }
     },
@@ -237,101 +207,26 @@
         }
       ],
       "workflow": {
-        "mode": "serial",
+        "mode": "parallel",
         "stages": [
-          { "agentId": "ops_external_main" },
-          { "agentId": "finance_external_main" }
+          {
+            "stageKey": "analysis",
+            "mode": "parallel",
+            "agents": [
+              {
+                "agentId": "ops_external_main"
+              },
+              {
+                "agentId": "finance_external_main"
+              }
+            ],
+            "publishOrder": [
+              "ops_external_main",
+              "finance_external_main"
+            ]
+          }
         ]
       }
     }
   ]
 }
-```
-
-## 这份输入会推导出什么 runtime 结果
-
-| teamKey | hidden main | SQLite | systemd | launchd |
-|---|---|---|---|---|
-| `internal_main` | `agent:supervisor_internal_main:main` | `~/.openclaw/teams/internal_main/state/team_jobs.db` | `v51-team-internal_main.service` / `v51-team-internal_main.timer` | `bot.molt.v51-team-internal_main` |
-| `external_main` | `agent:supervisor_external_main:main` | `~/.openclaw/teams/external_main/state/team_jobs.db` | `v51-team-external_main.service` / `v51-team-external_main.timer` | `bot.molt.v51-team-external_main` |
-
-这也是为什么 `teamKey` 不能乱改。它会驱动：
-
-- hidden main session key
-- workspace 路径
-- agentDir 路径
-- SQLite 路径
-- watchdog service / timer / launchd label
-
-## 替换说明
-
-把下面这些真实值替换成客户自己的值：
-
-- `accounts[].appId`
-- `accounts[].appSecret`
-- `accounts[].encryptKey`
-- `accounts[].verificationToken`
-- `teams[].group.peerId`
-- `teams[].displayName`
-- `roleCatalog.*.systemPrompt`
-- `roleCatalog.*.name / description / role / responsibility / identity`
-
-## 如何改成客户自己的版本
-
-### 如果客户只需要 1 个群
-
-- 删除 `external_main`
-- 只保留一个 `team`
-- 保留该群真正需要的角色
-- 同步调整 `workflow.stages`
-
-### 新增一个群
-
-要改 3 个地方：
-
-1. 如需新 supervisor prompt，新建一个新的 supervisor profile
-例如：`supervisor_marketing_default`
-
-2. 在 `teams[]` 新增一个 team
-例如：`marketing_main`
-
-3. 在新 team 的 `workers[]` 和 `workflow.stages` 写全这个群真正启用的 worker
-
-### 新增一个机器人账号
-
-要改 3 个地方：
-
-1. `accounts[]` 新增账号
-2. `roleCatalog` 新增或修改对应 profile 的 `accountId`
-3. 让需要这个 bot 的 `team` 引用对应 `profileId`
-
-### 给现有群增加一个 worker
-
-要改 3 个地方：
-
-1. 如为新角色，先新增 `roleCatalog.<profileId>`
-2. 在对应 `team.workers[]` 新增一项
-3. 在 `workflow.stages` 里加上它，并写对顺序
-
-### 从现有群移除一个 worker
-
-要改 2 个地方：
-
-1. 从 `team.workers[]` 删除对应项
-2. 从 `workflow.stages` 删除对应项
-
-如果这个 profile 已经没有任何 team 使用，再决定是否清理 `roleCatalog`
-
-### 下线一个群
-
-要做两层清理：
-
-1. 从输入文件 `teams[]` 删除对应 team
-2. 在运行机上清理该 team 对应的 manifest、watchdog、SQLite、workspace
-
-## 推荐使用方式
-
-1. 复制这份案例
-2. 替换成客户真实值
-3. 保存成客户自己的输入文件
-4. 再配合 `客户首次使用-Codex提示词.md` 一起交给 Codex

@@ -1,5 +1,21 @@
 # 上线与升级手册
 
+## 迁移原则
+
+- `V5.1 Hardening` brownfield 迁移必须按 team 分批切换，不能一次性并发替换所有群
+- brownfield 切换顺序固定为：`internal_main` -> `external_main`
+- 同一时刻只允许一个 team 进入 clean redeploy / hygiene / canary
+- 并发双群测试只用于最终验收，不作为第一轮排障手段
+
+## 迁移前备份范围
+
+至少备份：
+
+- `~/.openclaw/openclaw.json`
+- `~/.openclaw/v51-runtime-manifest.json`
+- `~/.openclaw/teams/`
+- `~/.config/systemd/user/v51-team-*`
+
 ## A. 首次上线（Greenfield）
 1. 准备 deployment inputs（建议从 templates 复制）
 2. 生成配置 patch
@@ -23,9 +39,12 @@ python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v51_team_orchestrator_
 TS=$(date +%Y%m%d-%H%M%S)
 cp ~/.openclaw/openclaw.json ~/.openclaw/openclaw.json.bak.$TS
 ```
-2. 只改必要字段：`channels.feishu` + `bindings`
-3. canary 群验证（至少 2 条消息 + 1 次重启后复测）
-4. 放量到全量群
+2. 额外归档 `~/.openclaw/v51-runtime-manifest.json`、`~/.openclaw/teams/` 和 `~/.config/systemd/user/v51-team-*`
+3. 先切 `internal_main`
+4. 只改必要字段并执行 clean redeploy + hygiene
+5. `internal_main` 单群 canary 通过后，再切 `external_main`
+6. 两个 team 都完成单群 canary 后，再做双群并发验收
+7. 最后放量到全量群
 
 ### 会话卫生说明
 - 只改普通 bindings / account secret 时，通常不需要清 session。
@@ -65,3 +84,12 @@ openclaw config validate
 - 私聊 1 条
 - canary 群 2 条（含 @ 与非 @）
 - 多账号场景每个 accountId 至少 1 条
+
+## E. 双群并发最终验收
+
+当 `internal_main` 与 `external_main` 都完成各自单群切换后，再做一次双群并发 canary。通过标准固定为：
+
+1. 新单编号全局唯一
+2. 单群只出现一条 active job
+3. 无重复阶段消息
+4. 主管最终统一收口始终带 `jobRef`

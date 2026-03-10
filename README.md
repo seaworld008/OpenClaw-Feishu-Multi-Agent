@@ -4,7 +4,7 @@
 
 ## 当前版本
 
-- `v1.6.2`（2026-03-09）
+- `v1.6.3`（2026-03-11）
 - 默认技术路线：官方插件 `@openclaw/feishu`
 - 当前公开主线版本：`V5.1 Hardening`
 - 当前最新稳定版：`V5.1 Hardening`
@@ -56,7 +56,15 @@ README.md
 - 前置条件、验收清单、回滚流程、升级回归手册
 - `Team Orchestrator`：多个飞书群，每群 `1` 个主管 + `N` 个 worker，可模板化扩展角色、职能与提示词
 - `V5.1 Hardening`：把 Team Orchestrator 的流程推进下沉到确定性控制面，`LLM 负责内容，代码负责流程`
+- 并行 stage：worker 可并行分析，但群里消息仍由控制面按 `publishOrder` 顺序发布
 - 直接给 Codex 使用的完整交付模板、真实双群示例和 `v51 runtime manifest`
+
+当前主线路径统一按下面 4 条理解：
+
+- 正常路径：ingress -> controller -> outbox -> sender -> callback sink
+- ingress transcript 扫描仅用于建单 repair；callback 不再走 hidden main / transcript recovery
+- `teamKey` 是唯一内部隔离主键；`group peerId` 只是入口地址
+- 插件与 OpenClaw 之间只依赖窄 adapter
 
 ## 平台兼容矩阵
 
@@ -115,16 +123,15 @@ openclaw agents list --bindings
 
 当前生产推荐直接采用 `V5.1 Hardening`：
 - 不再让 supervisor prompt 自己判断下一步
-- 必须使用 `start-job-with-workflow`
-- 必须使用 `build-visible-ack`
-- 必须使用 `get-next-action`
-- 必须使用 `build-dispatch-payload`
-- 最终收口前必须使用 `build-rollup-context` 和 `build-rollup-visible-message`
-- 群里主管可见消息发出后，必须执行 `record-visible-message`
+- 正式主路径固定为 `ingress -> controller -> outbox -> sender -> callback sink`
+- worker 只提交结构化 callback，不再直接决定群里可见消息的发布时间
+- worker 现在提交的是 `progressDraft / finalDraft / summary / details / risks / actionItems`，可见消息只允许由 `controller -> outbox -> sender` 发出
+- `workflow.stages` 支持 `serial` 和 `parallel` stage group
+- `parallel` stage 允许多个 worker 同时分析，但群里仍按 `publishOrder` 顺序发布 `progress/final`
 - timer 必须运行 `v51_team_orchestrator_reconcile.py resume-job`
 - 不把 `WARMUP` 当成常规运行依赖
-- 若主管群 session 对真实用户消息直接裸返回 `NO_REPLY`，先执行 `v51_team_orchestrator_hygiene.py` 清理 team 会话；若仍未建单，交给 `v51_team_orchestrator_reconcile.py` 从 transcript 补建单与补派发
-- 若当前 waiting worker 的新 `main` 会话对 `TASK_DISPATCH` 裸回 `NO_REPLY`，`resume-job` 必须在单次执行里做有限次内联重派，而不是只重派一次后等待下一轮 timer
+- 若主管群 session 对真实用户消息没有直接进入控制面，而是先发生 `read/exec/sessions_spawn` 自由漂移，`resume-job` 必须从 supervisor group transcript 抢占最近未消费的真实用户消息补建单；它不再要求“最后一轮 assistant 必须刚好是 `NO_REPLY`”，并会在建单后清理这条消息之后 supervisor 漂移出来的 subagent session
+- 若当前 stage 长时间停在 `wait_worker` 且没有新的结构化 callback，先检查 worker 是否真的提交了 draft callback，再决定是否走 repair；不要再把 worker 的 `NO_REPLY` 当作正常完成信号
 
 1. 输入模板：
 - [V5.1 Hardening 输入模板](skills/openclaw-feishu-multi-agent-deploy/references/input-template-v51-team-orchestrator.json)
@@ -148,7 +155,9 @@ openclaw agents list --bindings
 
 5. 生成器额外产物：
 - `openclaw-feishu-plugin-v51-runtime-<timestamp>.json`
-- 该文件就是 `v51 runtime manifest`，用于 Codex、watchdog、session hygiene、canary 和回滚脚本按 `teamKey` 取值
+- `openclaw-feishu-plugin-v51-runtime-latest.json`
+- `v51_team_orchestrator_deploy.py` 在保留时间戳产物的同时，会刷新 `latest` 别名；若额外传入 `--openclaw-home ~/.openclaw`，会同时完成三件事：写入 active `~/.openclaw/v51-runtime-manifest.json`、渲染 `v51-team-*.service/.timer` 或 launchd plist、以及把每个 team workspace 硬化成 role-specific 契约文件（`AGENTS.md / SOUL.md / USER.md / IDENTITY.md / TOOLS.md / HEARTBEAT.md`），并清掉默认 `BOOTSTRAP.md`
+- `~/.openclaw/v51-runtime-manifest.json` 才是现网 reconcile / watchdog / canary 应直接消费的 active manifest
 
 当前正式双群基线：
 - 内部团队群：`oc_f785e73d3c00954d4ccd5d49b63ef919`
@@ -166,18 +175,27 @@ openclaw agents list --bindings
 - 同一个 bot 可以跨很多群复用，但它在所有群里都保持同一个角色
 - 每个群的角色组合可以不同，只需要在该 `team` 下启用需要的 `workers`
 - `teamKey` 驱动 agentId / workspace / memory / watchdog 命名
+- deploy 落地后的 workspace 不是通用聊天空间，而是控制面/worker 的协议工作区；默认 bootstrap 人格文件不能继续留在现网 team workspace 中
+- hidden main 是一次性 mailbox；控制面每次成功消费 worker callback 后，都会自动轮转 supervisor hidden main 与该 worker 的 main session，避免旧点评/旧上下文跨 job 残留
 - `workflow.stages` 必须把当前 team 的每个 worker 恰好声明一次；主管最终收口前必须等所有已登记 worker 完成
+- `parallel` stage 必须显式声明 `stageKey / agents / publishOrder`
+- `publishOrder` 必须完整覆盖该 stage 的全部 worker，且顺序唯一
 - 每个 agent 都允许单独定制 `name / description / identity / role / responsibility / systemPrompt`
 - 不再推荐多个群共享同一套全局 `supervisor_agent / ops_agent / finance_agent`
-- `V5.1 Hardening` 采用 `Deterministic Orchestrator`：`watchdog-tick -> v51_team_orchestrator_reconcile.py resume-job -> start-job-with-workflow -> build-visible-ack -> record-visible-message -> get-next-action -> build-dispatch-payload -> reset waiting worker main session -> mark-dispatch/mark-worker-complete -> build-rollup-context -> build-rollup-visible-message -> record-visible-message -> close-job`
+- `V5.1 Hardening` 采用 `Deterministic Orchestrator`：`watchdog-tick -> v51_team_orchestrator_reconcile.py resume-job -> ingress claim -> TeamController.start_job -> outbox ack -> dispatch_stage -> callback sink -> ordered publish -> rollup -> close-job`
 - worker 的群内可见消息必须使用控制面下发的固定标题合同：`progressTitle=【角色进度｜TG-xxxx】`、`finalTitle=【角色结论｜TG-xxxx】`，不得省略 `jobRef`
+- worker 不再直接 `message(progress/final)`；正式协议是提交 `progressDraft / finalDraft`，由 controller/outbox 顺序发布
+- `build-dispatch-payload` 现在会显式下发 `scopeLabel / forbiddenRoleLabels / forbiddenSectionKeywords / finalScopeRule`；worker 的 `finalVisibleText` 只能停留在当前角色边界内，不能提前写 sibling 角色章节或主管统一收口
 - supervisor 最终统一收口必须是结构化完整方案，至少包含：`任务主题`、各角色结论、`联合风险与红线`、`明日三件事`
 - supervisor 最终统一收口必须优先引用各 worker 的完整 `finalVisibleText` 终案正文，并整理成可直接执行的终案方案；禁止把 worker 的完整结论压缩成两三行摘要后收口
 - 同一 `jobRef` 的 `【主管最终统一收口｜TG-xxxx】` 只允许出现一次；若 `rollupVisibleSent=true` 但 job 尚未关闭，只允许补 `close-job`，禁止再次发群消息
-- `resume-job` 必须优先消费 hidden main transcript 中最近的有效 `COMPLETE_PACKET`；若最新包是 `pending / placeholder / sent / <pending...>` 之类占位值，必须忽略并继续向后找最近有效包；若当前只剩无效包，则强制重派当前 worker
-- 若 hidden main 里的 `COMPLETE_PACKET` 仍是占位 messageId，但当前 waiting worker 的 `main` transcript 已经拿到了两个真实 `message` toolResult，`resume-job` 必须先从 worker transcript 恢复真实 `progressMessageId / finalMessageId`，再推进下一 stage / rollup，不能直接删会话重派
-- 即便 hidden main 还没真正收到 `COMPLETE_PACKET`，只要当前 waiting worker 的 `main` transcript 已经同时出现 callback toolCall 草稿和两个真实 `message` toolResult，`resume-job` 也必须直接从 worker transcript 合成有效回调并推进下一 stage / rollup，不能把这种场景误判成 worker 裸 `NO_REPLY`
+- `resume-job` 只消费 `inbound_events / stage_callbacks / outbound_messages` 这三类正式控制面状态；不再消费 hidden main / plaintext / worker transcript 文本回调
+- worker 完成回调的正式入口是结构化 callback sink：主协议提交 `progressDraft / finalDraft / summary / details / risks / actionItems`；若附带 `progressMessageId / finalMessageId`，必须是真实 messageId，禁止使用 `pending / placeholder / sent / <pending...>` 等占位值
+- 若 gateway 重启后出现历史 `delivery-recovery` 噪音：优先清理 `~/.openclaw/delivery-queue/` 中遗留的旧坏消息，再重启 gateway
+- callback sink 若缺少真实 messageId、越权输出跨角色内容、或仍保留 job scoped subagent 行为，控制面只允许拒绝并重派当前 worker，不再从任何文本 transcript 猜测推进状态
 - `resume-job` 在当前 stage 还未完成时，必须忽略已消费旧 stage 的 hidden main 包；旧包不能在下一 stage 被重新当成 invalid packet 触发误重派
+- 若 waiting worker 的当前 `jobRef` 期间出现 `sessions_spawn` 派生的 subagent session，或 `finalVisibleText` 越权写出其他角色标题/章节、统一收口/总方案章节，`resume-job` 必须拒绝该回调、清理 job scoped subagent/main session 并重派当前 worker
+- `resume-job / reconcile-dispatch / reconcile-rollup` 必须按 `teamKey` 持有独占锁；同一 team 不允许同时存在 timer 自动恢复和手工恢复两份控制面实例，否则会放大重复派发风险
 - 一句话原则：`LLM 负责内容，代码负责流程`
 
 推荐固定映射：
@@ -227,11 +245,53 @@ canonical schema 最小示意：
           "profileId": "ops_default",
           "agentId": "ops_internal_main"
         }
-      ]
+      ],
+      "workflow": {
+        "stages": [
+          {
+            "stageKey": "analysis",
+            "mode": "serial",
+            "agents": [
+              { "agentId": "ops_internal_main" }
+            ],
+            "publishOrder": ["ops_internal_main"]
+          }
+        ]
+      }
     }
   ]
 }
 ```
+
+并行 stage 示例：
+
+```json
+{
+  "workflow": {
+    "stages": [
+      {
+        "stageKey": "analysis",
+        "mode": "parallel",
+        "agents": [
+          { "agentId": "ops_internal_main" },
+          { "agentId": "finance_internal_main" },
+          { "agentId": "legal_internal_main" }
+        ],
+        "publishOrder": [
+          "ops_internal_main",
+          "finance_internal_main",
+          "legal_internal_main"
+        ]
+      }
+    ]
+  }
+}
+```
+
+语义：
+- worker 可以并行分析、并行回调
+- 群里只按 `publishOrder` 依次放出 `【角色进度】` / `【角色结论】`
+- 所有 worker 发布完成后，主管才进入最终统一收口
 
 ## 默认专家库 / Default Expert Catalog
 
@@ -303,7 +363,7 @@ runtime 命名约定：
 Codex 交付入口：
 - [V5.1 Hardening 交付模板](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v51-team-orchestrator.md)
 - 这份文档已经写入当前 2 个正式群、3 个正式机器人、可直接复制给 Codex 的长版提示词和运行命令
-- 其中 `V5.1 Hardening` 的控制面命令必须明确出现：`start-job-with-workflow`、`build-visible-ack`、`get-next-action`、`build-dispatch-payload`、`build-rollup-context`、`build-rollup-visible-message`、`record-visible-message`，以及 `v51_team_orchestrator_reconcile.py` 的 `resume-job / reconcile-dispatch / reconcile-rollup`
+- 其中 `V5.1 Hardening` 的正式主路径必须明确出现：`ingress -> controller -> outbox -> sender -> callback sink`，以及 `v51_team_orchestrator_reconcile.py` 的 `resume-job / reconcile-dispatch / reconcile-rollup`
 
 ## 飞书与 OpenClaw 信息采集（你现在最容易卡的点）
 
@@ -528,7 +588,9 @@ teams[]
 
 5. 生成并核对 patch
 - 先备份配置。
-- 运行 builder 生成最小 patch 与 `v51 runtime manifest`。
+- 优先运行 `v51_team_orchestrator_deploy.py` 生成最小 patch、`latest` 别名和 active `~/.openclaw/v51-runtime-manifest.json`。
+- Linux / WSL2 部署时，直接让它同时渲染 `~/.config/systemd/user/v51-team-*.service/.timer`。
+- 当前控制面在成功消费 worker callback 后，会自动轮转 supervisor hidden main 与已完成 worker 的 main session；若你在运行机上看到这些 session 被清掉，这是预期行为，不是异常。
 - 人工核对 `bindings` 排序：精确规则优先（peer+account）→ account 精确 → 兜底。
 
 6. 变更上线
@@ -741,13 +803,14 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
     - finance_external_main（profileId=finance_default, accountId=yiran_yibao）
 ```
 
-### 上线前 5 条强校验（避免配错）
+### 上线前 6 条强校验（避免配错）
 
 1. `teamKey` 唯一：一个群只对应一个独立 team unit。
 2. `workflow.stages` 完整：每个 team 当前启用的 worker 必须在 `workflow.stages` 中恰好声明一次。
-3. `agentId` 存在：`openclaw agents list` 能查到 supervisor / worker 对应的 agent。
-4. `accountId` 对齐：`roleCatalog.accountId`、`teams[].group.entryAccountId`、`bindings.match.accountId` 必须都等于 `channels.feishu.accounts` 的键名。
-5. 先验证再放量：先 canary 群验证通过，再全量。
+3. `parallel` stage 合法：并行 stage 必须配置 `stageKey + agents + publishOrder`，且 `publishOrder` 覆盖全部 worker 且顺序唯一。
+4. `agentId` 存在：`openclaw agents list` 能查到 supervisor / worker 对应的 agent。
+5. `accountId` 对齐：`roleCatalog.accountId`、`teams[].group.entryAccountId`、`bindings.match.accountId` 必须都等于 `channels.feishu.accounts` 的键名。
+6. 先验证再放量：先 canary 群验证通过，再全量。
 
 4. 交付验收建议
 - 先在 canary 群验证，再全量放量
@@ -760,7 +823,7 @@ https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/open
 
 | 主线版本 | 定位 | 适合场景 | 核心入口 |
 |---|---|---|---|
-| `V5.1 Hardening` | 多群模板化主线 | 多个群并行、每群独立 team unit、可复制到 2/10 个团队 | [codex-prompt-templates-v51-team-orchestrator.md](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v51-team-orchestrator.md) |
+| `V5.1 Hardening` | 多群模板化主线 | 多个群并行、每群独立 team unit、群内 worker 可并行分析且顺序发布 | [codex-prompt-templates-v51-team-orchestrator.md](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v51-team-orchestrator.md) |
 
 选择建议：
 1. 当前生产交付默认直接上 `V5.1 Hardening`。

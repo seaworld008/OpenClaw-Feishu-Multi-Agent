@@ -47,7 +47,14 @@
 - 每个群的角色组合可以不同，只需要在该 `team` 下启用需要的 `workers`
 - `workflow.stages` 决定当前团队的调度顺序
 - hidden main 必须按 supervisor 参数化，例如：`agent:supervisor_internal_main:main`
-- 默认生产流程必须严格串行：主管接单 -> 运营进度 -> 运营结论 -> 财务进度 -> 财务结论 -> 主管最终收口
+- 默认生产流程是：worker 可按 `workflow.stages` 串行或并行分析，但群里始终按控制面顺序发布：主管接单 -> 运营进度/结论 -> 财务进度/结论 -> 主管最终收口
+
+当前主线路径统一按下面 4 条理解：
+
+- 正常路径：ingress -> controller -> outbox -> sender -> callback sink
+- ingress transcript 扫描仅用于建单 repair；callback 不再走 hidden main / transcript recovery
+- `teamKey` 是唯一内部隔离主键；`group peerId` 只是入口地址
+- 插件与 OpenClaw 之间只依赖窄 adapter
 
 ## 为什么要用统一入口
 
@@ -72,31 +79,25 @@
 
 ### 控制面主流程
 
-主管控制面固定使用下面 7 个 registry 命令，watchdog 侧固定使用 `v51_team_orchestrator_reconcile.py`：
+正式主路径固定为：
 
 ```text
-start-job-with-workflow
-build-visible-ack
-get-next-action
-build-dispatch-payload
-build-rollup-context
-build-rollup-visible-message
-record-visible-message
-ready-to-rollup
-resume-job
-reconcile-dispatch
-reconcile-rollup
+timer/watchdog
+-> v51_team_orchestrator_reconcile.py resume-job
+-> ingress claim
+-> TeamController.start_job
+-> outbox ack
+-> dispatch_stage
+-> callback sink
+-> ordered publish
+-> rollup
+-> close-job
 ```
 
-推荐 supervisor 顺序：
-
-```text
-timer/watchdog -> v51_team_orchestrator_reconcile.py resume-job
--> 用户任务 -> start-job-with-workflow -> build-visible-ack -> message -> record-visible-message
--> get-next-action -> build-dispatch-payload -> dispatch 当前 worker
--> worker COMPLETE_PACKET -> get-next-action
--> 若 type=dispatch 则继续派单；若 type=rollup 则 build-rollup-context -> build-rollup-visible-message -> message -> record-visible-message -> close-job
-```
+补充说明：
+- worker 只负责产出 `progressDraft / finalDraft / summary / details / risks / actionItems`
+- 可见消息只允许由 `controller -> outbox -> sender` 发出
+- `parallel` stage 可以让多个 worker 同时分析，但仍必须按 `publishOrder` 顺序出群消息
 
 ### 运行时为什么稳
 
@@ -317,14 +318,14 @@ reconcile 按 team 参数化：
 
 ```bash
 python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v51_team_orchestrator_reconcile.py \
-  --manifest ~/.openclaw/generated/openclaw-feishu-plugin-v51-runtime-latest.json \
+  --manifest ~/.openclaw/v51-runtime-manifest.json \
   --team-key internal_main \
   resume-job
 ```
 
 ```bash
 python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v51_team_orchestrator_reconcile.py \
-  --manifest ~/.openclaw/generated/openclaw-feishu-plugin-v51-runtime-latest.json \
+  --manifest ~/.openclaw/v51-runtime-manifest.json \
   --team-key external_main \
   reconcile-dispatch
 ```
@@ -344,13 +345,25 @@ python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v51_team_orchestrator_
   --success-token V51_TEAM_CANARY_OK
 ```
 
-交付侧统一走 `v51_team_orchestrator_deploy.py` 生成 patch + summary + runtime manifest：
+交付侧统一走 `v51_team_orchestrator_deploy.py` 生成 patch + summary + runtime manifest；该脚本会保留时间戳产物、刷新 `latest` 别名，并在指定 `--openclaw-home` 时写入 active `~/.openclaw/v51-runtime-manifest.json`：
 
 ```bash
 python3 skills/openclaw-feishu-multi-agent-deploy/scripts/v51_team_orchestrator_deploy.py \
   --input skills/openclaw-feishu-multi-agent-deploy/references/input-template-v51-team-orchestrator.json \
-  --out skills/openclaw-feishu-multi-agent-deploy/references/generated
+  --out skills/openclaw-feishu-multi-agent-deploy/references/generated \
+  --openclaw-home ~/.openclaw \
+  --systemd-user-dir ~/.config/systemd/user
 ```
+
+`--openclaw-home` 不只是写 manifest。正式交付要求它同时完成：
+
+- 渲染 active `~/.openclaw/v51-runtime-manifest.json`
+- 渲染 `v51-team-*.service/.timer` 或 launchd plist
+- 把每个 team workspace 硬化成 role-specific 契约文件：`AGENTS.md / SOUL.md / USER.md / IDENTITY.md / TOOLS.md / HEARTBEAT.md`
+- 清掉默认 `BOOTSTRAP.md`
+- 运行态成功消费 worker callback 后，自动轮转 supervisor hidden main 与该 worker 的 `main` session，避免 mailbox 累积旧点评上下文
+
+如果 team workspace 里还保留默认 bootstrap/通用人格文件，就不能把该环境视为“已完成 V5.1 Hardening 部署”。
 
 watchdog 模板固定使用：
 
@@ -365,25 +378,25 @@ watchdog 模板固定使用：
 ### supervisor 内部团队 systemPrompt
 
 ```text
-你是内部团队主管 Agent，运行 V5.1 Hardening。群里只允许两类可见消息：主管接单、主管最终统一收口。被 @ 且不是 WARMUP/闲聊时，第一条 assistant 消息必须包含真实 toolCall。固定流程：begin-turn -> start-job-with-workflow -> build-visible-ack -> 用 message 工具发送【{visibleLabel}已接单｜<jobRef>】 -> record-visible-message(kind=ack) -> get-next-action -> build-dispatch-payload -> 只派发当前 stage 指定 worker -> hidden main 收 COMPLETE_PACKET -> 再次 get-next-action -> 若返回 rollup 则先 build-rollup-context，再 build-rollup-visible-message，用 message 工具发送【{visibleLabel}最终统一收口｜<jobRef>】并 record-visible-message(kind=rollup) -> close-job done。workflow.stages 必须覆盖当前 team 全部 worker。hidden main 固定为 agent:supervisor_internal_main:main。核心原则：LLM 负责内容，代码负责流程。最终统一收口必须是结构化完整方案，至少包含任务主题、各角色结论、联合风险与红线、明日三件事；同一 jobRef 的最终统一收口只允许出现一次；必须优先引用各 worker 的完整 finalVisibleText 终案正文，而不是只复述两三行摘要。若主管群 session 对真实用户消息裸 NO_REPLY，先执行 v51_team_orchestrator_hygiene.py；若仍未建单或卡在 dispatch/rollup，timer 会调用 v51_team_orchestrator_reconcile.py resume-job 从 transcript 补建单、补接单、补派单、补收口。内部协议回合最后只允许输出 NO_REPLY。
+你是内部团队主管 Agent，运行 V5.1 Hardening。你的群会话现在是 ingress-only，不再直接建单、发接单、派单或最终统一收口。真实用户在群里 @ 你且不是 WARMUP/闲聊时，首轮 assistant 响应必须直接输出 `NO_REPLY`；禁止调用 `start-job-with-workflow`、`build-visible-ack`、`build-dispatch-payload`、`build-rollup-visible-message`、`record-visible-message`，禁止使用 message 工具向群发送 `JOB-*`、`TG-*` 接单或其他可见业务文本，禁止 `sessions_spawn`。真正的流程由 `v51_team_orchestrator_reconcile.py resume-job` 从 ingress/store/outbox 建单，再由 `controller -> outbox -> sender` 统一发送 `【{visibleLabel}已接单｜<jobRef>】` 与 `【{visibleLabel}最终统一收口｜<jobRef>】`。workflow.stages 必须覆盖当前 team 全部 worker。hidden main 固定为 agent:supervisor_internal_main:main，但它只保留控制面 mailbox/announce，不再承担 worker callback 协议；hidden main / announce 回合只允许输出 `NO_REPLY` 或 `ANNOUNCE_SKIP`。若群会话对真实消息发生 read/exec/sessions_spawn 漂移，timer 会在 claim inbound 后清理这条消息之后 supervisor 漂移出来的子会话。核心原则：LLM 负责内容，代码负责流程。
 ```
 
 ### supervisor 外部团队 systemPrompt
 
 ```text
-你是外部团队主管 Agent，运行 V5.1 Hardening。群里只允许两类可见消息：主管接单、主管最终统一收口。被 @ 且不是 WARMUP/闲聊时，第一条 assistant 消息必须包含真实 toolCall。固定流程：begin-turn -> start-job-with-workflow -> build-visible-ack -> 用 message 工具发送【{visibleLabel}已接单｜<jobRef>】 -> record-visible-message(kind=ack) -> get-next-action -> build-dispatch-payload -> 只派发当前 stage 指定 worker -> hidden main 收 COMPLETE_PACKET -> 再次 get-next-action -> 若返回 rollup 则先 build-rollup-context，再 build-rollup-visible-message，用 message 工具发送【{visibleLabel}最终统一收口｜<jobRef>】并 record-visible-message(kind=rollup) -> close-job done。workflow.stages 必须覆盖当前 team 全部 worker。hidden main 固定为 agent:supervisor_external_main:main。核心原则：LLM 负责内容，代码负责流程。最终统一收口必须是结构化完整方案，至少包含任务主题、各角色结论、联合风险与红线、明日三件事；同一 jobRef 的最终统一收口只允许出现一次；必须优先引用各 worker 的完整 finalVisibleText 终案正文，而不是只复述两三行摘要。若主管群 session 对真实用户消息裸 NO_REPLY，先执行 v51_team_orchestrator_hygiene.py；若仍未建单或卡在 dispatch/rollup，timer 会调用 v51_team_orchestrator_reconcile.py resume-job 从 transcript 补建单、补接单、补派单、补收口。内部协议回合最后只允许输出 NO_REPLY。
+你是外部团队主管 Agent，运行 V5.1 Hardening。你的群会话现在是 ingress-only，不再直接建单、发接单、派单或最终统一收口。真实用户在群里 @ 你且不是 WARMUP/闲聊时，首轮 assistant 响应必须直接输出 `NO_REPLY`；禁止调用 `start-job-with-workflow`、`build-visible-ack`、`build-dispatch-payload`、`build-rollup-visible-message`、`record-visible-message`，禁止使用 message 工具向群发送 `JOB-*`、`TG-*` 接单或其他可见业务文本，禁止 `sessions_spawn`。真正的流程由 `v51_team_orchestrator_reconcile.py resume-job` 从 ingress/store/outbox 建单，再由 `controller -> outbox -> sender` 统一发送 `【{visibleLabel}已接单｜<jobRef>】` 与 `【{visibleLabel}最终统一收口｜<jobRef>】`。workflow.stages 必须覆盖当前 team 全部 worker。hidden main 固定为 agent:supervisor_external_main:main，但它只保留控制面 mailbox/announce，不再承担 worker callback 协议；hidden main / announce 回合只允许输出 `NO_REPLY` 或 `ANNOUNCE_SKIP`。若群会话对真实消息发生 read/exec/sessions_spawn 漂移，timer 会在 claim inbound 后清理这条消息之后 supervisor 漂移出来的子会话。核心原则：LLM 负责内容，代码负责流程。
 ```
 
 ### ops worker systemPrompt
 
 ```text
-你是团队运营专家。必须先从 TASK_DISPATCH 读取 channel/accountId/target 与 progressTitle/finalTitle/callbackMustInclude，再显式 message(progress) -> 读取真实 progressMessageId -> message(final) -> 读取真实 finalMessageId -> sessions_send(COMPLETE_PACKET|status=completed|summary=...|details=...|risks=...|actionItems=...) -> NO_REPLY。两条群内可见消息的第一行必须原样使用 progressTitle/finalTitle，例如【{visibleLabel}进度｜TG-xxxx】和【{visibleLabel}结论｜TG-xxxx】；final 不得压成一句话，必须给出完整判断、执行建议、风险与下一步。禁止使用 pending/sent/<pending...>/*_placeholder 这类占位 messageId。
+你是团队运营专家。必须先从 TASK_DISPATCH 读取 channel/accountId/target、progressTitle/finalTitle、callbackMustInclude，以及 scopeLabel/forbiddenRoleLabels/forbiddenSectionKeywords/finalScopeRule 和 callbackCommand。你不再直接使用 `message` 工具向群发送 `progress/final`，而是一次性通过 callbackCommand 提交 `progressDraft / finalDraft / summary / details / risks / actionItems`；如附带 `progressMessageId / finalMessageId`，它们必须是真实 messageId，禁止使用 pending/sent/<pending...>/*_placeholder。两段 draft 的第一行必须原样使用 progressTitle/finalTitle，例如【{visibleLabel}进度｜TG-xxxx】和【{visibleLabel}结论｜TG-xxxx】；finalDraft 不得压成一句话，必须给出完整判断、执行建议、风险与下一步，但只能覆盖运营视角，不能提前写财务章节、主管统一收口或整版总方案。禁止 sessions_spawn，禁止退回 hidden main 文本协议。完整 callback 成功后只输出 `CALLBACK_OK`。
 ```
 
 ### finance worker systemPrompt
 
 ```text
-你是团队财务专家。必须先从 TASK_DISPATCH 读取 channel/accountId/target 与 progressTitle/finalTitle/callbackMustInclude，再显式 message(progress) -> 读取真实 progressMessageId -> message(final) -> 读取真实 finalMessageId -> sessions_send(COMPLETE_PACKET|status=completed|summary=...|details=...|risks=...|actionItems=...) -> NO_REPLY。两条群内可见消息的第一行必须原样使用 progressTitle/finalTitle，例如【{visibleLabel}进度｜TG-xxxx】和【{visibleLabel}结论｜TG-xxxx】；final 不得压成一句话，必须给出完整判断、红线、风险与下一步。禁止使用 pending/sent/<pending...>/*_placeholder 这类占位 messageId。
+你是团队财务专家。必须先从 TASK_DISPATCH 读取 channel/accountId/target、progressTitle/finalTitle、callbackMustInclude，以及 scopeLabel/forbiddenRoleLabels/forbiddenSectionKeywords/finalScopeRule 和 callbackCommand。你不再直接使用 `message` 工具向群发送 `progress/final`，而是一次性通过 callbackCommand 提交 `progressDraft / finalDraft / summary / details / risks / actionItems`；如附带 `progressMessageId / finalMessageId`，它们必须是真实 messageId，禁止使用 pending/sent/<pending...>/*_placeholder。两段 draft 的第一行必须原样使用 progressTitle/finalTitle，例如【{visibleLabel}进度｜TG-xxxx】和【{visibleLabel}结论｜TG-xxxx】；finalDraft 不得压成一句话，必须给出完整判断、红线、风险与下一步，但只能覆盖财务视角，不能替运营补打法，也不能提前写主管统一收口或整版总方案。禁止 sessions_spawn，禁止退回 hidden main 文本协议。完整 callback 成功后只输出 `CALLBACK_OK`。
 ```
 
 ## Codex 真实交付模板
@@ -432,11 +445,35 @@ watchdog 模板固定使用：
 3) 每个 team 都必须生成自己的 hidden main session key，不允许共享 agent:supervisor_agent:main。
 4) 每个 team 都必须生成自己的 SQLite db 路径。
 5) 每个 team 都必须生成自己的 watchdog service / timer / launchd label。
-6) worker 必须严格执行：message(progress) -> 读取真实 progressMessageId -> message(final) -> 读取真实 finalMessageId -> sessions_send(COMPLETE_PACKET|status=completed) -> NO_REPLY。
-7) resume-job 必须能消费 hidden main transcript 中最近有效 COMPLETE_PACKET，并跳过 pending / placeholder / sent / <pending...> 这类占位回调。
+6) worker 不再直接 `message(progress/final)`；worker 只提交 `progressDraft / finalDraft / summary / details / risks / actionItems`，由 controller/outbox 按 `publishOrder` 顺序发群。完整 callback 成功后只输出 `CALLBACK_OK`。
+7) `resume-job` 不再消费 hidden main / plaintext / transcript 文本回调；正式回调入口只有结构化 callback sink。
+7.1) worker callback 若缺少真实 messageId、越权输出跨角色内容、或仍保留 job scoped subagent 行为，必须由 callback sink 直接拒绝。
 8) 文档和模板里必须写入当前两群和三个机器人真实配置，不允许继续只给抽象占位骨架。
 9) 输出 openclaw patch、v51 runtime manifest、验证命令、回滚命令和 canary 步骤。
 ```
+
+## Brownfield 迁移与双群验收 contract
+
+如果目标不是 greenfield，而是远端已有 OpenClaw 的 brownfield 环境，迁移前备份范围至少包括：
+
+- `~/.openclaw/openclaw.json`
+- `~/.openclaw/v51-runtime-manifest.json`
+- `~/.openclaw/teams/`
+- `~/.config/systemd/user/v51-team-*`
+
+切换顺序固定为：
+
+1. `internal_main`
+2. `external_main`
+
+一次只切一个 team，先完成该 team 的 clean redeploy、hygiene 和单群验收，再切下一组。
+
+双群并发 canary 最终通过标准固定为：
+
+1. 新单编号全局唯一
+2. 单群只出现一条 active job
+3. 无重复阶段消息
+4. 主管最终统一收口始终带 `jobRef`
 
 ## 扩容与裁剪操作手册
 

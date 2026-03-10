@@ -101,10 +101,20 @@
         }
       ],
       "workflow": {
-        "mode": "serial",
+        "mode": "parallel",
         "stages": [
-          { "agentId": "ops_full_team_demo" },
-          { "agentId": "finance_full_team_demo" }
+          {
+            "stageKey": "analysis",
+            "mode": "parallel",
+            "agents": [
+              { "agentId": "ops_full_team_demo" },
+              { "agentId": "finance_full_team_demo" }
+            ],
+            "publishOrder": [
+              "ops_full_team_demo",
+              "finance_full_team_demo"
+            ]
+          }
         ]
       }
     },

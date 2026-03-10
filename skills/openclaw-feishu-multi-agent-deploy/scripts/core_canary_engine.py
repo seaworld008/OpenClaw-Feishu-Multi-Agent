@@ -9,6 +9,8 @@ import re
 import sqlite3
 from pathlib import Path
 
+from core_openclaw_adapter import OpenClawAdapter
+
 
 LEAK_TOKENS = ("ACK_READY", "REPLY_SKIP", "COMPLETE_PACKET", "WORKFLOW_INCOMPLETE")
 DEFAULT_DISPATCH_PATTERNS = (
@@ -27,15 +29,14 @@ def normalize_agents(raw: str) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
+def adapter_for_session_root(root: Path) -> OpenClawAdapter:
+    session_root = Path(root)
+    openclaw_home = session_root.parent if session_root.name == "agents" else session_root
+    return OpenClawAdapter(openclaw_home=openclaw_home)
+
+
 def iter_session_text_files(root: Path, agent_id: str):
-    session_dir = root / agent_id / "sessions"
-    if not session_dir.exists():
-        return
-    for path in session_dir.glob("*.jsonl"):
-        try:
-            yield path, path.read_text(encoding="utf-8", errors="ignore")
-        except OSError:
-            continue
+    yield from adapter_for_session_root(root).iter_session_text_files(agent_id)
 
 
 def load_db(db_path: Path) -> sqlite3.Connection:

@@ -326,6 +326,15 @@ def build_team_agent_record(team_key: str, agent: Dict[str, Any], default_role_k
     return record
 
 
+def build_team_ingress_record(team_key: str) -> Dict[str, Any]:
+    return {
+        "id": f"ingress_{team_key}",
+        "name": f"{team_key} ingress sentinel",
+        "workspace": f"~/.openclaw/teams/{team_key}/workspaces/ingress",
+        "agentDir": f"~/.openclaw/teams/{team_key}/agents/ingress/agent",
+    }
+
+
 def normalize_v51_teams(data: Dict[str, Any], account_ids: set[str]) -> List[Dict[str, Any]]:
     teams = require(data, "teams")
     if not isinstance(teams, list) or not teams:
@@ -416,19 +425,77 @@ def normalize_v51_teams(data: Dict[str, Any], account_ids: set[str]) -> List[Dic
             raise ValueError(f"teams[{idx}].workflow.stages must be a non-empty array")
         valid_stage_agent_ids = {str(worker["agentId"]) for worker in normalized_workers}
         stage_agent_ids: List[str] = []
+        normalized_stages: List[Dict[str, Any]] = []
         for stage_idx, stage in enumerate(stages):
-            if not isinstance(stage, dict) or not stage.get("agentId"):
-                raise ValueError(f"teams[{idx}].workflow.stages[{stage_idx}] requires agentId")
-            stage_agent_id = str(stage["agentId"])
-            if stage_agent_id not in valid_stage_agent_ids:
-                raise ValueError(
-                    f"teams[{idx}].workflow.stages[{stage_idx}].agentId must reference a worker in the same team"
+            if not isinstance(stage, dict):
+                raise ValueError(f"teams[{idx}].workflow.stages[{stage_idx}] must be an object")
+            if stage.get("agentId"):
+                stage_agent_id = str(stage["agentId"]).strip()
+                if stage_agent_id not in valid_stage_agent_ids:
+                    raise ValueError(
+                        f"teams[{idx}].workflow.stages[{stage_idx}].agentId must reference a worker in the same team"
+                    )
+                if stage_agent_id in stage_agent_ids:
+                    raise ValueError(
+                        f"teams[{idx}].workflow.stages contains duplicate agentId: {stage_agent_id}"
+                    )
+                stage_agent_ids.append(stage_agent_id)
+                normalized_stages.append(
+                    {
+                        "stageKey": str(stage.get("stageKey") or f"stage_{stage_idx}"),
+                        "mode": "serial",
+                        "agents": [{"agentId": stage_agent_id}],
+                        "publishOrder": [stage_agent_id],
+                    }
                 )
-            if stage_agent_id in stage_agent_ids:
-                raise ValueError(
-                    f"teams[{idx}].workflow.stages contains duplicate agentId: {stage_agent_id}"
-                )
-            stage_agent_ids.append(stage_agent_id)
+                continue
+
+            stage_mode = str(stage.get("mode") or "serial").strip()
+            if stage_mode not in {"serial", "parallel"}:
+                raise ValueError(f"teams[{idx}].workflow.stages[{stage_idx}].mode must be serial or parallel")
+            raw_agents = stage.get("agents")
+            if not isinstance(raw_agents, list) or not raw_agents:
+                raise ValueError(f"teams[{idx}].workflow.stages[{stage_idx}].agents must be a non-empty array")
+            normalized_agents: List[Dict[str, str]] = []
+            stage_group_agent_ids: List[str] = []
+            for agent_idx, agent in enumerate(raw_agents):
+                if not isinstance(agent, dict) or not agent.get("agentId"):
+                    raise ValueError(
+                        f"teams[{idx}].workflow.stages[{stage_idx}].agents[{agent_idx}].agentId is required"
+                    )
+                agent_id = str(agent["agentId"]).strip()
+                if agent_id not in valid_stage_agent_ids:
+                    raise ValueError(
+                        f"teams[{idx}].workflow.stages[{stage_idx}].agents[{agent_idx}].agentId must reference a worker in the same team"
+                    )
+                if agent_id in stage_agent_ids:
+                    raise ValueError(
+                        f"teams[{idx}].workflow.stages contains duplicate agentId: {agent_id}"
+                    )
+                stage_agent_ids.append(agent_id)
+                stage_group_agent_ids.append(agent_id)
+                normalized_agents.append({"agentId": agent_id})
+            if stage_mode == "serial" and len(stage_group_agent_ids) != 1:
+                raise ValueError(f"teams[{idx}].workflow.stages[{stage_idx}] serial stage must contain exactly one agent")
+            publish_order = stage.get("publishOrder")
+            if stage_mode == "parallel":
+                if not isinstance(publish_order, list) or not publish_order:
+                    raise ValueError(f"teams[{idx}].workflow.stages[{stage_idx}].publishOrder is required for parallel stage")
+                normalized_publish_order = [str(item).strip() for item in publish_order if str(item).strip()]
+                if len(normalized_publish_order) != len(stage_group_agent_ids) or set(normalized_publish_order) != set(stage_group_agent_ids):
+                    raise ValueError(
+                        f"teams[{idx}].workflow.stages[{stage_idx}].publishOrder must contain each parallel agent exactly once"
+                    )
+            else:
+                normalized_publish_order = [stage_group_agent_ids[0]]
+            normalized_stages.append(
+                {
+                    "stageKey": str(stage.get("stageKey") or f"stage_{stage_idx}"),
+                    "mode": stage_mode,
+                    "agents": normalized_agents,
+                    "publishOrder": normalized_publish_order,
+                }
+            )
         missing_stage_agents = sorted(valid_stage_agent_ids - set(stage_agent_ids))
         if missing_stage_agents:
             raise ValueError(
@@ -439,6 +506,10 @@ def normalize_v51_teams(data: Dict[str, Any], account_ids: set[str]) -> List[Dic
         normalized_team = copy.deepcopy(team)
         normalized_team["supervisor"] = supervisor
         normalized_team["workers"] = normalized_workers
+        normalized_team["workflow"] = {
+            "mode": "parallel" if any(stage["mode"] == "parallel" for stage in normalized_stages) else "serial",
+            "stages": normalized_stages,
+        }
         validated.append(normalized_team)
 
     return validated
@@ -476,6 +547,7 @@ def build_v51_runtime_manifest(data: Dict[str, Any]) -> Dict[str, Any]:
         peer_id = str(group["peerId"])
         supervisor = team["supervisor"]
         supervisor_account_id = str(supervisor.get("accountId") or group["entryAccountId"])
+        ingress_record = build_team_ingress_record(team_key)
         supervisor_record = build_team_agent_record(team_key, supervisor, "supervisor")
         allowed_worker_agent_ids: List[str] = []
         worker_records: List[Dict[str, Any]] = []
@@ -508,6 +580,11 @@ def build_v51_runtime_manifest(data: Dict[str, Any]) -> Dict[str, Any]:
             )
 
         hidden_main = f"agent:{supervisor_record['id']}:main"
+        db_path = f"~/.openclaw/teams/{team_key}/state/team_jobs.db"
+        runtime_script = "skills/openclaw-feishu-multi-agent-deploy/scripts/v51_team_orchestrator_runtime.py"
+        reconcile_script = "skills/openclaw-feishu-multi-agent-deploy/scripts/v51_team_orchestrator_reconcile.py"
+        callback_sink_script = "skills/openclaw-feishu-multi-agent-deploy/scripts/core_worker_callback_sink.py"
+        adapter_script = "skills/openclaw-feishu-multi-agent-deploy/scripts/core_openclaw_adapter.py"
         manifest_teams.append(
             {
                 "teamKey": team_key,
@@ -516,6 +593,12 @@ def build_v51_runtime_manifest(data: Dict[str, Any]) -> Dict[str, Any]:
                     "peerId": peer_id,
                     "entryAccountId": group["entryAccountId"],
                     "requireMention": group.get("requireMention"),
+                },
+                "ingress": {
+                    "agentId": ingress_record["id"],
+                    "name": ingress_record["name"],
+                    "workspace": ingress_record["workspace"],
+                    "agentDir": ingress_record["agentDir"],
                 },
                 "supervisor": {
                     "kind": supervisor.get("kind") or "supervisor",
@@ -539,14 +622,37 @@ def build_v51_runtime_manifest(data: Dict[str, Any]) -> Dict[str, Any]:
                 "workflow": team["workflow"],
                 "runtime": {
                     "orchestratorVersion": "V5.1 Hardening",
-                    "dbPath": f"~/.openclaw/teams/{team_key}/state/team_jobs.db",
+                    "dbPath": db_path,
                     "hiddenMainSessionKey": hidden_main,
                     "entryAccountId": group["entryAccountId"],
                     "entryChannel": PLUGIN_CHANNEL,
                     "entryTarget": f"chat:{peer_id}",
+                    "ingressAgentId": ingress_record["id"],
                     "controlPlane": {
-                        "registryScript": "skills/openclaw-feishu-multi-agent-deploy/scripts/v51_team_orchestrator_runtime.py",
-                        "reconcileScript": "skills/openclaw-feishu-multi-agent-deploy/scripts/v51_team_orchestrator_reconcile.py",
+                        "runtimeScript": runtime_script,
+                        "registryScript": runtime_script,
+                        "reconcileScript": reconcile_script,
+                        "controller": {
+                            "teamKey": team_key,
+                            "storeDbPath": db_path,
+                        },
+                        "outbox": {
+                            "runtimeScript": runtime_script,
+                            "command": "deliver-outbox",
+                            "storeDbPath": db_path,
+                        },
+                        "callback": {
+                            "runtimeScript": runtime_script,
+                            "command": "ingest-callback",
+                            "sinkScript": callback_sink_script,
+                            "storeDbPath": db_path,
+                            "legacyTextRecovery": False,
+                        },
+                        "adapter": {
+                            "script": adapter_script,
+                            "channel": PLUGIN_CHANNEL,
+                            "sessionRoot": "~/.openclaw/agents",
+                        },
                         "commands": {
                             "startJob": "start-job-with-workflow",
                             "nextAction": "get-next-action",
@@ -562,6 +668,7 @@ def build_v51_runtime_manifest(data: Dict[str, Any]) -> Dict[str, Any]:
                         },
                     },
                     "sessionKeys": {
+                        "ingressGroup": f"agent:{ingress_record['id']}:{PLUGIN_CHANNEL}:group:{peer_id}",
                         "supervisorGroup": f"agent:{supervisor_record['id']}:{PLUGIN_CHANNEL}:group:{peer_id}",
                         "supervisorMain": hidden_main,
                         "workers": worker_session_keys,
@@ -616,6 +723,7 @@ def build_v51_plugin_patch(data: Dict[str, Any], accounts: List[Dict[str, Any]])
             feishu[key] = optional[key]
 
     group_overrides: Dict[str, Dict[str, Any]] = {}
+    broadcast_routes: Dict[str, List[str]] = {}
     for account in accounts:
         account_id = str(account["accountId"])
         feishu["accounts"][account_id] = build_account_cfg(account)
@@ -630,12 +738,15 @@ def build_v51_plugin_patch(data: Dict[str, Any], accounts: List[Dict[str, Any]])
         peer_id = str(group["peerId"])
         supervisor = team["supervisor"]
         supervisor_account_id = str(supervisor.get("accountId") or group["entryAccountId"])
+        ingress_record = build_team_ingress_record(team_key)
         supervisor_record = build_team_agent_record(team_key, supervisor, "supervisor")
+        agents_list.append(ingress_record)
         agents_list.append(supervisor_record)
         generated_agent_ids.append(supervisor_record["id"])
+        broadcast_routes[peer_id] = [supervisor_record["id"]]
         bindings.append(
             {
-                "agentId": supervisor_record["id"],
+                "agentId": ingress_record["id"],
                 "match": {
                     "channel": PLUGIN_CHANNEL,
                     "accountId": supervisor_account_id,
@@ -681,6 +792,8 @@ def build_v51_plugin_patch(data: Dict[str, Any], accounts: List[Dict[str, Any]])
         "bindings": bindings,
         "agents": agents_patch,
     }
+    if broadcast_routes:
+        patch["broadcast"] = broadcast_routes
 
     tools_patch: Dict[str, Any] = {}
     if isinstance(data.get("agentToAgent"), dict) and data["agentToAgent"]:
