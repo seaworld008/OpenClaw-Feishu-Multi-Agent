@@ -21,6 +21,8 @@ from typing import Any, Dict, List
 PLUGIN_CHANNEL = "feishu"
 TEAM_KEY_RE = re.compile(r"^[a-z0-9_]+$")
 ROLE_KINDS = {"supervisor", "worker"}
+AGENT_RUNTIME_RESERVED_KEYS = {"id", "name", "workspace", "agentDir", "identity", "groupChat"}
+AGENT_RUNTIME_ALLOWED_KEYS = {"model", "sandbox"}
 
 
 def load_json(path: pathlib.Path) -> Dict[str, Any]:
@@ -145,6 +147,27 @@ def normalize_visibility(value: Any, *, required: bool, path: str) -> str | None
     return text
 
 
+def normalize_runtime(value: Any, *, path: str) -> Dict[str, Any] | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError(f"{path}.runtime must be an object")
+    runtime: Dict[str, Any] = {}
+    for key, item in value.items():
+        if key in AGENT_RUNTIME_RESERVED_KEYS:
+            raise ValueError(f"{path}.runtime must not override reserved field: {key}")
+        if key not in AGENT_RUNTIME_ALLOWED_KEYS:
+            raise ValueError(
+                f"{path}.runtime only supports per-agent keys: {', '.join(sorted(AGENT_RUNTIME_ALLOWED_KEYS))}"
+            )
+        if item is None:
+            continue
+        if isinstance(item, str) and not item.strip():
+            continue
+        runtime[key] = copy.deepcopy(item)
+    return runtime or None
+
+
 def validate_role_catalog(role_catalog: Any, account_ids: set[str]) -> Dict[str, Dict[str, Any]]:
     if role_catalog is None:
         return {}
@@ -184,6 +207,11 @@ def validate_role_catalog(role_catalog: Any, account_ids: set[str]) -> Dict[str,
         visibility = normalize_visibility(profile.get("visibility"), required=(kind == "worker"), path=f"roleCatalog.{profile_id}")
         if visibility:
             profile["visibility"] = visibility
+        runtime = normalize_runtime(profile.get("runtime"), path=f"roleCatalog.{profile_id}")
+        if runtime:
+            profile["runtime"] = runtime
+        else:
+            profile.pop("runtime", None)
         normalized[str(profile_id)] = profile
     return normalized
 
@@ -204,6 +232,18 @@ def merge_role_spec(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str,
                 merged["mentionPatterns"] = patterns
             else:
                 merged.pop("mentionPatterns", None)
+            continue
+        if key == "runtime":
+            runtime = normalize_runtime(value, path="roleSpec")
+            base_runtime = normalize_runtime(merged.get("runtime"), path="roleSpec")
+            combined_runtime = copy.deepcopy(base_runtime or {})
+            if runtime:
+                combined_runtime.update(runtime)
+            runtime = combined_runtime or None
+            if runtime:
+                merged["runtime"] = runtime
+            else:
+                merged.pop("runtime", None)
             continue
         if value is None:
             continue
@@ -282,6 +322,11 @@ def resolve_team_role_spec(
         merged["visibility"] = visibility
     elif kind != "worker":
         merged.pop("visibility", None)
+    runtime = normalize_runtime(merged.get("runtime"), path=path)
+    if runtime:
+        merged["runtime"] = runtime
+    else:
+        merged.pop("runtime", None)
     return merged
 
 
@@ -313,6 +358,7 @@ def build_agent_identity(agent: Dict[str, Any]) -> Dict[str, Any] | None:
 def build_team_agent_record(team_key: str, agent: Dict[str, Any], default_role_key: str) -> Dict[str, Any]:
     role_key = build_team_role_key(team_key, agent, default_role_key)
     identity = build_agent_identity(agent)
+    runtime = normalize_runtime(agent.get("runtime"), path=f"agent:{agent.get('agentId') or default_role_key}") or {}
     record: Dict[str, Any] = {
         "id": agent["agentId"],
         "name": agent.get("name") or (identity or {}).get("name") or agent.get("role") or agent["agentId"],
@@ -323,6 +369,8 @@ def build_team_agent_record(team_key: str, agent: Dict[str, Any], default_role_k
         record["identity"] = identity
     if agent.get("mentionPatterns"):
         record["groupChat"] = {"mentionPatterns": list(agent["mentionPatterns"])}
+    if runtime:
+        record.update(runtime)
     return record
 
 

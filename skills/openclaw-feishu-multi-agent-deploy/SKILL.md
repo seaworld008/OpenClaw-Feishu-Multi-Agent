@@ -140,6 +140,8 @@ Codex 交付入口：
 - 主线 schema 固定按 `accounts + roleCatalog + teams(profileId + override)` 组织
 - 若采用并行 worker，必须把 `workflow.stages` 写成 stage group，并显式给出 `publishOrder`
 - 允许 builder 按输入自动派生 `channels.feishu`、`bindings`、必要的 `agents.list` 与 `v51 runtime manifest`
+- `roleCatalog.*.runtime` 与 `teams[].supervisor/teams[].workers[].overrides.runtime` 已是正式能力；builder 会把这些 per-agent runtime override 下沉到生成后的 `agents.list`
+- 当前推荐用于统一入口的 runtime override 字段只包括：`model`、`sandbox`；`workspace / agentDir` 仍可按 agent 显式覆盖，`maxConcurrent / subagents` 继续留在顶层 `agents.defaults`
 - 群/私聊 ID（`peer.id`）必须真实可用
 
 4. 生成配置

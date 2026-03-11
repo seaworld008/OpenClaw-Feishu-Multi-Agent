@@ -452,6 +452,8 @@ teams[]
 - `bindings` 是 builder 派生结果，不是主线手工输入；你要人工核对排序和命中结果，但不要再把 `routes` 当成统一入口。
 - 群级策略默认写在 `teams[].group`：如 `peerId`、`entryAccountId`、`requireMention`。
 - 角色默认定义写在 `roleCatalog`；同一角色如果只是某个群上下文不同，优先在对应 `team` 里做 override，不要复制整块 prompt。
+- 角色级运行时配置现在也可以统一写在 `roleCatalog.*.runtime`，并在 `teams[].supervisor/teams[].workers[].overrides.runtime` 做 team 级覆盖；builder 会把它们下沉到生成后的 `agents.list`。
+- 当前正式支持写入 `agents.list` 的 runtime override 只包括：`model`、`sandbox`。`workspace / agentDir` 仍通过 agent 显式字段覆盖；`maxConcurrent / subagents` 继续保留在顶层 `agents.defaults`，不要下沉到单个 agent。
 - 同一个 bot 可以跨多个群复用，但它在所有群里都保持同一个角色；不要让同一个 `accountId` 在一个群当 supervisor、另一个群又当 finance。
 
 ### 五、飞书权限清单（含多维表格）
@@ -584,6 +586,8 @@ teams[]
 4. 填统一入口输入
 - 在 `roleCatalog` 里定义 supervisor / worker 默认资料。
 - 在 `teams[]` 里声明每个群的 `teamKey`、`group`、`supervisor`、`workers`、`workflow.stages`。
+- 若某个角色在所有群都使用相同模型或 sandbox 策略，优先写在 `roleCatalog.*.runtime`。
+- 若只有某个 team 的某个 agent 需要特殊模型或 sandbox，再写在 `teams[].supervisor.overrides.runtime` 或 `teams[].workers[].overrides.runtime`。
 - 若只是复用现有角色，不要重复写新的整块 prompt。
 
 5. 生成并核对 patch

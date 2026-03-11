@@ -371,6 +371,15 @@ def clean_invalid_delivery_queue(openclaw_home: Path, *, valid_account_ids: set[
     return removed
 
 
+def merge_openclaw_patch(base: Any, patch: Any) -> Any:
+    if isinstance(base, dict) and isinstance(patch, dict):
+        merged = {key: copy.deepcopy(value) for key, value in base.items()}
+        for key, value in patch.items():
+            merged[key] = merge_openclaw_patch(merged.get(key), value)
+        return merged
+    return copy.deepcopy(patch)
+
+
 def render_systemd_units(
     runtime_manifest: Dict[str, Any],
     *,
@@ -497,6 +506,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.openclaw_home:
         openclaw_home = Path(args.openclaw_home).expanduser().resolve()
         openclaw_home.mkdir(parents=True, exist_ok=True)
+        active_config_path = openclaw_home / "openclaw.json"
+        existing_config: Dict[str, Any] = {}
+        if active_config_path.exists():
+            existing_config = load_json(active_config_path)
+        merged_config = merge_openclaw_patch(existing_config, patch)
+        write_json(active_config_path, merged_config)
         materialize_runtime_scripts(openclaw_home)
         active_manifest = materialize_runtime_manifest(runtime_manifest, openclaw_home)
         active_manifest_path = openclaw_home / "v51-runtime-manifest.json"
@@ -507,6 +522,7 @@ def main(argv: list[str] | None = None) -> int:
             valid_account_ids={str(item["accountId"]) for item in data.get("accounts", []) if str(item.get("accountId") or "").strip()},
         )
         print(str(active_manifest_path))
+        print(str(active_config_path))
         if removed_queue_entries:
             print(json.dumps({"removedDeliveryQueueEntries": removed_queue_entries}, ensure_ascii=False))
 

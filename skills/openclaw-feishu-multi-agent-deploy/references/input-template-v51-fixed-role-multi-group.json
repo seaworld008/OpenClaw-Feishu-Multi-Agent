@@ -62,7 +62,12 @@
       "description": "运营角色固定使用 xiaolongxia。",
       "responsibility": "活动打法、节奏、执行动作",
       "visibility": "visible",
-      "systemPrompt": "<replace-ops-prompt>"
+      "runtime": {
+        "model": {
+          "primary": "<replace-ops-model>"
+        }
+      },
+      "systemPrompt": "<replace-ops-prompt: use progressDraft/finalDraft and end with CALLBACK_OK>"
     },
     "finance_default": {
       "kind": "worker",
@@ -74,7 +79,12 @@
       "description": "财务角色固定使用 yiran_yibao。",
       "responsibility": "预算、毛利、ROI 与风险",
       "visibility": "visible",
-      "systemPrompt": "<replace-finance-prompt>"
+      "runtime": {
+        "model": {
+          "primary": "<replace-finance-model>"
+        }
+      },
+      "systemPrompt": "<replace-finance-prompt: use progressDraft/finalDraft and end with CALLBACK_OK>"
     }
   },
   "teams": [

@@ -422,6 +422,47 @@ class BuildSnippetTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "visibleLabel is required"):
             self.module.build_plugin_patch(data)
 
+    def test_v51_runtime_override_is_materialized_into_generated_agents_list(self):
+        data = self.minimal_v51_input()
+        data["roleCatalog"] = {
+            "ops_profile": {
+                "kind": "worker",
+                "accountId": "ops",
+                "role": "运营专家",
+                "visibleLabel": "运营",
+                "visibility": "visible",
+                "systemPrompt": "ops prompt",
+                "runtime": {
+                    "model": {"primary": "sub2api/gpt-5.3-codex"},
+                    "sandbox": {"sessionToolsVisibility": "all"},
+                },
+            }
+        }
+        data["teams"][0]["workers"][0] = {
+            "profileId": "ops_profile",
+            "agentId": "ops_demo_team",
+            "overrides": {
+                "runtime": {
+                    "model": {"primary": "sub2api/gpt-5.4-codex"},
+                }
+            },
+        }
+
+        patch = self.module.build_plugin_patch(data)
+        agent = next(item for item in patch["agents"]["list"] if item["id"] == "ops_demo_team")
+
+        self.assertEqual(agent["model"]["primary"], "sub2api/gpt-5.4-codex")
+        self.assertEqual(agent["sandbox"]["sessionToolsVisibility"], "all")
+
+    def test_v51_runtime_override_rejects_unsupported_agent_level_keys(self):
+        data = self.minimal_v51_input()
+        data["teams"][0]["workers"][0]["runtime"] = {
+            "maxConcurrent": 4,
+        }
+
+        with self.assertRaisesRegex(ValueError, "runtime only supports per-agent keys: model, sandbox"):
+            self.module.build_plugin_patch(data)
+
     def test_builder_source_does_not_keep_legacy_route_validation_helpers(self):
         content = BUILD_SCRIPT.read_text(encoding="utf-8")
 
@@ -1302,6 +1343,52 @@ class DeployArtifactTests(unittest.TestCase):
                 Path(control_plane["adapter"]["sessionRoot"]).resolve(),
                 (openclaw_home / "agents").resolve(),
             )
+
+    def test_deploy_script_merges_patch_into_openclaw_json_when_openclaw_home_is_provided(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp_root = Path(tmpdir)
+            input_path = temp_root / "input.json"
+            out_dir = temp_root / "generated"
+            openclaw_home = temp_root / ".openclaw"
+            openclaw_home.mkdir(parents=True, exist_ok=True)
+            existing_config = {
+                "models": {"providers": {"sub2api": {"apiKey": "keep-me"}}},
+                "agents": {"defaults": {"workspace": "~/.openclaw/workspace"}},
+            }
+            (openclaw_home / "openclaw.json").write_text(
+                json.dumps(existing_config, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            data = self.unified_input()
+            data["teams"][0]["workers"][0]["runtime"] = {
+                "model": {"primary": "sub2api/gpt-5.3-codex"},
+                "sandbox": {"sessionToolsVisibility": "all"},
+            }
+            input_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    "python3",
+                    str(V51_DEPLOY_SCRIPT),
+                    "--input",
+                    str(input_path),
+                    "--out",
+                    str(out_dir),
+                    "--openclaw-home",
+                    str(openclaw_home),
+                ],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr or result.stdout)
+            merged = json.loads((openclaw_home / "openclaw.json").read_text(encoding="utf-8"))
+            self.assertEqual(merged["models"]["providers"]["sub2api"]["apiKey"], "keep-me")
+            worker = next(item for item in merged["agents"]["list"] if item["id"] == "ops_demo_team")
+            self.assertEqual(worker["model"]["primary"], "sub2api/gpt-5.3-codex")
+            self.assertEqual(worker["sandbox"]["sessionToolsVisibility"], "all")
 
     def test_deploy_script_materializes_role_specific_workspace_contracts(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -7112,6 +7199,23 @@ class V51DocumentationTests(unittest.TestCase):
         self.assertIn("完整 `finalVisibleText` 终案正文", checklist)
         self.assertIn("progressDraft / finalDraft", checklist)
 
+    def test_v51_unified_entry_templates_use_draft_only_worker_protocol(self):
+        v5_input = V51_INPUT_TEMPLATE.read_text(encoding="utf-8")
+        v5_fixed_role = V51_FIXED_ROLE_TEMPLATE.read_text(encoding="utf-8")
+        v5_real_case = (
+            REPO_ROOT
+            / "skills/openclaw-feishu-multi-agent-deploy/references/input-template-v51-seaworld-real-case.json"
+        ).read_text(encoding="utf-8")
+        v5_snapshot = V51_CONFIG_SNAPSHOT.read_text(encoding="utf-8")
+
+        for content in (v5_input, v5_fixed_role, v5_real_case, v5_snapshot):
+            self.assertIn("progressDraft", content)
+            self.assertIn("finalDraft", content)
+            self.assertIn("CALLBACK_OK", content)
+            self.assertNotIn("message(progress)", content)
+            self.assertNotIn("message(final)", content)
+            self.assertNotIn(" -> NO_REPLY", content)
+
     def test_v51_docs_document_role_catalog_as_canonical_schema(self):
         readme = README_FILE.read_text(encoding="utf-8")
         skill = SKILL_FILE.read_text(encoding="utf-8")
@@ -7143,6 +7247,21 @@ class V51DocumentationTests(unittest.TestCase):
         self.assertIn('"roleCatalog"', v5_snapshot)
         self.assertIn('"profileId"', v5_snapshot)
         self.assertIn('"visibleLabel"', v5_snapshot)
+
+    def test_v51_docs_document_runtime_override_as_unified_entry_capability(self):
+        readme = README_FILE.read_text(encoding="utf-8")
+        skill = SKILL_FILE.read_text(encoding="utf-8")
+        quickstart = V51_QUICKSTART_DOC.read_text(encoding="utf-8")
+        v5_input = V51_INPUT_TEMPLATE.read_text(encoding="utf-8")
+        v5_fixed_role = V51_FIXED_ROLE_TEMPLATE.read_text(encoding="utf-8")
+
+        for content in (readme, skill, quickstart):
+            self.assertIn("roleCatalog.*.runtime", content)
+            self.assertIn("overrides.runtime", content)
+
+        for content in (v5_input, v5_fixed_role):
+            self.assertIn('"runtime"', content)
+            self.assertIn('"model"', content)
 
     def test_v51_canonical_schema_examples_include_accounts(self):
         readme = README_FILE.read_text(encoding="utf-8")
