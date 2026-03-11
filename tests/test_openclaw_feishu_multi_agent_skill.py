@@ -55,6 +55,7 @@ V51_SYSTEMD_TIMER_TEMPLATE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-dep
 V51_LAUNCHD_TEMPLATE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/launchd/v51-team-watchdog.plist"
 VERIFICATION_CHECKLIST = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/verification-checklist.md"
 WSL_CONF_TEMPLATE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/windows/wsl.conf.example"
+V51_FIELD_GUIDE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/v51-unified-entry-field-guide.md"
 
 REMOVED_V4_ASSETS = [
     REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.3.1-single-group-production.md",
@@ -7262,6 +7263,24 @@ class V51DocumentationTests(unittest.TestCase):
         for content in (v5_input, v5_fixed_role):
             self.assertIn('"runtime"', content)
             self.assertIn('"model"', content)
+
+    def test_v51_field_guide_exists_and_is_linked_from_main_docs(self):
+        self.assertTrue(V51_FIELD_GUIDE.exists())
+        guide = V51_FIELD_GUIDE.read_text(encoding="utf-8")
+        readme = README_FILE.read_text(encoding="utf-8")
+        skill = SKILL_FILE.read_text(encoding="utf-8")
+        quickstart = V51_QUICKSTART_DOC.read_text(encoding="utf-8")
+
+        self.assertIn("roleCatalog.runtime", guide)
+        self.assertIn("overrides.runtime", guide)
+        self.assertIn("model", guide)
+        self.assertIn("sandbox", guide)
+        self.assertIn("maxConcurrent", guide)
+        self.assertIn("subagents", guide)
+
+        self.assertIn("v51-unified-entry-field-guide.md", readme)
+        self.assertIn("v51-unified-entry-field-guide.md", skill)
+        self.assertIn("v51-unified-entry-field-guide.md", quickstart)
 
     def test_v51_canonical_schema_examples_include_accounts(self):
         readme = README_FILE.read_text(encoding="utf-8")

@@ -27,10 +27,11 @@
 推荐阅读顺序：
 
 1. 产品手册：[codex-prompt-templates-v51-team-orchestrator.md](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v51-team-orchestrator.md)
-2. 收集清单：[客户首次使用信息清单.md](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用信息清单.md)
-3. 真实案例：[客户首次使用真实案例.md](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用真实案例.md)
-4. 操作型提示词：[客户首次使用-Codex提示词.md](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用-Codex提示词.md)
-5. 新机器上线：[V5.1-新机器快速启动-SOP.md](skills/openclaw-feishu-multi-agent-deploy/references/V5.1-新机器快速启动-SOP.md)
+2. 字段手册：[v51-unified-entry-field-guide.md](skills/openclaw-feishu-multi-agent-deploy/references/v51-unified-entry-field-guide.md)
+3. 收集清单：[客户首次使用信息清单.md](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用信息清单.md)
+4. 真实案例：[客户首次使用真实案例.md](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用真实案例.md)
+5. 操作型提示词：[客户首次使用-Codex提示词.md](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用-Codex提示词.md)
+6. 新机器上线：[V5.1-新机器快速启动-SOP.md](skills/openclaw-feishu-multi-agent-deploy/references/V5.1-新机器快速启动-SOP.md)
 
 ## 仓库结构
 
@@ -136,6 +137,7 @@ openclaw agents list --bindings
 1. 输入模板：
 - [V5.1 Hardening 输入模板](skills/openclaw-feishu-multi-agent-deploy/references/input-template-v51-team-orchestrator.json)
 - [V5.1 固定角色多群模板](skills/openclaw-feishu-multi-agent-deploy/references/input-template-v51-fixed-role-multi-group.json)
+- [统一入口字段手册](skills/openclaw-feishu-multi-agent-deploy/references/v51-unified-entry-field-guide.md)
 
 2. 交付文档：
 - [V5.1 Hardening 交付模板](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v51-team-orchestrator.md)
