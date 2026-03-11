@@ -56,6 +56,7 @@ V51_LAUNCHD_TEMPLATE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/te
 VERIFICATION_CHECKLIST = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/verification-checklist.md"
 WSL_CONF_TEMPLATE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/templates/windows/wsl.conf.example"
 V51_FIELD_GUIDE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/v51-unified-entry-field-guide.md"
+V51_BOUNDARY_SUMMARY = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/v51-supported-boundaries-summary.md"
 
 REMOVED_V4_ASSETS = [
     REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v4.3.1-single-group-production.md",
@@ -7281,6 +7282,24 @@ class V51DocumentationTests(unittest.TestCase):
         self.assertIn("v51-unified-entry-field-guide.md", readme)
         self.assertIn("v51-unified-entry-field-guide.md", skill)
         self.assertIn("v51-unified-entry-field-guide.md", quickstart)
+
+    def test_v51_boundary_summary_exists_and_is_linked_from_main_docs(self):
+        self.assertTrue(V51_BOUNDARY_SUMMARY.exists())
+        summary = V51_BOUNDARY_SUMMARY.read_text(encoding="utf-8")
+        readme = README_FILE.read_text(encoding="utf-8")
+        skill = SKILL_FILE.read_text(encoding="utf-8")
+        quickstart = V51_QUICKSTART_DOC.read_text(encoding="utf-8")
+
+        self.assertIn("当前正式主线", summary)
+        self.assertIn("progressDraft", summary)
+        self.assertIn("CALLBACK_OK", summary)
+        self.assertIn("model", summary)
+        self.assertIn("sandbox", summary)
+        self.assertIn("maxConcurrent", summary)
+
+        self.assertIn("v51-supported-boundaries-summary.md", readme)
+        self.assertIn("v51-supported-boundaries-summary.md", skill)
+        self.assertIn("v51-supported-boundaries-summary.md", quickstart)
 
     def test_v51_canonical_schema_examples_include_accounts(self):
         readme = README_FILE.read_text(encoding="utf-8")

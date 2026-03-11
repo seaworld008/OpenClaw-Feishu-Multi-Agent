@@ -28,10 +28,11 @@
 
 1. 产品手册：[codex-prompt-templates-v51-team-orchestrator.md](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v51-team-orchestrator.md)
 2. 字段手册：[v51-unified-entry-field-guide.md](skills/openclaw-feishu-multi-agent-deploy/references/v51-unified-entry-field-guide.md)
-3. 收集清单：[客户首次使用信息清单.md](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用信息清单.md)
-4. 真实案例：[客户首次使用真实案例.md](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用真实案例.md)
-5. 操作型提示词：[客户首次使用-Codex提示词.md](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用-Codex提示词.md)
-6. 新机器上线：[V5.1-新机器快速启动-SOP.md](skills/openclaw-feishu-multi-agent-deploy/references/V5.1-新机器快速启动-SOP.md)
+3. 支持边界摘要：[v51-supported-boundaries-summary.md](skills/openclaw-feishu-multi-agent-deploy/references/v51-supported-boundaries-summary.md)
+4. 收集清单：[客户首次使用信息清单.md](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用信息清单.md)
+5. 真实案例：[客户首次使用真实案例.md](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用真实案例.md)
+6. 操作型提示词：[客户首次使用-Codex提示词.md](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用-Codex提示词.md)
+7. 新机器上线：[V5.1-新机器快速启动-SOP.md](skills/openclaw-feishu-multi-agent-deploy/references/V5.1-新机器快速启动-SOP.md)
 
 ## 仓库结构
 
