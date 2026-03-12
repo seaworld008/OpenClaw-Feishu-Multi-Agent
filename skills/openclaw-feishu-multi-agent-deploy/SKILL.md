@@ -57,7 +57,7 @@ description: Use when delivering V5.1 Hardening OpenClaw Feishu team-orchestrato
 - `V5.1` 重点是模板化复制 team，而不是做任意 mesh 式 agent 工作流引擎
 - `V5.1 Hardening` 固定采用 `Deterministic Orchestrator`
 - 一句话原则：`LLM 负责内容，代码负责流程`
-- 控制面主路径固定为：`ingress -> controller -> outbox -> sender -> callback sink`
+- 控制面主路径固定为：`ingress -> controller -> outbox -> sender -> structured worker response`
 - worker 只提交 `progressDraft / finalDraft / summary / details / risks / actionItems`
 - 群里可见消息只允许由 `controller -> outbox -> sender` 发出
 - watchdog/reconcile 控制面固定脚本：
@@ -74,7 +74,7 @@ description: Use when delivering V5.1 Hardening OpenClaw Feishu team-orchestrato
 - launchd：`bot.molt.v51-team-<teamKey>`
 
 当前主线路径统一按下面 4 条理解：
-- 正常路径：ingress -> controller -> outbox -> sender -> callback sink
+- 正常路径：ingress -> controller -> outbox -> sender -> structured worker response
 - ingress transcript 扫描仅用于建单 repair；callback 不再走 hidden main / transcript recovery
 - `teamKey` 是唯一内部隔离主键；`group peerId` 只是入口地址
 - 插件与 OpenClaw 之间只依赖窄 adapter
@@ -166,7 +166,7 @@ python3 scripts/v51_team_orchestrator_deploy.py \
 ```
 - `references/generated/openclaw-feishu-plugin-v51-runtime-latest.json` 是最近一次生成的产物别名；现网 active manifest 统一写到 `~/.openclaw/v51-runtime-manifest.json`
 - 只要传了 `--openclaw-home`，deploy 还必须同步硬化 team workspace：写入 role-specific `AGENTS.md / SOUL.md / USER.md / IDENTITY.md / TOOLS.md / HEARTBEAT.md`，并清掉默认 `BOOTSTRAP.md`
-- 这些 workspace 文件属于运行时协议的一部分，不是可选装饰；若仍保留默认 bootstrap/通用人格文件，worker 和控制面可能偏离 `TASK_DISPATCH -> callbackCommand(ingest-callback) -> CALLBACK_OK` 协议
+- 这些 workspace 文件属于运行时协议的一部分，不是可选装饰；若仍保留默认 bootstrap/通用人格文件，worker 和控制面可能偏离 `TASK_DISPATCH -> 单个结构化 JSON 响应 -> 控制面入库` 协议
 - 当前 `TASK_DISPATCH` 不只下发 `progressTitle/finalTitle`，还会下发 `scopeLabel / forbiddenRoleLabels / forbiddenSectionKeywords / finalScopeRule`；worker 的 `finalVisibleText` 必须严格停留在自己的角色边界内
 - 若是 `parallel` stage，worker 仍然只负责分析和 callback；群里 `【角色进度】/【角色结论】` 只能由 controller -> outbox 按 `publishOrder` 顺序发出
 - 当前控制面在成功消费 worker callback 后，还会自动轮转 supervisor hidden main 和已完成 worker 的 main session；运行机上看到这两个 session 被清掉是预期行为，不要误判成异常
@@ -241,7 +241,7 @@ python3 scripts/v51_team_orchestrator_hygiene.py \
 - `V5.1` 若出现跨群串线：先核对 `teamKey`、hidden main 是否按 team 隔离，以及 runtime manifest 中的 session key / db / watchdog 是否落在当前 team 命名空间
 - `V5.1` 若新增第 2/10 个群时行为不一致：优先比对 `teams[]` 模板输入与 runtime manifest，而不是直接手改 `openclaw.json`
 - `V5.1` 若主管群 session 首轮出现裸 NO_REPLY，或没有进入控制面而是先发生 `read/exec/sessions_spawn` 等自由漂移：不要要求用户连续重发。先执行 `scripts/v51_team_orchestrator_reconcile.py --team-key <teamKey> resume-job`；当前主线实现会从 supervisor group transcript 抢占最近未消费的真实用户消息补建单，并清理这条消息之后 supervisor 漂移出来的 subagent session。若仍未恢复，再做 hygiene。
-- `V5.1` 若群里顺序乱、hidden main 开始点评 worker、或 worker 没有严格执行 `callbackCommand(ingest-callback ...)`：先核对该 team workspace 是否已经由 `v51_team_orchestrator_deploy.py --openclaw-home ...` 重新硬化；若仍是默认 `BOOTSTRAP.md / 通用 AGENTS.md` 风格文件，应先 clean redeploy，再做 hygiene 和复测。
+- `V5.1` 若群里顺序乱、hidden main 开始点评 worker、或 worker 没有输出单个结构化 JSON：先核对该 team workspace 是否已经由 `v51_team_orchestrator_deploy.py --openclaw-home ...` 重新硬化；若仍是默认 `BOOTSTRAP.md / 通用 AGENTS.md` 风格文件，应先 clean redeploy，再做 hygiene 和复测。
 - `V5.1` 若你在运行机上看到 `agent:supervisor_<teamKey>:main` 或已完成 worker 的 `agent:<worker>:main` 被自动删除：这是控制面在消费成功 callback 后主动做的 session 轮转，用来防止 hidden main 累积点评上下文，不需要手工恢复这些 session。
 - `V5.1` 若主管接单/最终收口仍写成普通 assistant 文本：优先检查当前 team 是否真的走了 `controller -> outbox -> sender` 主路径，而不是继续依赖 supervisor 自由发挥可见文案。
 - `V5.1` worker 若从 main session 被控制面直派：`TASK_DISPATCH` 必须携带显式 `channel/accountId/target`，但 worker 只产出 `progressDraft / finalDraft`，不要再自己直接 `message send`。
@@ -250,15 +250,15 @@ python3 scripts/v51_team_orchestrator_hygiene.py \
 - `V5.1` supervisor 最终收口若只有两条摘要拼接：优先检查 worker 回调是否已携带 `summary/details/risks/actionItems`，并确认 `build-rollup-visible-message` 输出的是结构化完整方案，而不是 `agentId: summary` 列表。
 - `V5.1` 同一 `jobRef` 若出现两次 `【主管最终统一收口】`：视为控制面幂等缺陷；`rollupVisibleSent=true` 后只允许补 `close-job done`，不允许再次 `message send`。
 - `V5.1` reconcile/control-plane 直派 worker 前会自动重置当前 `agent:<worker>:main`，避免旧 transcript 把 `TASK_DISPATCH` 拉回过时协议；手工 hygiene 时 `--include-workers` 也必须覆盖 worker `main + group`。
-- `V5.1` 若 worker 群消息已经发出，但 DB 没推进：优先检查 `stage_callbacks` 是否已有入库记录，并确认 worker 是否真的执行了 `callbackCommand(ingest-callback ...)`。
-- `V5.1` 若 callback sink 拒绝回调：优先修正真实 `messageId / summary / details / risks / actionItems` 和角色边界，再重派当前 worker；不要退回 hidden main / plaintext / transcript 文本恢复。
-- `V5.1` 当前开发主线不再从 hidden main / plaintext / transcript 文本恢复 callback；worker 完成回调只有结构化 callback sink 这一条正式路径。
+- `V5.1` 若 worker 群消息已经发出，但 DB 没推进：优先检查 `stage_callbacks` 是否已有入库记录，并确认 worker 最后一条 assistant 是否真的输出了单个结构化 JSON。
+- `V5.1` 若结构化响应被控制面拒绝：优先修正真实 `messageId / summary / details / risks / actionItems` 和角色边界，再重派当前 worker；不要退回 hidden main / plaintext / transcript 文本恢复。
+- `V5.1` 当前开发主线不再从 hidden main / plaintext / transcript 文本恢复 callback；worker 完成回调只有单个结构化 JSON 响应这一条正式路径。
 - `V5.1` 若 hidden main transcript 里仍出现 `COMPLETE_PACKET` 或自由文本回调：视为遗留协议漂移，不作为正式恢复路径；应 clean redeploy + hygiene 后再复测。
 - `V5.1` 若 timer 自动恢复与人工 SSH 恢复可能重叠：不要同时跑两份 `resume-job`。当前主线实现已对 `resume-job / reconcile-dispatch / reconcile-rollup` 加 team 级独占锁；若命中锁，会直接返回 `reconcile_already_running`，这是预期行为，不是故障。
 - `V5.1` 主管最终统一收口必须优先使用各 worker 的完整 `finalVisibleText` 正文来整理终案方案，而不是只复述 `summary/details` 摘要；用户在群里看到的最终主管消息必须足够详细，能直接当执行底稿。
 - `V5.1` 若当前 stage 长时间停在 `wait_worker`：优先检查 worker 是否真的提交了 `progressDraft / finalDraft` 结构化 callback，再决定是否走 repair；不要再把 worker 的 `NO_REPLY` 当作正常完成信号。
 - `V5.1` stage callback 一旦入库且 stage 已推进，重复 callback 必须被忽略；控制面只认当前 stage 的结构化 callback。
-- `V5.1` worker 调 `callbackCommand(ingest-callback ...)` 时，主协议直接提交 `progressDraft / finalDraft / summary / details / risks / actionItems`；若附带 messageId，只能是真实 messageId，禁止使用 `pending`、`sent`、`<pending_from_tool_1>`、`msg_*_placeholder` 等占位值。
+- `V5.1` worker 的最后一条 assistant 响应必须是单个 JSON 对象，主协议直接提交 `progressDraft / finalDraft / finalVisibleText / summary / details / risks / actionItems`；若附带 messageId，只能是真实 messageId，禁止使用 `pending`、`sent`、`<pending_from_tool_1>`、`msg_*_placeholder` 等占位值。
 - `V5.1` gateway 重启后若出现历史 `delivery-recovery` 噪音：优先清理 `~/.openclaw/delivery-queue/` 中旧坏消息，再重启 gateway。
 - macOS 客户不要套用 `systemctl --user`；应使用 `launchctl bootstrap/print` 与 `templates/launchd/v51-team-watchdog.plist`
 - Windows 客户不要默认承诺原生 service 版；应优先交付 `WSL2`，并保留 `templates/windows/wsl.conf.example`

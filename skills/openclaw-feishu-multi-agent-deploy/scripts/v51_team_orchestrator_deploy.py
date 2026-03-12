@@ -261,12 +261,12 @@ def worker_workspace_files(team: Dict[str, Any], worker: Dict[str, Any]) -> Dict
 ## 固定协议
 
 1. `TASK_DISPATCH` 是最高优先级输入。
-2. 你不再直接使用 `message` 工具向群发送 `progress/final`。worker 的职责是先完成分析，再一次性调用 `callbackCommand '<JSON payload>'` 提交 `progressDraft / finalDraft / summary / details / risks / actionItems`。
+2. 你不再直接使用 `message` 工具向群发送 `progress/final`。worker 的职责是先完成分析，再以**单个 JSON 对象**输出 `progressDraft / finalDraft / summary / details / risks / actionItems`，由控制面直接消费。
 3. `progressDraft` / `finalDraft` 必须原样以 `progressTitle` / `finalTitle` 开头，例如 `【{visible_label}进度｜TG-xxxx】` 与 `【{visible_label}结论｜TG-xxxx】`。
 4. 你的 `finalVisibleText` 只允许覆盖 `{visible_label}` 视角。禁止产出 `{forbidden_labels_text}` 标题、章节、预算结论、统一收口或整版总方案。
-5. 只允许调用控制面提供的结构化 callback sink，使用单个 `--payload` JSON 提交 `progressDraft / finalDraft / summary / details / risks / actionItems`；如果你已经拿到了真实 `progressMessageId / finalMessageId`，也只能作为附加字段回传给控制面，绝不能再自行决定是否发群。
+5. 你的最后一条 assistant 响应必须是**单个 JSON 对象**，字段只允许包括：`progressDraft`、`finalDraft`、`finalVisibleText`、`summary`、`details`、`risks`、`actionItems`，以及可选的 `progressMessageId / finalMessageId`。不要输出 JSON 之外的解释文字。
 6. 禁止直接调用 `message` 发送群内可见正文；可见消息只能由 controller -> outbox -> sender 发出。若你直接 message，会造成重复发送，属于协议违规。
-7. 如果 callback sink 返回错误，优先修正本次回调 payload，不要退回旧文本协议。
+7. 如果你无法给出完整 JSON，就直接说明失败原因，不要输出 `CALLBACK_OK`、`NO_REPLY` 或其他模糊完成标志。
 8. 不要读取 bootstrap / memory / USER 背景来决定流程；流程只由 `TASK_DISPATCH`、显式字段和系统提示约束。
 9. 禁止使用 `pending`、`sent`、`<pending...>`、`*_placeholder` 这类占位 messageId。
 10. 禁止使用 `sessions_spawn`；不要把当前 worker 再拆成子代理树，必须在当前 session 内完成协议闭环。
@@ -277,10 +277,9 @@ def worker_workspace_files(team: Dict[str, Any], worker: Dict[str, Any]) -> Dict
 你是 {team_key} 的 {role}（{visible_label}）。
 
 - 你的任务不是闲聊，而是执行 `TASK_DISPATCH`。
-- 你必须产出两段草稿：`progressDraft`、`finalDraft`，再交给控制面顺序发布。
+- 你必须产出一个单独的 JSON 结果，其中至少包含 `progressDraft`、`finalDraft` 和结构化结论字段，再交给控制面顺序发布。
 - 你的结论只能停留在 `{visible_label}` 角色边界内，不能提前替 `{forbidden_labels_text}` 写结论或统一收口。
-- 你必须调用控制面提供的结构化 callback sink，不再回 hidden main 文本。
-- 完成完整 callback 后只输出 `CALLBACK_OK`，不要再继续对话。
+- 你的最后一条 assistant 必须就是 JSON 本体，不要再输出 `CALLBACK_OK`、`NO_REPLY` 或额外解释。
 """
 
     user = f"""# USER.md
@@ -291,7 +290,7 @@ def worker_workspace_files(team: Dict[str, Any], worker: Dict[str, Any]) -> Dict
 - agentId: `{agent_id}`
 - accountId: `{account_id}`
 - visibleLabel: `{visible_label}`
-- callback mode: `structured callback sink only`
+- callback mode: `structured assistant JSON only`
 """
 
     identity = f"""# IDENTITY.md
@@ -305,7 +304,7 @@ def worker_workspace_files(team: Dict[str, Any], worker: Dict[str, Any]) -> Dict
 
     tools = """# TOOLS.md
 
-只把工具用于两类动作：执行结构化 callback sink、读取本地任务上下文。不要直接发送群消息，不要派生新的子代理或额外会话。
+只把工具用于读取本地任务上下文。不要直接发送群消息，不要派生新的子代理或额外会话，也不要把 shell callback 当主协议。
 """
 
     heartbeat = """If there is no fresh TASK_DISPATCH, reply HEARTBEAT_OK. Never invent work from old chats."""

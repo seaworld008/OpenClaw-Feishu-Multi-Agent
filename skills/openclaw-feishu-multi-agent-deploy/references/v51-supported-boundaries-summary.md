@@ -34,16 +34,12 @@ worker 只提交：
 - `risks`
 - `actionItems`
 
-完整 callback 成功后，只输出：
-
-```text
-CALLBACK_OK
-```
+最后一条 assistant 响应必须直接输出单个 JSON 对象（结构化 JSON）。
 
 不要再使用旧协议：
 - `message(progress)`
 - `message(final)`
-- `NO_REPLY` 作为正常完成标志
+- `NO_REPLY` 或 `CALLBACK_OK` 作为正常完成标志
 
 ## 3. 统一入口正式结构
 

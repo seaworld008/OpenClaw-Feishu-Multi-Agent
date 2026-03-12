@@ -25,9 +25,16 @@ class CapturedInboundEvent:
 
 
 class OpenClawAdapter:
-    def __init__(self, *, openclaw_home: Path, openclaw_bin: str | Path = "openclaw") -> None:
+    def __init__(
+        self,
+        *,
+        openclaw_home: Path,
+        openclaw_bin: str | Path = "openclaw",
+        timeout_seconds: int = 90,
+    ) -> None:
         self.openclaw_home = Path(openclaw_home).expanduser()
         self.openclaw_bin = str(openclaw_bin)
+        self.timeout_seconds = int(timeout_seconds)
 
     def send_message(self, *, channel: str, account_id: str, target: str, message: str) -> dict[str, Any]:
         return self._run_json_command(
@@ -211,12 +218,18 @@ class OpenClawAdapter:
                 continue
 
     def _run_json_command(self, command: list[str]) -> dict[str, Any]:
-        completed = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        try:
+            completed = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=self.timeout_seconds,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(
+                f"OpenClaw command timed out after {self.timeout_seconds}s: {' '.join(command)}"
+            ) from exc
         if completed.returncode != 0:
             raise RuntimeError(
                 f"OpenClaw command failed ({completed.returncode}): {' '.join(command)}\n"

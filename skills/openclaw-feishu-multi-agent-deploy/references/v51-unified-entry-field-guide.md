@@ -254,7 +254,7 @@ worker `systemPrompt` 必须符合当前正式主线：
   - `details`
   - `risks`
   - `actionItems`
-- 完整 callback 成功后输出 `CALLBACK_OK`
+- 最后一条 assistant 响应直接输出单个结构化 JSON
 
 不要再写旧协议：
 - `message(progress) -> message(final) -> callback -> NO_REPLY`

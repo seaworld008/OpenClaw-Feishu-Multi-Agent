@@ -1451,14 +1451,14 @@ class DeployArtifactTests(unittest.TestCase):
             self.assertIn("不得直接运行 `start-job-with-workflow`", supervisor_agents)
             self.assertNotIn("真正的流程只能按控制面命令推进", supervisor_agents)
             self.assertIn("TASK_DISPATCH", worker_agents)
-            self.assertIn("callbackCommand '<JSON payload>'", worker_agents)
+            self.assertIn("单个 JSON 对象", worker_agents)
             self.assertIn("你不再直接使用 `message` 工具向群发送 `progress/final`", worker_agents)
             self.assertIn("`progressDraft` / `finalDraft`", worker_agents)
             self.assertIn("不要读取", worker_agents)
             self.assertIn("禁止使用 `sessions_spawn`", worker_agents)
             self.assertIn("只允许覆盖 `运营` 视角", worker_agents)
             self.assertIn("你的结论只能停留在 `运营` 角色边界内", worker_soul)
-            self.assertIn("完成完整 callback 后只输出 `CALLBACK_OK`", worker_soul)
+            self.assertIn("最后一条 assistant 必须就是 JSON 本体", worker_soul)
             self.assertIn("写结论或统一收口", worker_soul)
             self.assertIn("运营专家", worker_soul)
             self.assertIn("supervisor_demo_team", supervisor_identity)
@@ -1723,15 +1723,15 @@ class DocumentationConsistencyTests(unittest.TestCase):
         v5_doc = V51_DOC.read_text(encoding="utf-8")
         v5_snapshot = V51_CONFIG_SNAPSHOT.read_text(encoding="utf-8")
 
-        self.assertIn("结构化 callback sink", readme)
+        self.assertIn("structured worker response", readme)
         self.assertIn("resume-job` 只消费 `inbound_events / stage_callbacks / outbound_messages`", readme)
-        self.assertIn("callbackCommand(ingest-callback ...)", skill)
+        self.assertIn("单个 JSON 对象", skill)
         self.assertIn("不再从 hidden main / plaintext / transcript 文本恢复", skill)
         self.assertIn("不再从 hidden main / worker transcript 文本恢复 callback", checklist)
         self.assertIn("真实 messageId", checklist)
-        self.assertIn("结构化 callback sink", v5_doc)
-        self.assertIn("不再消费 hidden main / plaintext / transcript 文本回调", v5_doc)
-        self.assertIn("callbackCommand(ingest-callback", v5_snapshot)
+        self.assertIn("JSON 对象", v5_doc)
+        self.assertIn("正式回调入口只有单个结构化 JSON 响应", v5_doc)
+        self.assertIn("单个 JSON 对象", v5_snapshot)
         self.assertIn("禁止使用 pending/sent/<pending...>/*_placeholder", v5_snapshot)
         self.assertNotIn("最近的有效 `COMPLETE_PACKET`", readme)
 
@@ -4234,6 +4234,109 @@ class RuntimeRegistryTests(unittest.TestCase):
             )
             self.assertIn('"status": "active_ok"', watchdog_after.stdout)
 
+    def test_watchdog_parallel_wait_worker_stays_active_ok_after_all_parallel_dispatches_exist(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "team_jobs.db"
+
+            self.run_registry(db_path, "init-db")
+            parallel_workflow = json.dumps(
+                {
+                    "mode": "parallel",
+                    "stages": [
+                        {
+                            "stageKey": "analysis",
+                            "mode": "parallel",
+                            "agents": [
+                                {
+                                    "agentId": "ops_external_main",
+                                    "accountId": "xiaolongxia",
+                                    "role": "运营专家",
+                                    "visibleLabel": "运营",
+                                },
+                                {
+                                    "agentId": "finance_external_main",
+                                    "accountId": "yiran_yibao",
+                                    "role": "财务专家",
+                                    "visibleLabel": "财务",
+                                },
+                            ],
+                            "publishOrder": [
+                                "ops_external_main",
+                                "finance_external_main",
+                            ],
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            )
+            started = self.run_registry(
+                db_path,
+                "start-job-with-workflow",
+                "--group-peer-id",
+                "oc_demo",
+                "--requested-by",
+                "SeaWorld",
+                "--title",
+                "V5.1 parallel wait worker",
+                "--supervisor-visible-label",
+                "主管",
+                "--workflow-json",
+                parallel_workflow,
+                "--participants-json",
+                json.dumps(
+                    [
+                        {
+                            "agentId": "ops_external_main",
+                            "accountId": "xiaolongxia",
+                            "role": "运营专家",
+                            "visibleLabel": "运营",
+                        },
+                        {
+                            "agentId": "finance_external_main",
+                            "accountId": "yiran_yibao",
+                            "role": "财务专家",
+                            "visibleLabel": "财务",
+                        },
+                    ],
+                    ensure_ascii=False,
+                ),
+            )
+            self.assertEqual(started.returncode, 0, started.stderr)
+            job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
+
+            for agent_id, account_id, role in (
+                ("ops_external_main", "xiaolongxia", "运营专家"),
+                ("finance_external_main", "yiran_yibao", "财务专家"),
+            ):
+                dispatch = self.run_registry(
+                    db_path,
+                    "mark-dispatch",
+                    "--job-ref",
+                    job_ref,
+                    "--agent-id",
+                    agent_id,
+                    "--account-id",
+                    account_id,
+                    "--role",
+                    role,
+                    "--dispatch-run-id",
+                    f"run-{agent_id}",
+                    "--dispatch-status",
+                    "accepted",
+                )
+                self.assertEqual(dispatch.returncode, 0, dispatch.stderr)
+
+            watchdog = self.run_registry(
+                db_path,
+                "watchdog-tick",
+                "--group-peer-id",
+                "oc_demo",
+                "--stale-seconds",
+                "999999",
+            )
+            self.assertIn('"status": "active_ok"', watchdog.stdout)
+            self.assertNotIn('"status": "needs_dispatch_reconcile"', watchdog.stdout)
+
 
 class V51ReconcileTests(unittest.TestCase):
     def run_registry(self, db_path, *args):
@@ -4977,6 +5080,63 @@ with lock_path.open("w", encoding="utf-8") as handle:
                 ensure_ascii=False,
                 indent=2,
             ),
+            encoding="utf-8",
+        )
+
+    def write_worker_main_terminal_transcript(self, openclaw_home, agent_id, job_ref, terminal_text, group_peer_id="oc_demo"):
+        sessions_dir = openclaw_home / "agents" / agent_id / "sessions"
+        sessions_dir.mkdir(parents=True, exist_ok=True)
+        session_id = f"{agent_id}-main-1"
+        transcript_path = sessions_dir / f"{session_id}.jsonl"
+        dispatch_text = (
+            f"[Sun 2026-03-08 23:58 GMT+8] TASK_DISPATCH|jobRef={job_ref}|from=supervisor_internal_main|"
+            f"to={agent_id}|title=测试任务|request=请输出完整方案|"
+            f"channel=feishu|accountId=xiaolongxia|target=chat:{group_peer_id}|groupPeerId={group_peer_id}"
+        )
+        transcript_path.write_text(
+            "\n".join(
+                [
+                    json.dumps(
+                        {
+                            "type": "message",
+                            "id": "worker-user",
+                            "timestamp": "2026-03-08T15:58:10.127Z",
+                            "message": {
+                                "role": "user",
+                                "content": [{"type": "text", "text": dispatch_text}],
+                            },
+                        },
+                        ensure_ascii=False,
+                    ),
+                    json.dumps(
+                        {
+                            "type": "message",
+                            "id": "worker-assistant",
+                            "timestamp": "2026-03-08T15:58:15.271Z",
+                            "message": {
+                                "role": "assistant",
+                                "content": [{"type": "text", "text": terminal_text}],
+                            },
+                        },
+                        ensure_ascii=False,
+                    ),
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (sessions_dir / "sessions.json").write_text(
+            json.dumps(
+                {
+                    f"agent:{agent_id}:main": {
+                        "sessionId": session_id,
+                        "sessionFile": str(transcript_path),
+                    }
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
             encoding="utf-8",
         )
 
@@ -6008,6 +6168,263 @@ else:
             finally:
                 conn.close()
             self.assertEqual(count, 2)
+
+    def test_resume_job_parallel_callback_ok_without_structured_callback_retries_missing_agents(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            db_path = tmp_path / "team_jobs.db"
+            manifest_path = tmp_path / "manifest.json"
+            openclaw_home = tmp_path / "openclaw-home"
+            fake_openclaw = tmp_path / "openclaw"
+            fake_log = tmp_path / "openclaw.log"
+
+            self.run_registry(db_path, "init-db")
+            self.write_manifest(
+                manifest_path,
+                db_path,
+                workflow_override={
+                    "mode": "parallel",
+                    "stages": [
+                        {
+                            "stageKey": "analysis",
+                            "mode": "parallel",
+                            "agents": [
+                                {"agentId": "ops_internal_main"},
+                                {"agentId": "finance_internal_main"},
+                            ],
+                            "publishOrder": [
+                                "ops_internal_main",
+                                "finance_internal_main",
+                            ],
+                        }
+                    ],
+                },
+            )
+            self.make_fake_openclaw(fake_openclaw, fake_log)
+
+            started = self.run_registry(
+                db_path,
+                "start-job-with-workflow",
+                "--group-peer-id",
+                "oc_demo",
+                "--requested-by",
+                "ou_user",
+                "--title",
+                "parallel callback retry",
+                "--supervisor-visible-label",
+                "主管",
+                "--workflow-json",
+                json.dumps(
+                    {
+                        "mode": "parallel",
+                        "stages": [
+                            {
+                                "stageKey": "analysis",
+                                "mode": "parallel",
+                                "agents": [
+                                    {"agentId": "ops_internal_main", "accountId": "xiaolongxia", "role": "运营执行", "visibleLabel": "运营"},
+                                    {"agentId": "finance_internal_main", "accountId": "yiran_yibao", "role": "财务执行", "visibleLabel": "财务"},
+                                ],
+                                "publishOrder": ["ops_internal_main", "finance_internal_main"],
+                            }
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                "--participants-json",
+                workflow_participants_json("ops_internal_main", "finance_internal_main"),
+                "--hidden-main-session-key",
+                "agent:supervisor_internal_main:main",
+                "--entry-account-id",
+                "aoteman",
+                "--entry-channel",
+                "feishu",
+                "--entry-target",
+                "chat:oc_demo",
+            )
+            self.assertEqual(started.returncode, 0, started.stderr)
+            job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
+            self.run_registry(
+                db_path,
+                "record-visible-message",
+                "--job-ref",
+                job_ref,
+                "--kind",
+                "ack",
+                "--message-id",
+                "om_ack_existing",
+            )
+            for agent_id, account_id, role in (
+                ("ops_internal_main", "xiaolongxia", "运营执行"),
+                ("finance_internal_main", "yiran_yibao", "财务执行"),
+            ):
+                dispatch = self.run_registry(
+                    db_path,
+                    "mark-dispatch",
+                    "--job-ref",
+                    job_ref,
+                    "--agent-id",
+                    agent_id,
+                    "--account-id",
+                    account_id,
+                    "--role",
+                    role,
+                    "--dispatch-run-id",
+                    f"run-{agent_id}",
+                    "--dispatch-status",
+                    "accepted",
+                )
+                self.assertEqual(dispatch.returncode, 0, dispatch.stderr)
+                self.write_worker_main_terminal_transcript(openclaw_home, agent_id, job_ref, "CALLBACK_OK")
+
+            result = self.run_reconcile(
+                manifest_path,
+                "internal_main",
+                openclaw_home,
+                fake_openclaw,
+                "resume-job",
+                "--stale-seconds",
+                "180",
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('"status": "worker_callback_retry_scheduled"', result.stdout)
+            self.assertIn('"ops_internal_main"', result.stdout)
+            self.assertIn('"finance_internal_main"', result.stdout)
+            calls = fake_log.read_text(encoding="utf-8")
+            self.assertGreaterEqual(calls.count("TASK_DISPATCH|"), 2)
+
+    def test_reconcile_dispatch_ingests_structured_worker_json_response_for_parallel_stage(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            db_path = tmp_path / "team_jobs.db"
+            manifest_path = tmp_path / "manifest.json"
+            store_module = load_runtime_store_module()
+            controller_module = load_team_controller_module()
+            ingress_module = load_ingress_module()
+            store = store_module.RuntimeStore(db_path)
+            store.initialize()
+            controller = controller_module.TeamController(store=store)
+            self.write_manifest(
+                manifest_path,
+                db_path,
+                workflow_override={
+                    "mode": "parallel",
+                    "stages": [
+                        {
+                            "stageKey": "analysis",
+                            "mode": "parallel",
+                            "agents": [
+                                {"agentId": "ops_internal_main"},
+                                {"agentId": "finance_internal_main"},
+                            ],
+                            "publishOrder": [
+                                "ops_internal_main",
+                                "finance_internal_main",
+                            ],
+                        }
+                    ],
+                },
+            )
+            event = ingress_module.extract_inbound_event(
+                team_key="internal_main",
+                source_message_id="om_parallel_structured_json",
+                canonical_target_id="oc_demo",
+                request_text="@奥特曼 请输出完整方案",
+                requested_by="ou_user",
+                account_id="aoteman",
+                mentioned_agent_id="supervisor_internal_main",
+                channel="feishu",
+            )
+            started = controller.start_job(
+                event=event,
+                title="parallel structured json callback",
+                workflow={
+                    "mode": "parallel",
+                    "stages": [
+                        {
+                            "stageKey": "analysis",
+                            "mode": "parallel",
+                            "agents": [
+                                {"agentId": "ops_internal_main", "accountId": "xiaolongxia", "role": "运营执行", "visibleLabel": "运营"},
+                                {"agentId": "finance_internal_main", "accountId": "yiran_yibao", "role": "财务执行", "visibleLabel": "财务"},
+                            ],
+                            "publishOrder": ["ops_internal_main", "finance_internal_main"],
+                        }
+                    ],
+                },
+                hidden_main_session_key="agent:supervisor_internal_main:main",
+                supervisor_visible_label="主管",
+                entry_delivery={
+                    "channel": "feishu",
+                    "accountId": "aoteman",
+                    "target": "chat:oc_demo",
+                },
+            )
+            job_ref = started["jobRef"]
+            controller.enqueue_ack(job_ref=job_ref)
+
+            reconcile = self.load_reconcile_module()
+
+            class FakeAdapter:
+                def send_message(self, **_kwargs):
+                    return {"result": {"messageId": "om_ack_test"}}
+
+                def invoke_agent(self, *, agent_id, message):
+                    return {"status": "ok", "runId": f"run-{agent_id}"}
+
+                def inspect_or_reset_session(self, *, targets, action, delete_transcripts):
+                    return []
+
+                def load_session_entries(self, *, agent_id, session_key):
+                    payload = {
+                        "progressDraft": f"【{'运营' if 'ops' in agent_id else '财务'}进度｜{job_ref}】已开始分析。",
+                        "finalDraft": f"【{'运营' if 'ops' in agent_id else '财务'}结论｜{job_ref}】已完成结构化方案。",
+                        "finalVisibleText": f"【{'运营' if 'ops' in agent_id else '财务'}结论｜{job_ref}】已完成结构化方案。",
+                        "summary": "已完成阶段结论。",
+                        "details": "细节完整。",
+                        "risks": "风险可控。",
+                        "actionItems": "进入下一阶段。",
+                    }
+                    return [
+                        {
+                            "type": "message",
+                            "message": {
+                                "role": "user",
+                                "content": [{"type": "text", "text": f"TASK_DISPATCH|jobRef={job_ref}|from=controller|to={agent_id}"}],
+                            },
+                        },
+                        {
+                            "type": "message",
+                            "message": {
+                                "role": "assistant",
+                                "content": [{"type": "text", "text": json.dumps(payload, ensure_ascii=False)}],
+                            },
+                        },
+                    ]
+
+                def capture_inbound_events(self, *, agent_id, session_key):
+                    return []
+
+            team = reconcile.load_manifest_team(manifest_path, "internal_main")
+            exit_code = reconcile.reconcile_dispatch(team, manifest_path, FakeAdapter(), job_ref)
+            self.assertEqual(exit_code, 0)
+
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            try:
+                callbacks = conn.execute(
+                    "select count(*) from stage_callbacks where job_ref = ?",
+                    (job_ref,),
+                ).fetchone()[0]
+                row = conn.execute(
+                    "select next_action from jobs where job_ref = ?",
+                    (job_ref,),
+                ).fetchone()
+            finally:
+                conn.close()
+            self.assertEqual(callbacks, 2)
+            self.assertEqual(row["next_action"], "publish")
 
     def test_resume_job_dispatches_next_stage_after_structured_callback_sink_accepts_callback(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -7213,7 +7630,7 @@ class V51DocumentationTests(unittest.TestCase):
         for content in (v5_input, v5_fixed_role, v5_real_case, v5_snapshot):
             self.assertIn("progressDraft", content)
             self.assertIn("finalDraft", content)
-            self.assertIn("CALLBACK_OK", content)
+            self.assertIn("JSON 对象", content)
             self.assertNotIn("message(progress)", content)
             self.assertNotIn("message(final)", content)
             self.assertNotIn(" -> NO_REPLY", content)
@@ -7292,7 +7709,7 @@ class V51DocumentationTests(unittest.TestCase):
 
         self.assertIn("当前正式主线", summary)
         self.assertIn("progressDraft", summary)
-        self.assertIn("CALLBACK_OK", summary)
+        self.assertIn("JSON 对象", summary)
         self.assertIn("model", summary)
         self.assertIn("sandbox", summary)
         self.assertIn("maxConcurrent", summary)
@@ -7344,7 +7761,7 @@ class V51DocumentationTests(unittest.TestCase):
         quickstart = V51_QUICKSTART_DOC.read_text(encoding="utf-8")
 
         for content in (readme, skill, v5_doc, quickstart):
-            self.assertIn("正常路径：ingress -> controller -> outbox -> sender -> callback sink", content)
+            self.assertIn("正常路径：ingress -> controller -> outbox -> sender -> structured worker response", content)
             self.assertIn("ingress transcript 扫描仅用于建单 repair", content)
 
     def test_task9_main_docs_define_team_key_and_adapter_boundary(self):

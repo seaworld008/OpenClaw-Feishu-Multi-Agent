@@ -33,6 +33,7 @@
 5. 真实案例：[客户首次使用真实案例.md](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用真实案例.md)
 6. 操作型提示词：[客户首次使用-Codex提示词.md](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用-Codex提示词.md)
 7. 新机器上线：[V5.1-新机器快速启动-SOP.md](skills/openclaw-feishu-multi-agent-deploy/references/V5.1-新机器快速启动-SOP.md)
+8. 外部群并行恢复复盘：[2026-03-12-external-parallel-recovery-validation.md](docs/plans/2026-03-12-external-parallel-recovery-validation.md)
 
 ## 仓库结构
 
@@ -63,7 +64,7 @@ README.md
 
 当前主线路径统一按下面 4 条理解：
 
-- 正常路径：ingress -> controller -> outbox -> sender -> callback sink
+- 正常路径：ingress -> controller -> outbox -> sender -> structured worker response
 - ingress transcript 扫描仅用于建单 repair；callback 不再走 hidden main / transcript recovery
 - `teamKey` 是唯一内部隔离主键；`group peerId` 只是入口地址
 - 插件与 OpenClaw 之间只依赖窄 adapter
@@ -125,7 +126,7 @@ openclaw agents list --bindings
 
 当前生产推荐直接采用 `V5.1 Hardening`：
 - 不再让 supervisor prompt 自己判断下一步
-- 正式主路径固定为 `ingress -> controller -> outbox -> sender -> callback sink`
+- 正式主路径固定为 `ingress -> controller -> outbox -> sender -> structured worker response`
 - worker 只提交结构化 callback，不再直接决定群里可见消息的发布时间
 - worker 现在提交的是 `progressDraft / finalDraft / summary / details / risks / actionItems`，可见消息只允许由 `controller -> outbox -> sender` 发出
 - `workflow.stages` 支持 `serial` 和 `parallel` stage group
@@ -185,7 +186,7 @@ openclaw agents list --bindings
 - `publishOrder` 必须完整覆盖该 stage 的全部 worker，且顺序唯一
 - 每个 agent 都允许单独定制 `name / description / identity / role / responsibility / systemPrompt`
 - 不再推荐多个群共享同一套全局 `supervisor_agent / ops_agent / finance_agent`
-- `V5.1 Hardening` 采用 `Deterministic Orchestrator`：`watchdog-tick -> v51_team_orchestrator_reconcile.py resume-job -> ingress claim -> TeamController.start_job -> outbox ack -> dispatch_stage -> callback sink -> ordered publish -> rollup -> close-job`
+- `V5.1 Hardening` 采用 `Deterministic Orchestrator`：`watchdog-tick -> v51_team_orchestrator_reconcile.py resume-job -> ingress claim -> TeamController.start_job -> outbox ack -> dispatch_stage -> structured worker response -> ordered publish -> rollup -> close-job`
 - worker 的群内可见消息必须使用控制面下发的固定标题合同：`progressTitle=【角色进度｜TG-xxxx】`、`finalTitle=【角色结论｜TG-xxxx】`，不得省略 `jobRef`
 - worker 不再直接 `message(progress/final)`；正式协议是提交 `progressDraft / finalDraft`，由 controller/outbox 顺序发布
 - `build-dispatch-payload` 现在会显式下发 `scopeLabel / forbiddenRoleLabels / forbiddenSectionKeywords / finalScopeRule`；worker 的 `finalVisibleText` 只能停留在当前角色边界内，不能提前写 sibling 角色章节或主管统一收口
@@ -193,9 +194,9 @@ openclaw agents list --bindings
 - supervisor 最终统一收口必须优先引用各 worker 的完整 `finalVisibleText` 终案正文，并整理成可直接执行的终案方案；禁止把 worker 的完整结论压缩成两三行摘要后收口
 - 同一 `jobRef` 的 `【主管最终统一收口｜TG-xxxx】` 只允许出现一次；若 `rollupVisibleSent=true` 但 job 尚未关闭，只允许补 `close-job`，禁止再次发群消息
 - `resume-job` 只消费 `inbound_events / stage_callbacks / outbound_messages` 这三类正式控制面状态；不再消费 hidden main / plaintext / worker transcript 文本回调
-- worker 完成回调的正式入口是结构化 callback sink：主协议提交 `progressDraft / finalDraft / summary / details / risks / actionItems`；若附带 `progressMessageId / finalMessageId`，必须是真实 messageId，禁止使用 `pending / placeholder / sent / <pending...>` 等占位值
+- worker 完成回调的正式协议是：最后一条 assistant 响应直接输出单个结构化 JSON，对象中提交 `progressDraft / finalDraft / finalVisibleText / summary / details / risks / actionItems`；若附带 `progressMessageId / finalMessageId`，必须是真实 messageId，禁止使用 `pending / placeholder / sent / <pending...>` 等占位值
 - 若 gateway 重启后出现历史 `delivery-recovery` 噪音：优先清理 `~/.openclaw/delivery-queue/` 中遗留的旧坏消息，再重启 gateway
-- callback sink 若缺少真实 messageId、越权输出跨角色内容、或仍保留 job scoped subagent 行为，控制面只允许拒绝并重派当前 worker，不再从任何文本 transcript 猜测推进状态
+- worker 结构化响应若缺少真实 messageId、越权输出跨角色内容、或仍保留 job scoped subagent 行为，控制面只允许拒绝并重派当前 worker，不再从任意自由文本猜测推进状态
 - `resume-job` 在当前 stage 还未完成时，必须忽略已消费旧 stage 的 hidden main 包；旧包不能在下一 stage 被重新当成 invalid packet 触发误重派
 - 若 waiting worker 的当前 `jobRef` 期间出现 `sessions_spawn` 派生的 subagent session，或 `finalVisibleText` 越权写出其他角色标题/章节、统一收口/总方案章节，`resume-job` 必须拒绝该回调、清理 job scoped subagent/main session 并重派当前 worker
 - `resume-job / reconcile-dispatch / reconcile-rollup` 必须按 `teamKey` 持有独占锁；同一 team 不允许同时存在 timer 自动恢复和手工恢复两份控制面实例，否则会放大重复派发风险
@@ -366,7 +367,7 @@ runtime 命名约定：
 Codex 交付入口：
 - [V5.1 Hardening 交付模板](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v51-team-orchestrator.md)
 - 这份文档已经写入当前 2 个正式群、3 个正式机器人、可直接复制给 Codex 的长版提示词和运行命令
-- 其中 `V5.1 Hardening` 的正式主路径必须明确出现：`ingress -> controller -> outbox -> sender -> callback sink`，以及 `v51_team_orchestrator_reconcile.py` 的 `resume-job / reconcile-dispatch / reconcile-rollup`
+- 其中 `V5.1 Hardening` 的正式主路径必须明确出现：`ingress -> controller -> outbox -> sender -> structured worker response`，以及 `v51_team_orchestrator_reconcile.py` 的 `resume-job / reconcile-dispatch / reconcile-rollup`
 
 ## 飞书与 OpenClaw 信息采集（你现在最容易卡的点）
 
