@@ -4,10 +4,13 @@
 - docs/zh-CN/channels/feishu.md
   - 官方插件路径、配置字段（`channels.feishu.*`）
   - 多账号、群策略、`defaultAccount`、`requireMention` 相关字段
+  - 当前官方页面：https://docs.openclaw.ai/zh-CN/channels/feishu
 - docs/zh-CN/channels/channel-routing.md
   - 绑定匹配优先级（更具体规则优先）
+  - 当前官方页面：https://docs.openclaw.ai/channels/channel-routing
 - docs/zh-CN/concepts/multi-agent.md
   - 多 Agent 隔离模型、`agentId/accountId/bindings` 概念
+  - 当前官方页面：https://docs.openclaw.ai/zh-CN/concepts/multi-agent
 
 ## OpenClaw Release Notes
 - v2026.3.2（2026-03-03）

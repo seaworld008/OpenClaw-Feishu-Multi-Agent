@@ -656,7 +656,8 @@ teams[]
 ```text
 请使用 $skill-installer，
 从 GitHub 安装这个 skill 到我的 Codex：
-https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tree/main/skills/openclaw-feishu-multi-agent-deploy
+- repo: `seaworld008/OpenClaw-Feishu-Multi-Agent`
+- path: `skills/openclaw-feishu-multi-agent-deploy`
 安装成功后提醒我重启 Codex。
 ```
 
