@@ -3623,10 +3623,13 @@ class RuntimeRegistryTests(unittest.TestCase):
             rollup_payload = json.loads(rollup.stdout)
             rollup_message = rollup_payload["message"]
             self.assertIn(f"【总控台最终统一收口｜{job_ref}】", rollup_message)
-            self.assertIn("二、各角色关键结论", rollup_message)
+            self.assertIn("一、最终结论", rollup_message)
+            self.assertIn("二、决策依据", rollup_message)
+            self.assertIn("三、最终方案", rollup_message)
+            self.assertIn("四、执行路线", rollup_message)
+            self.assertIn("六、明日三件事", rollup_message)
             self.assertIn("增长：增长方案已完成", rollup_message)
             self.assertIn("财审：财审方案已完成", rollup_message)
-            self.assertIn("三、统一执行方案", rollup_message)
             self.assertIn("完整增长方案。", rollup_message)
             self.assertIn("完整财审方案。", rollup_message)
 
@@ -3784,15 +3787,18 @@ class RuntimeRegistryTests(unittest.TestCase):
             rollup_message = rolled_payload["message"]
             self.assertIn(f"【主管最终统一收口｜{job_ref}】", rollup_message)
             self.assertIn("任务主题：V5.1 structured rollup", rollup_message)
-            self.assertIn("一、主管综合判断", rollup_message)
-            self.assertIn("二、各角色关键结论", rollup_message)
-            self.assertIn("三、统一执行方案", rollup_message)
-            self.assertIn("四、联合风险与红线", rollup_message)
-            self.assertIn("五、下一步行动", rollup_message)
-            self.assertIn("运营：该角色已完成完整方案并可直接执行。", rollup_message)
-            self.assertIn("财务：该角色已完成完整方案并可直接执行。", rollup_message)
-            self.assertIn("活动今晚完成物料锁版，明早 10 点准时开跑。", rollup_message)
+            self.assertIn("一、最终结论", rollup_message)
+            self.assertIn("二、决策依据", rollup_message)
+            self.assertIn("三、最终方案", rollup_message)
+            self.assertIn("四、执行路线", rollup_message)
+            self.assertIn("五、风险红线", rollup_message)
+            self.assertIn("六、明日三件事", rollup_message)
+            self.assertIn("采纳运营判断：该角色已完成完整方案并可直接执行。", rollup_message)
+            self.assertIn("采纳财务判断：该角色已完成完整方案并可直接执行。", rollup_message)
+            self.assertIn("3天100单，预算不超10000，毛利率不低于35%。", rollup_message)
+            self.assertIn("今晚锁版物料，明早10点开跑，中午复盘，晚高峰二次冲刺。", rollup_message)
             self.assertIn("锁定物料、校验链路、召开战前会。", rollup_message)
+            self.assertNotIn("财务侧：财务侧", rollup_message)
             self.assertNotIn("一、目标与约束", rollup_message)
             self.assertNotIn("二、执行步骤", rollup_message)
             self.assertNotIn("三、关键红线", rollup_message)
@@ -3935,19 +3941,109 @@ class RuntimeRegistryTests(unittest.TestCase):
             rolled_payload = json.loads(rolled_ready.stdout)
             rollup_message = rolled_payload["message"]
             self.assertIn(f"【主管最终统一收口｜{job_ref}】", rollup_message)
-            self.assertIn("一、主管综合判断", rollup_message)
-            self.assertIn("二、各角色关键结论", rollup_message)
-            self.assertIn("三、统一执行方案", rollup_message)
-            self.assertIn("四、联合风险与红线", rollup_message)
-            self.assertIn("五、下一步行动", rollup_message)
-            self.assertIn("运营：运营判断：本周末主推亲子票限时专场，核心抓手是社群裂变和短视频引流。", rollup_message)
-            self.assertIn("财务：财务判断：预算上限 20000 元，对应 GMV 80000 元的 ROI 红线为 4.0。", rollup_message)
-            self.assertIn("法务：法务判断：活动文案必须明确适用日期、退改规则和限量机制。", rollup_message)
+            self.assertIn("一、最终结论", rollup_message)
+            self.assertIn("二、决策依据", rollup_message)
+            self.assertIn("三、最终方案", rollup_message)
+            self.assertIn("四、执行路线", rollup_message)
+            self.assertIn("五、风险红线", rollup_message)
+            self.assertIn("六、明日三件事", rollup_message)
+            self.assertIn("运营判断：本周末主推亲子票限时专场，核心抓手是社群裂变和短视频引流。", rollup_message)
+            self.assertIn("财务判断：预算上限 20000 元，对应 GMV 80000 元的 ROI 红线为 4.0。", rollup_message)
+            self.assertIn("法务判断：活动文案必须明确适用日期、退改规则和限量机制。", rollup_message)
+            self.assertIn("采纳运营判断：运营判断：本周末主推亲子票限时专场，核心抓手是社群裂变和短视频引流。", rollup_message)
+            self.assertIn("采纳财务判断：财务判断：预算上限 20000 元，对应 GMV 80000 元的 ROI 红线为 4.0。", rollup_message)
+            self.assertIn("采纳法务判断：法务判断：活动文案必须明确适用日期、退改规则和限量机制。", rollup_message)
             self.assertIn("周三预热、周五开售、周末集中转化。", rollup_message)
             self.assertIn("补贴、投流、赠品统一总包控费", rollup_message)
             self.assertIn("详情页、海报、社群话术口径一致", rollup_message)
+            self.assertNotIn("财务侧：财务侧", rollup_message)
             self.assertNotIn("一、角色原始长正文", rollup_message)
             self.assertNotIn("这是一段不应该被主管逐字拼接进最终统一收口的长正文。", rollup_message)
+
+    def test_registry_build_rollup_visible_message_normalizes_python_style_list_strings(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "team_jobs.db"
+
+            self.run_registry(db_path, "init-db")
+            started = self.start_v51_job(
+                db_path,
+                title="V5.1 python style list normalization",
+                workflow_agents=("ops_internal_main", "finance_internal_main"),
+                extra_args=(
+                    "--entry-account-id",
+                    "aoteman",
+                    "--entry-channel",
+                    "feishu",
+                    "--entry-target",
+                    "chat:oc_demo",
+                ),
+            )
+            self.assertEqual(started.returncode, 0, started.stderr)
+            job_ref = started.stdout.split('"jobRef": "')[1].split('"', 1)[0]
+
+            for agent_id, account_id, role, visible_label in (
+                ("ops_internal_main", "xiaolongxia", "运营执行", "运营"),
+                ("finance_internal_main", "yiran_yibao", "财务执行", "财务"),
+            ):
+                dispatch = self.run_registry(
+                    db_path,
+                    "mark-dispatch",
+                    "--job-ref",
+                    job_ref,
+                    "--agent-id",
+                    agent_id,
+                    "--account-id",
+                    account_id,
+                    "--role",
+                    role,
+                    "--visible-label",
+                    visible_label,
+                    "--dispatch-run-id",
+                    f"run-{agent_id}",
+                    "--dispatch-status",
+                    "accepted",
+                )
+                self.assertEqual(dispatch.returncode, 0, dispatch.stderr)
+                complete = self.run_registry(
+                    db_path,
+                    "mark-worker-complete",
+                    "--job-ref",
+                    job_ref,
+                    "--agent-id",
+                    agent_id,
+                    "--account-id",
+                    account_id,
+                    "--role",
+                    role,
+                    "--visible-label",
+                    visible_label,
+                    "--progress-message-id",
+                    f"om_{agent_id}_progress",
+                    "--final-message-id",
+                    f"om_{agent_id}_final",
+                    "--summary",
+                    f"{visible_label}方案已完成。",
+                    "--details",
+                    "['第一条细项。', '第二条细项。']",
+                    "--risks",
+                    "['第一条风险。', '第二条风险。']",
+                    "--action-items",
+                    "['第一条动作。', '第二条动作。', '第三条动作。']",
+                    "--final-visible-text",
+                    f"【{visible_label}结论｜{job_ref}】\n建议采用标准化套餐与边界控制。",
+                )
+                self.assertEqual(complete.returncode, 0, complete.stderr)
+
+            rolled_ready = self.run_registry(db_path, "build-rollup-visible-message", "--job-ref", job_ref)
+            self.assertEqual(rolled_ready.returncode, 0, rolled_ready.stderr)
+            rollup_message = json.loads(rolled_ready.stdout)["message"]
+
+            self.assertIn("第一条细项。", rollup_message)
+            self.assertIn("第一条风险。", rollup_message)
+            self.assertIn("第一条动作。", rollup_message)
+            self.assertNotIn("['第一条细项。'", rollup_message)
+            self.assertNotIn("['第一条风险。'", rollup_message)
+            self.assertNotIn("['第一条动作。'", rollup_message)
 
     def test_registry_record_visible_message_updates_ack_and_rollup_flags(self):
         with tempfile.TemporaryDirectory() as tmpdir:

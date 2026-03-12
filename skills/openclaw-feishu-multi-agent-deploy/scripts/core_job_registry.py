@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import importlib.util
 import json
 import re
@@ -1018,8 +1019,11 @@ def parse_structured_lines(raw: Any) -> list[str]:
         try:
             decoded = json.loads(text)
         except json.JSONDecodeError:
-            decoded = None
-        if isinstance(decoded, list):
+            try:
+                decoded = ast.literal_eval(text)
+            except (SyntaxError, ValueError):
+                decoded = None
+        if isinstance(decoded, (list, tuple)):
             return parse_structured_lines(decoded)
     return normalize_lines(text)
 
@@ -1050,6 +1054,66 @@ def fallback_summary_from_final_visible_text(final_visible_text: str, label: str
     return summary_lines or [plan_lines[0]]
 
 
+def is_structured_heading_line(text: str) -> bool:
+    stripped = str(text or "").strip()
+    if not stripped:
+        return False
+    return bool(re.match(r"^[一二三四五六七八九十0-9]+[、.．）)]", stripped))
+
+
+def split_natural_sentences(text: str) -> list[str]:
+    stripped = str(text or "").strip()
+    if not stripped:
+        return []
+    parts = [part.strip() for part in re.split(r"(?<=[。！？；;])", stripped) if part.strip()]
+    return parts or [stripped]
+
+
+def extract_rollup_body_lines(final_visible_text: str) -> list[str]:
+    lines = normalize_visible_plan_lines(final_visible_text)
+    out: list[str] = []
+    for line in lines:
+        if is_structured_heading_line(line):
+            continue
+        out.extend(split_natural_sentences(line))
+    return unique_preserve_order(out)
+
+
+def first_non_empty_line(*values: str) -> str:
+    for value in values:
+        text = str(value or "").strip()
+        if text:
+            return text
+    return ""
+
+
+def is_label_only_line(text: str) -> bool:
+    stripped = str(text or "").strip()
+    if not stripped:
+        return False
+    return stripped.endswith(("：", ":")) and not stripped.startswith(("-", "1", "2", "3"))
+
+
+def first_meaningful_line(*values: str, skip_values: list[str] | None = None) -> str:
+    skipped = {str(value or "").strip() for value in (skip_values or []) if str(value or "").strip()}
+    for value in values:
+        text = str(value or "").strip()
+        if not text or text in skipped or is_label_only_line(text):
+            continue
+        return text
+    return ""
+
+
+def format_role_rollup_sentence(label: str, text: str) -> str:
+    content = str(text or "").strip()
+    if not content:
+        return ""
+    role = str(label or "").strip() or "当前角色"
+    if content.startswith((f"{role}侧", f"{role}：", f"{role}:", role)):
+        return content
+    return f"{role}侧：{content}"
+
+
 def build_dynamic_rollup_sections(
     row: sqlite3.Row,
     conn: sqlite3.Connection | None = None,
@@ -1061,10 +1125,12 @@ def build_dynamic_rollup_sections(
     stage_agent_ids = workflow_stage_agent_ids(workflow) if workflow else list(participants.keys())
 
     role_labels: list[str] = []
-    role_summary_lines: list[str] = []
-    unified_plan_lines: list[str] = []
+    recommended_headlines: list[str] = []
+    recommended_constraints: list[str] = []
+    integration_lines: list[str] = []
+    roadmap_candidates: list[tuple[str, str]] = []
     risk_lines: list[str] = []
-    action_lines: list[str] = []
+    tomorrow_candidates: list[str] = []
 
     for agent_id in stage_agent_ids:
         participant = participants.get(agent_id)
@@ -1077,38 +1143,100 @@ def build_dynamic_rollup_sections(
         risks_lines = parse_structured_lines(packet.get("risks"))
         action_item_lines = parse_structured_lines(packet.get("actionItems") or packet.get("action_items"))
         final_visible_text = str(packet.get("finalVisibleText") or packet.get("final_visible_text") or "").strip()
+        final_body_lines = extract_rollup_body_lines(final_visible_text)
 
-        if summary:
-            role_summary_lines.append(f"- {label}：{summary}")
-        else:
-            for line in fallback_summary_from_final_visible_text(final_visible_text, label):
-                role_summary_lines.append(f"- {label}：{line}")
+        summary_line = first_non_empty_line(summary, final_body_lines[0] if final_body_lines else "", details_lines[0] if details_lines else "")
+        primary_plan_line = first_meaningful_line(
+            final_body_lines[0] if final_body_lines else "",
+            details_lines[0] if details_lines else "",
+            summary_line,
+        )
+        secondary_plan_line = first_meaningful_line(
+            final_body_lines[1] if len(final_body_lines) > 1 else "",
+            details_lines[0] if details_lines else "",
+            action_item_lines[0] if action_item_lines else "",
+            skip_values=[summary_line, primary_plan_line],
+        )
 
-        for line in details_lines or fallback_summary_from_final_visible_text(final_visible_text, label):
-            unified_plan_lines.append(f"- {label}：{line}")
+        formatted_primary = format_role_rollup_sentence(label, primary_plan_line)
+        if formatted_primary:
+            recommended_headlines.append(formatted_primary)
+
+        formatted_secondary = format_role_rollup_sentence(label, secondary_plan_line)
+        if formatted_secondary:
+            recommended_constraints.append(formatted_secondary)
+
+        if summary_line:
+            integration_lines.append(f"- 采纳{label}判断：{summary_line}")
+        if secondary_plan_line and secondary_plan_line != summary_line:
+            integration_lines.append(f"- {label}补充条件：{secondary_plan_line}")
+
+        roadmap_source_lines = action_item_lines or details_lines or final_body_lines[1:3] or final_body_lines[:1]
+        for line in roadmap_source_lines[:1]:
+            text = str(line or "").strip()
+            if text:
+                roadmap_candidates.append((label, text))
+
         for line in risks_lines:
-            risk_lines.append(f"- {label}：{line}")
-        for line in action_item_lines:
-            action_lines.append(f"- {label}：{line}")
+            risk_lines.append(f"- {label}红线：{line}")
+
+        tomorrow_source_lines = action_item_lines or details_lines or final_body_lines[:3]
+        for line in tomorrow_source_lines:
+            text = str(line or "").strip()
+            if text:
+                tomorrow_candidates.append(f"- {label}：{text}")
 
     role_labels = unique_preserve_order(role_labels)
-    role_summary_lines = unique_preserve_order(role_summary_lines)
-    unified_plan_lines = unique_preserve_order(unified_plan_lines)
+    recommended_headlines = unique_preserve_order(recommended_headlines)
+    recommended_constraints = unique_preserve_order(recommended_constraints)
+    integration_lines = unique_preserve_order(integration_lines)
     risk_lines = unique_preserve_order(risk_lines)
-    action_lines = unique_preserve_order(action_lines)
+    tomorrow_candidates = unique_preserve_order(tomorrow_candidates)
 
     combined_roles = format_chinese_join(role_labels)
-    summary_intro = (
-        f"已综合{combined_roles}的阶段结论，形成以下统一可执行方案。"
+    decision_intro = (
+        f"已综合{combined_roles}的完整终案，本次建议直接按统一方案推进。"
         if combined_roles
-        else "已综合当前各阶段结论，形成以下统一可执行方案。"
+        else "已综合当前各阶段结论，本次建议直接按统一方案推进。"
     )
+    recommended_plan_lines: list[str] = []
+    if recommended_headlines:
+        recommended_plan_lines.append(f"- 主线方案：{recommended_headlines[0]}")
+        for line in recommended_headlines[1:3]:
+            recommended_plan_lines.append(f"- 配套方案：{line}")
+    else:
+        recommended_plan_lines.append("- 主线方案：先按当前已形成的角色结论交集推进。")
+    if recommended_constraints:
+        recommended_plan_lines.append(f"- 落地边界：{'；'.join(recommended_constraints[:2])}")
+    else:
+        recommended_plan_lines.append("- 落地边界：所有超出既有角色红线的事项，必须先升级决策再执行。")
+    recommended_plan_lines.append("- 统一要求：先锁定边界，再推进执行；任何新增承诺或超范围事项，必须先升级决策。")
+
+    roadmap_lines: list[str] = []
+    for index, (label, text) in enumerate(roadmap_candidates[:3], start=1):
+        roadmap_lines.append(f"- 第{index}步（{label}牵头）：{text}")
+    if len(roadmap_lines) < 3:
+        roadmap_lines.append(f"- 第{len(roadmap_lines) + 1}步（主管统筹）：按统一口径回收首轮执行结果，并决定是否扩面或升级。")
+    if len(roadmap_lines) < 3:
+        roadmap_lines.append(f"- 第{len(roadmap_lines) + 1}步（主管统筹）：对超范围事项单独建专项清单，避免边执行边失控。")
+
+    tomorrow_lines = tomorrow_candidates[:3]
+    if len(tomorrow_lines) < 3:
+        fallback_index = 1
+        while len(tomorrow_lines) < 3:
+            tomorrow_lines.append(f"- 补位动作{fallback_index}：按执行路线图推进并同步回收数据。")
+            fallback_index += 1
+
     return {
-        "summaryIntro": summary_intro,
-        "roleSummaryLines": role_summary_lines or ["- 当前尚未收集到可汇总的角色结论。"],
-        "unifiedPlanLines": unified_plan_lines or ["- 先按既有阶段结论推进，并尽快补齐统一执行方案。"],
-        "riskLines": risk_lines or ["- 当前未上报新增风险，请继续按各角色结论中的红线执行。"],
-        "actionLines": action_lines or ["- 先按上述统一方案推进，并在首轮执行后回收数据复盘。"],
+        "decisionLines": [
+            decision_intro,
+            "- 决策原则：优先采用各角色交集最大的主线方案；超出标准边界的事项，一律转专项处理或二次决策。",
+        ],
+        "recommendedPlanLines": recommended_plan_lines,
+        "integrationLines": integration_lines or ["- 当前尚未收集到可解释的角色综合依据。"],
+        "roadmapLines": roadmap_lines or ["- 第1步（主管统筹）：先按现有角色结论推进第一轮执行，并补齐责任人与时间点。"],
+        "riskLines": risk_lines or ["- 当前未上报新增风险，请继续按各角色终案中的红线执行。"],
+        "tomorrowLines": tomorrow_lines,
         "completionPackets": completion_packets,
     }
 
@@ -1150,20 +1278,23 @@ def visible_message_text(kind: str, row: sqlite3.Row, conn: sqlite3.Connection |
             f"【{supervisor_label}最终统一收口｜{job_ref}】",
             f"任务主题：{row['title']}",
             "",
-            "一、主管综合判断",
-            rollup_sections["summaryIntro"],
+            "一、最终结论",
+            *rollup_sections["decisionLines"],
             "",
-            "二、各角色关键结论",
-            *rollup_sections["roleSummaryLines"],
+            "二、决策依据",
+            *rollup_sections["integrationLines"],
             "",
-            "三、统一执行方案",
-            *rollup_sections["unifiedPlanLines"],
+            "三、最终方案",
+            *rollup_sections["recommendedPlanLines"],
             "",
-            "四、联合风险与红线",
+            "四、执行路线",
+            *rollup_sections["roadmapLines"],
+            "",
+            "五、风险红线",
             *rollup_sections["riskLines"],
             "",
-            "五、下一步行动",
-            *rollup_sections["actionLines"],
+            "六、明日三件事",
+            *rollup_sections["tomorrowLines"],
         ]
         return "\n".join(lines)
     raise ValueError(f"unsupported visible message kind: {kind}")

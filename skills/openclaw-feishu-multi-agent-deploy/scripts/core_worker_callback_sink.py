@@ -261,10 +261,18 @@ def _parse_payload_argument(raw_payload: str) -> dict[str, Any]:
     return payload
 
 
+def _normalize_payload_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (list, dict)):
+        return json.dumps(value, ensure_ascii=False)
+    return str(value)
+
+
 def _payload_get(payload: dict[str, Any], *keys: str) -> str:
     for key in keys:
         if key in payload and payload[key] is not None:
-            return str(payload[key])
+            return _normalize_payload_value(payload[key])
     return ""
 
 
