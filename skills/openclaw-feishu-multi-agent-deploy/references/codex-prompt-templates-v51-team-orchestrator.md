@@ -7,7 +7,7 @@
 - 上线后会得到什么效果
 - 为什么 `V5.1 Hardening` 比旧方案稳
 - 统一入口配置怎么写
-- 当前正式双群、三个正式机器人和真实 `appId/appSecret`
+- 当前正式双群、三个正式机器人、真实 `appId` 与去敏后的 `appSecret` 占位
 - runtime manifest / hidden main / SQLite / watchdog 怎么工作
 - 真实 supervisor / worker 提示词怎么写
 - 怎么新增一个群、新增一个机器人账号、给现有群增加一个 worker、从现有群移除一个 worker、下线一个群
@@ -160,12 +160,12 @@ supervisor 最终统一收口必须满足：
     {
       "accountId": "aoteman",
       "appId": "cli_a923c749bab6dcba",
-      "appSecret": "TWpD207Ri2g1Qqmw4R5YhfkPRhOokCGX"
+      "appSecret": "<replace-aoteman-app-secret>"
     },
     {
       "accountId": "xiaolongxia",
       "appId": "cli_a9f1849b67f9dcc2",
-      "appSecret": "g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr"
+      "appSecret": "<replace-xiaolongxia-app-secret>"
     }
   ],
   "roleCatalog": {
@@ -249,13 +249,13 @@ supervisor 最终统一收口必须满足：
 
 - `aoteman`
   - `appId`: `cli_a923c749bab6dcba`
-  - `appSecret`: `TWpD207Ri2g1Qqmw4R5YhfkPRhOokCGX`
+  - `appSecret`: `<replace-aoteman-app-secret>`
 - `xiaolongxia`
   - `appId`: `cli_a9f1849b67f9dcc2`
-  - `appSecret`: `g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr`
+  - `appSecret`: `<replace-xiaolongxia-app-secret>`
 - `yiran_yibao`
   - `appId`: `cli_a923c71498b8dcc9`
-  - `appSecret`: `swscrlPKYCwAehOyyoLrlesLTsuYY6nl`
+  - `appSecret`: `<replace-yiran-yibao-app-secret>`
 
 正式 profile 约定：
 
@@ -454,9 +454,9 @@ watchdog 模板固定使用：
 - <例如 /home/user/customer-v51-prod-input.json>
 
 已知正式账号：
-- aoteman / cli_a923c749bab6dcba / TWpD207Ri2g1Qqmw4R5YhfkPRhOokCGX
-- xiaolongxia / cli_a9f1849b67f9dcc2 / g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr
-- yiran_yibao / cli_a923c71498b8dcc9 / swscrlPKYCwAehOyyoLrlesLTsuYY6nl
+- aoteman / cli_a923c749bab6dcba / <replace-aoteman-app-secret>
+- xiaolongxia / cli_a9f1849b67f9dcc2 / <replace-xiaolongxia-app-secret>
+- yiran_yibao / cli_a923c71498b8dcc9 / <replace-yiran-yibao-app-secret>
 
 约束：
 1) 先审计现有 ~/.openclaw/openclaw.json，输出 to_add / to_update / to_keep_unchanged。

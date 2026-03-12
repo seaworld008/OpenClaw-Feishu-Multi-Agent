@@ -20,7 +20,7 @@
 - 你将得到什么效果
 - `accounts + roleCatalog + teams(profileId + override)` 统一入口
 - runtime manifest / hidden main / SQLite / watchdog 的实现原理
-- 当前正式双群、三个正式机器人和真实 `appId/appSecret`
+- 当前正式双群、三个正式机器人、真实 `appId` 与去敏后的 `appSecret` 占位
 - 真实 supervisor / worker 提示词
 - 新增一个群、新增一个机器人账号、给现有群增加一个 worker、从现有群移除一个 worker、下线一个群
 
@@ -233,12 +233,12 @@ canonical schema 最小示意：
     {
       "accountId": "aoteman",
       "appId": "cli_a923c749bab6dcba",
-      "appSecret": "TWpD207Ri2g1Qqmw4R5YhfkPRhOokCGX"
+      "appSecret": "<replace-aoteman-app-secret>"
     },
     {
       "accountId": "xiaolongxia",
       "appId": "cli_a9f1849b67f9dcc2",
-      "appSecret": "g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr"
+      "appSecret": "<replace-xiaolongxia-app-secret>"
     }
   ],
   "roleCatalog": {
@@ -676,17 +676,17 @@ teams[]
 - accounts:
   - accountId: "aoteman"
     appId: "cli_a923c749bab6dcba"
-    appSecret: "TWpD207Ri2g1Qqmw4R5YhfkPRhOokCGX"
+    appSecret: "<replace-aoteman-app-secret>"
     encryptKey: "..."
     verificationToken: "..."
   - accountId: "xiaolongxia"
     appId: "cli_a9f1849b67f9dcc2"
-    appSecret: "g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr"
+    appSecret: "<replace-xiaolongxia-app-secret>"
     encryptKey: "..."
     verificationToken: "..."
   - accountId: "yiran_yibao"
     appId: "cli_a923c71498b8dcc9"
-    appSecret: "swscrlPKYCwAehOyyoLrlesLTsuYY6nl"
+    appSecret: "<replace-yiran-yibao-app-secret>"
     encryptKey: "..."
     verificationToken: "..."
 - roleCatalog:
