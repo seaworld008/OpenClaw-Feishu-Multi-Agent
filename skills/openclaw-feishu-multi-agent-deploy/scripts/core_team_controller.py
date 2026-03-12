@@ -403,6 +403,36 @@ class TeamController:
             "payload": payload,
         }
 
+    def redispatch_agents(self, *, job_ref: str, agent_ids: Iterable[str]) -> dict[str, Any]:
+        row = self._load_job(job_ref)
+        stage_group = self._current_stage_group(row)
+        allowed_agents = {str(agent["agentId"]) for agent in stage_group.get("agents", [])}
+        dispatches: list[dict[str, Any]] = []
+        stage_index = self._current_stage_index(row)
+        for agent_id in agent_ids:
+            normalized_agent_id = str(agent_id or "").strip()
+            if not normalized_agent_id:
+                continue
+            if normalized_agent_id not in allowed_agents:
+                raise RuntimeError(f"当前 stage 不接受 {normalized_agent_id}")
+            _row, _participant, _stage_index, payload = self._build_dispatch_payload(
+                job_ref=job_ref,
+                allow_wait_worker=True,
+                agent_id=normalized_agent_id,
+            )
+            stage_index = _stage_index
+            dispatches.append(payload)
+        if not dispatches:
+            raise RuntimeError("当前 stage 没有可重派的 agent")
+        return {
+            "jobRef": job_ref,
+            "teamKey": self._team_key_for_row(row),
+            "agentIds": [payload["agentId"] for payload in dispatches],
+            "stageIndex": stage_index,
+            "nextAction": ACTION_WAIT_WORKER,
+            "dispatches": dispatches,
+        }
+
     def record_dispatch_acceptance(
         self,
         *,

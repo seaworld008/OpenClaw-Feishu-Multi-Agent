@@ -789,6 +789,28 @@ def current_stage_participant(conn: sqlite3.Connection, row: sqlite3.Row) -> sql
     return participant_map(conn, row["job_ref"]).get(str(row["waiting_for_agent_id"]))
 
 
+def current_stage_participants(conn: sqlite3.Connection, row: sqlite3.Row) -> list[sqlite3.Row]:
+    workflow = parse_workflow_json(row["workflow_json"]) if "workflow_json" in row.keys() else None
+    if not workflow:
+        participant = current_stage_participant(conn, row)
+        return [participant] if participant else []
+    stage_groups = workflow_stage_groups(workflow)
+    if not stage_groups:
+        return []
+    stage_index = int(row["current_stage_index"] or 0)
+    if stage_index < 0 or stage_index >= len(stage_groups):
+        return []
+    stage = stage_groups[stage_index]
+    participants = participant_map(conn, row["job_ref"])
+    rows: list[sqlite3.Row] = []
+    for agent in stage.get("agents", []):
+        agent_id = str(agent.get("agentId") or "").strip()
+        participant = participants.get(agent_id)
+        if participant is not None:
+            rows.append(participant)
+    return rows
+
+
 def workflow_visible_snapshot_error(conn: sqlite3.Connection, row: sqlite3.Row) -> str | None:
     workflow = parse_workflow_json(row["workflow_json"]) if "workflow_json" in row.keys() else None
     if not workflow:
@@ -1153,7 +1175,7 @@ def workflow_repair_status(conn: sqlite3.Connection, row: sqlite3.Row) -> dict |
         return None
 
     current_action = str(row["next_action"] or "").strip()
-    participant = current_stage_participant(conn, row)
+    participants = current_stage_participants(conn, row)
     if current_action == "dispatch":
         return {
             "status": "needs_dispatch_reconcile",
@@ -1163,7 +1185,14 @@ def workflow_repair_status(conn: sqlite3.Connection, row: sqlite3.Row) -> dict |
         }
 
     if current_action == "wait_worker":
-        if not dispatch_record_exists(participant):
+        if not participants:
+            return {
+                "status": "needs_dispatch_reconcile",
+                "jobRef": row["job_ref"],
+                "stageAgentId": row["waiting_for_agent_id"],
+                "ackVisibleSent": flag_value(row["ack_visible_sent"]) if "ack_visible_sent" in row.keys() else False,
+            }
+        if any(not dispatch_record_exists(participant) for participant in participants):
             return {
                 "status": "needs_dispatch_reconcile",
                 "jobRef": row["job_ref"],

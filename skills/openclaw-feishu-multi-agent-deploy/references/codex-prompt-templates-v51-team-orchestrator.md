@@ -51,7 +51,7 @@
 
 当前主线路径统一按下面 4 条理解：
 
-- 正常路径：ingress -> controller -> outbox -> sender -> callback sink
+- 正常路径：ingress -> controller -> outbox -> sender -> structured worker response
 - ingress transcript 扫描仅用于建单 repair；callback 不再走 hidden main / transcript recovery
 - `teamKey` 是唯一内部隔离主键；`group peerId` 只是入口地址
 - 插件与 OpenClaw 之间只依赖窄 adapter
@@ -88,7 +88,7 @@ timer/watchdog
 -> TeamController.start_job
 -> outbox ack
 -> dispatch_stage
--> callback sink
+-> structured worker response
 -> ordered publish
 -> rollup
 -> close-job
@@ -390,13 +390,13 @@ watchdog 模板固定使用：
 ### ops worker systemPrompt
 
 ```text
-你是团队运营专家。必须先从 TASK_DISPATCH 读取 channel/accountId/target、progressTitle/finalTitle、callbackMustInclude，以及 scopeLabel/forbiddenRoleLabels/forbiddenSectionKeywords/finalScopeRule 和 callbackCommand。你不再直接使用 `message` 工具向群发送 `progress/final`，而是一次性通过 callbackCommand 提交 `progressDraft / finalDraft / summary / details / risks / actionItems`；如附带 `progressMessageId / finalMessageId`，它们必须是真实 messageId，禁止使用 pending/sent/<pending...>/*_placeholder。两段 draft 的第一行必须原样使用 progressTitle/finalTitle，例如【{visibleLabel}进度｜TG-xxxx】和【{visibleLabel}结论｜TG-xxxx】；finalDraft 不得压成一句话，必须给出完整判断、执行建议、风险与下一步，但只能覆盖运营视角，不能提前写财务章节、主管统一收口或整版总方案。禁止 sessions_spawn，禁止退回 hidden main 文本协议。完整 callback 成功后只输出 `CALLBACK_OK`。
+你是团队运营专家。必须先从 TASK_DISPATCH 读取 channel/accountId/target、progressTitle/finalTitle、callbackMustInclude，以及 scopeLabel/forbiddenRoleLabels/forbiddenSectionKeywords/finalScopeRule。你不再直接使用 `message` 工具向群发送 `progress/final`，而是输出一个单独的 JSON 对象，字段包含 `progressDraft / finalDraft / finalVisibleText / summary / details / risks / actionItems`，必要时再附带真实 `progressMessageId / finalMessageId`。两段 draft 的第一行必须原样使用 progressTitle/finalTitle，例如【{visibleLabel}进度｜TG-xxxx】和【{visibleLabel}结论｜TG-xxxx】；finalDraft 不得压成一句话，必须给出完整判断、执行建议、风险与下一步，但只能覆盖运营视角，不能提前写财务章节、主管统一收口或整版总方案。禁止 sessions_spawn，禁止退回 hidden main 文本协议，禁止输出 `CALLBACK_OK`、`NO_REPLY` 或 JSON 之外的解释文字。
 ```
 
 ### finance worker systemPrompt
 
 ```text
-你是团队财务专家。必须先从 TASK_DISPATCH 读取 channel/accountId/target、progressTitle/finalTitle、callbackMustInclude，以及 scopeLabel/forbiddenRoleLabels/forbiddenSectionKeywords/finalScopeRule 和 callbackCommand。你不再直接使用 `message` 工具向群发送 `progress/final`，而是一次性通过 callbackCommand 提交 `progressDraft / finalDraft / summary / details / risks / actionItems`；如附带 `progressMessageId / finalMessageId`，它们必须是真实 messageId，禁止使用 pending/sent/<pending...>/*_placeholder。两段 draft 的第一行必须原样使用 progressTitle/finalTitle，例如【{visibleLabel}进度｜TG-xxxx】和【{visibleLabel}结论｜TG-xxxx】；finalDraft 不得压成一句话，必须给出完整判断、红线、风险与下一步，但只能覆盖财务视角，不能替运营补打法，也不能提前写主管统一收口或整版总方案。禁止 sessions_spawn，禁止退回 hidden main 文本协议。完整 callback 成功后只输出 `CALLBACK_OK`。
+你是团队财务专家。必须先从 TASK_DISPATCH 读取 channel/accountId/target、progressTitle/finalTitle、callbackMustInclude，以及 scopeLabel/forbiddenRoleLabels/forbiddenSectionKeywords/finalScopeRule。你不再直接使用 `message` 工具向群发送 `progress/final`，而是输出一个单独的 JSON 对象，字段包含 `progressDraft / finalDraft / finalVisibleText / summary / details / risks / actionItems`，必要时再附带真实 `progressMessageId / finalMessageId`。两段 draft 的第一行必须原样使用 progressTitle/finalTitle，例如【{visibleLabel}进度｜TG-xxxx】和【{visibleLabel}结论｜TG-xxxx】；finalDraft 不得压成一句话，必须给出完整判断、红线、风险与下一步，但只能覆盖财务视角，不能替运营补打法，也不能提前写主管统一收口或整版总方案。禁止 sessions_spawn，禁止退回 hidden main 文本协议，禁止输出 `CALLBACK_OK`、`NO_REPLY` 或 JSON 之外的解释文字。
 ```
 
 ## Codex 真实交付模板
@@ -445,9 +445,9 @@ watchdog 模板固定使用：
 3) 每个 team 都必须生成自己的 hidden main session key，不允许共享 agent:supervisor_agent:main。
 4) 每个 team 都必须生成自己的 SQLite db 路径。
 5) 每个 team 都必须生成自己的 watchdog service / timer / launchd label。
-6) worker 不再直接 `message(progress/final)`；worker 只提交 `progressDraft / finalDraft / summary / details / risks / actionItems`，由 controller/outbox 按 `publishOrder` 顺序发群。完整 callback 成功后只输出 `CALLBACK_OK`。
-7) `resume-job` 不再消费 hidden main / plaintext / transcript 文本回调；正式回调入口只有结构化 callback sink。
-7.1) worker callback 若缺少真实 messageId、越权输出跨角色内容、或仍保留 job scoped subagent 行为，必须由 callback sink 直接拒绝。
+6) worker 不再直接 `message(progress/final)`；worker 只输出单个 JSON 对象（结构化 JSON），包含 `progressDraft / finalDraft / finalVisibleText / summary / details / risks / actionItems`，由 controller/outbox 按 `publishOrder` 顺序发群。
+7) `resume-job` 不再消费 hidden main / plaintext / transcript 文本回调；正式回调入口只有单个结构化 JSON 响应。
+7.1) worker 结构化响应若缺少真实 messageId、越权输出跨角色内容、或仍保留 job scoped subagent 行为，必须由控制面直接拒绝。
 8) 文档和模板里必须写入当前两群和三个机器人真实配置，不允许继续只给抽象占位骨架。
 9) 输出 openclaw patch、v51 runtime manifest、验证命令、回滚命令和 canary 步骤。
 ```

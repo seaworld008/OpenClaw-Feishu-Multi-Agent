@@ -67,7 +67,7 @@
           "primary": "<replace-ops-model>"
         }
       },
-      "systemPrompt": "<replace-ops-prompt: use progressDraft/finalDraft and end with CALLBACK_OK>"
+      "systemPrompt": "<replace-ops-prompt: return a 单个 JSON 对象 with progressDraft/finalDraft/finalVisibleText/summary/details/risks/actionItems>"
     },
     "finance_default": {
       "kind": "worker",
@@ -84,7 +84,7 @@
           "primary": "<replace-finance-model>"
         }
       },
-      "systemPrompt": "<replace-finance-prompt: use progressDraft/finalDraft and end with CALLBACK_OK>"
+      "systemPrompt": "<replace-finance-prompt: return a 单个 JSON 对象 with progressDraft/finalDraft/finalVisibleText/summary/details/risks/actionItems>"
     }
   },
   "teams": [

@@ -114,6 +114,27 @@ class OpenClawAdapterContractTests(unittest.TestCase):
             ],
         )
 
+    def test_openclaw_adapter_uses_timeout_and_raises_on_hung_cli(self):
+        module = load_module(ADAPTER_SCRIPT)
+        adapter = module.OpenClawAdapter(
+            openclaw_home=Path("/tmp/fake-openclaw-home"),
+            openclaw_bin="openclaw",
+            timeout_seconds=15,
+        )
+
+        with patch.object(
+            module.subprocess,
+            "run",
+            side_effect=module.subprocess.TimeoutExpired(cmd=["openclaw"], timeout=15),
+        ) as mock_run:
+            with self.assertRaisesRegex(RuntimeError, "timed out"):
+                adapter.invoke_agent(
+                    agent_id="ops_internal_main",
+                    message="TASK_DISPATCH|jobRef=TG-01TEST|...",
+                )
+
+        self.assertEqual(mock_run.call_args.kwargs["timeout"], 15)
+
     def test_openclaw_adapter_capture_inbound_event_reads_group_session(self):
         module = load_module(ADAPTER_SCRIPT)
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -226,4 +247,3 @@ class OpenClawAdapterContractTests(unittest.TestCase):
             self.assertEqual(inspected[0]["status"], "present")
             self.assertEqual(reset[0]["status"], "removed")
             self.assertFalse(transcript_path.exists())
-

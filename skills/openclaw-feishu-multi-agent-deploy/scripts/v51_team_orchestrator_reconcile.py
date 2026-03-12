@@ -30,6 +30,7 @@ from core_openclaw_adapter import OpenClawAdapter, SessionTarget
 from core_outbox_sender import deliver_pending_messages, enqueue_visible_message
 from core_job_registry import (
     connect,
+    current_stage_participants,
     get_active_job,
     get_job,
     init_db,
@@ -39,6 +40,7 @@ from core_job_registry import (
 )
 from core_runtime_store import RuntimeStore
 from core_team_controller import TeamController
+from core_worker_callback_sink import StructuredWorkerCallback, ingest_callback
 
 INLINE_WORKER_NO_REPLY_RETRY_LIMIT = 5
 
@@ -283,6 +285,98 @@ def current_worker_main_no_reply(team: dict[str, Any], adapter: OpenClawAdapter,
         if assistant_text:
             last_assistant_text = assistant_text
     return last_assistant_text == "NO_REPLY"
+
+
+def current_stage_terminal_worker_retry_agents(
+    team: dict[str, Any],
+    adapter: OpenClawAdapter,
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+) -> list[str]:
+    if str(row["next_action"] or "").strip() != "wait_worker":
+        return []
+    stage_index = int(row["current_stage_index"] or 0)
+    participants = current_stage_participants(conn, row)
+    if not participants:
+        return []
+    store = RuntimeStore(conn)
+    retry_agents: list[str] = []
+    for participant in participants:
+        agent_id = str(participant["agent_id"] or "").strip()
+        if not agent_id:
+            continue
+        if store.get_stage_callback(job_ref=str(row["job_ref"]), stage_index=stage_index, agent_id=agent_id) is not None:
+            continue
+        entries = adapter.load_session_entries(agent_id=agent_id, session_key=f"agent:{agent_id}:main")
+        if not entries:
+            continue
+        dispatch_entries = current_worker_dispatch_entries(entries, f"TASK_DISPATCH|jobRef={row['job_ref']}|")
+        if not dispatch_entries:
+            continue
+        last_assistant_text = ""
+        for entry in dispatch_entries:
+            if entry.get("type") != "message":
+                continue
+            message = entry.get("message")
+            if not isinstance(message, dict) or str(message.get("role") or "") != "assistant":
+                continue
+            assistant_text = extract_text_content(message).strip()
+            if assistant_text:
+                last_assistant_text = assistant_text
+        if last_assistant_text in {"NO_REPLY", "CALLBACK_OK"}:
+            retry_agents.append(agent_id)
+    return retry_agents
+
+
+def structured_callback_from_worker_main(
+    adapter: OpenClawAdapter,
+    row: sqlite3.Row,
+    *,
+    team_key: str,
+    stage_index: int,
+    agent_id: str,
+) -> StructuredWorkerCallback | None:
+    entries = adapter.load_session_entries(agent_id=agent_id, session_key=f"agent:{agent_id}:main")
+    if not entries:
+        return None
+    dispatch_entries = current_worker_dispatch_entries(entries, f"TASK_DISPATCH|jobRef={row['job_ref']}|")
+    if not dispatch_entries:
+        return None
+    last_assistant_text = ""
+    for entry in dispatch_entries:
+        if entry.get("type") != "message":
+            continue
+        message = entry.get("message")
+        if not isinstance(message, dict) or str(message.get("role") or "") != "assistant":
+            continue
+        assistant_text = extract_text_content(message).strip()
+        if assistant_text:
+            last_assistant_text = assistant_text
+    if not last_assistant_text or last_assistant_text in {"NO_REPLY", "CALLBACK_OK"}:
+        return None
+    try:
+        payload = parse_last_json_blob(last_assistant_text)
+    except ValueError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    if not any(key in payload for key in ("progressDraft", "finalDraft", "summary", "details", "risks", "actionItems")):
+        return None
+    return StructuredWorkerCallback(
+        job_ref=str(row["job_ref"]),
+        team_key=team_key,
+        stage_index=stage_index,
+        agent_id=agent_id,
+        progress_draft=str(payload.get("progressDraft") or payload.get("progressText") or ""),
+        final_draft=str(payload.get("finalDraft") or payload.get("finalText") or ""),
+        summary=str(payload.get("summary") or ""),
+        details=str(payload.get("details") or ""),
+        risks=str(payload.get("risks") or ""),
+        action_items=str(payload.get("actionItems") or payload.get("action_items") or ""),
+        progress_message_id=str(payload.get("progressMessageId") or ""),
+        final_message_id=str(payload.get("finalMessageId") or ""),
+        final_visible_text=str(payload.get("finalVisibleText") or payload.get("finalDraft") or payload.get("finalText") or ""),
+    )
 
 
 def current_worker_dispatch_entries(entries: list[dict[str, Any]], dispatch_marker: str) -> list[dict[str, Any]]:
@@ -542,6 +636,7 @@ def reconcile_dispatch(
     job_ref: str | None,
     *,
     force: bool = False,
+    agent_ids: list[str] | None = None,
 ) -> int:
     conn, active = db_and_active_job(team, manifest_path)
     try:
@@ -590,8 +685,11 @@ def reconcile_dispatch(
         controller = TeamController(store=store)
         current_action = str(row["next_action"] or "").strip()
         if force and current_action == "wait_worker":
-            dispatch_payload = controller.redispatch_current_stage(job_ref=row["job_ref"])["payload"]
-            dispatches = [dispatch_payload]
+            if agent_ids:
+                dispatches = list(controller.redispatch_agents(job_ref=row["job_ref"], agent_ids=agent_ids)["dispatches"])
+            else:
+                dispatch_payload = controller.redispatch_current_stage(job_ref=row["job_ref"])["payload"]
+                dispatches = [dispatch_payload]
         else:
             dispatch_plan = controller.dispatch_stage(job_ref=row["job_ref"])
             if dispatch_plan.get("mode") == "parallel":
@@ -622,6 +720,15 @@ def reconcile_dispatch(
                 dispatch_run_id=str(agent_payload.get("runId") or provisional_run_id),
                 dispatch_status="accepted",
             )
+            structured_callback = structured_callback_from_worker_main(
+                adapter,
+                row,
+                team_key=str(team["teamKey"]),
+                stage_index=int(dispatch_payload["stageIndex"]),
+                agent_id=str(dispatch_payload["agentId"]),
+            )
+            if structured_callback is not None:
+                ingest_callback(store=store, callback=structured_callback)
             dispatch_results.append(
                 {
                     "agentId": str(dispatch_payload["agentId"]),
@@ -792,31 +899,31 @@ def reconcile_active_job_until_idle(
                 retry_observed_progress = True
                 return ReconcileLoopResult(reconcile_rollup(team, manifest_path, adapter, str(active["job_ref"])))
 
-            if current_worker_main_no_reply(team, adapter, active):
+            retry_agent_ids = current_stage_terminal_worker_retry_agents(team, adapter, conn, active)
+            if retry_agent_ids:
                 if bare_no_reply_retries >= INLINE_WORKER_NO_REPLY_RETRY_LIMIT:
                     emit(
                         {
-                            "status": "worker_no_reply_retry_exhausted",
+                            "status": "worker_callback_retry_exhausted",
                             "jobRef": active["job_ref"],
-                            "agentId": active["waiting_for_agent_id"],
-                            "reason": "worker_main_bare_no_reply",
+                            "agentIds": retry_agent_ids,
+                            "reason": "worker_main_terminal_without_callback",
                         }
                     )
                     return ReconcileLoopResult(2)
                 bare_no_reply_retries += 1
                 retry_scheduled = True
                 job_ref = str(active["job_ref"])
-                agent_id = str(active["waiting_for_agent_id"] or "")
                 conn.close()
-                dispatch_exit = reconcile_dispatch(team, manifest_path, adapter, job_ref, force=True)
+                dispatch_exit = reconcile_dispatch(team, manifest_path, adapter, job_ref, force=True, agent_ids=retry_agent_ids)
                 if dispatch_exit != 0:
                     return ReconcileLoopResult(dispatch_exit)
                 conn, active = db_and_active_job(team, manifest_path)
                 emit(
                     {
-                        "status": "worker_no_reply_retry_scheduled",
+                        "status": "worker_callback_retry_scheduled",
                         "jobRef": job_ref,
-                        "agentId": agent_id,
+                        "agentIds": retry_agent_ids,
                         "attempt": bare_no_reply_retries,
                         "limit": INLINE_WORKER_NO_REPLY_RETRY_LIMIT,
                     }
