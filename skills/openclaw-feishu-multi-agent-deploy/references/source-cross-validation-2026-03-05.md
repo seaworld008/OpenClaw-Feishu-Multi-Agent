@@ -4,11 +4,11 @@
 - 主仓库：
   - https://github.com/openclaw/openclaw
 - Feishu 渠道文档（官方插件、权限、群组 ID 获取、defaultAccount、requireMention）：
-  - https://github.com/openclaw/openclaw/blob/main/docs/zh-CN/channels/feishu.md
+  - https://docs.openclaw.ai/zh-CN/channels/feishu
 - 路由规则文档（匹配优先级、bindings）：
-  - https://github.com/openclaw/openclaw/blob/main/docs/zh-CN/channels/channel-routing.md
+  - https://docs.openclaw.ai/channels/channel-routing
 - 多 Agent 概念文档（agentId、bindings、隔离模型）：
-  - https://github.com/openclaw/openclaw/blob/main/docs/zh-CN/concepts/multi-agent.md
+  - https://docs.openclaw.ai/zh-CN/concepts/multi-agent
 - Releases：
   - https://github.com/openclaw/openclaw/releases
 

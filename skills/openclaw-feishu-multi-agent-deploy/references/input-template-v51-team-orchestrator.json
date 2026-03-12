@@ -13,17 +13,17 @@
     {
       "accountId": "aoteman",
       "appId": "cli_a923c749bab6dcba",
-      "appSecret": "TWpD207Ri2g1Qqmw4R5YhfkPRhOokCGX"
+      "appSecret": "<replace-aoteman-app-secret>"
     },
     {
       "accountId": "xiaolongxia",
       "appId": "cli_a9f1849b67f9dcc2",
-      "appSecret": "g7dTIRe6Tz8jYzASSKTT2eBV5LGzrKDr"
+      "appSecret": "<replace-xiaolongxia-app-secret>"
     },
     {
       "accountId": "yiran_yibao",
       "appId": "cli_a923c71498b8dcc9",
-      "appSecret": "swscrlPKYCwAehOyyoLrlesLTsuYY6nl"
+      "appSecret": "<replace-yiran-yibao-app-secret>"
     }
   ],
   "agents": {
