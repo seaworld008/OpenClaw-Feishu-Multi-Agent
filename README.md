@@ -178,6 +178,16 @@ openclaw agents list --bindings
 - 当前生产推荐标准：`bot 复用，role 固定`
 - 同一个 bot 可以跨很多群复用，但它在所有群里都保持同一个角色
 - 每个群的角色组合可以不同，只需要在该 `team` 下启用需要的 `workers`
+- supervisor 的“决策型终稿”不是为某一组角色写死的，而是按当前 `team` 的 worker 组合动态综合
+- 常见可复用组合示例：
+  - `运营 + 财务`
+  - `法务 + 财务 + 交付`
+  - `技术 + 产品 + 运维`
+  - 任意 `3` 个 worker 的组合
+  - 任意 `4` 个 worker 的组合
+- 实践建议：
+  - `2~4` 个 worker 是主管终稿最稳定、最易读的范围
+  - 超过 `4` 个 worker 依然支持，但建议每个角色只保留“核心判断 + 关键约束”
 - `teamKey` 驱动 agentId / workspace / memory / watchdog 命名
 - deploy 落地后的 workspace 不是通用聊天空间，而是控制面/worker 的协议工作区；默认 bootstrap 人格文件不能继续留在现网 team workspace 中
 - hidden main 是一次性 mailbox；控制面每次成功消费 worker callback 后，都会自动轮转 supervisor hidden main 与该 worker 的 main session，避免旧点评/旧上下文跨 job 残留
@@ -192,6 +202,14 @@ openclaw agents list --bindings
 - `build-dispatch-payload` 现在会显式下发 `scopeLabel / forbiddenRoleLabels / forbiddenSectionKeywords / finalScopeRule`；worker 的 `finalVisibleText` 只能停留在当前角色边界内，不能提前写 sibling 角色章节或主管统一收口
 - supervisor 最终统一收口必须是结构化完整方案，至少包含：`任务主题`、各角色结论、`联合风险与红线`、`明日三件事`
 - supervisor 最终统一收口必须优先引用各 worker 的完整 `finalVisibleText` 终案正文，并整理成可直接执行的终案方案；禁止把 worker 的完整结论压缩成两三行摘要后收口
+- 当前推荐 supervisor 最终统一收口使用“决策型终稿”结构：
+  - `最终结论`
+  - `决策依据`
+  - `最终方案`
+  - `执行路线`
+  - `风险红线`
+  - `明日三件事`
+- 这套主管终稿适用于不同角色组合；主管只负责统一拍板，不依赖固定的 `运营 / 财务 / 法务 / 技术` 顺序
 - 同一 `jobRef` 的 `【主管最终统一收口｜TG-xxxx】` 只允许出现一次；若 `rollupVisibleSent=true` 但 job 尚未关闭，只允许补 `close-job`，禁止再次发群消息
 - `resume-job` 只消费 `inbound_events / stage_callbacks / outbound_messages` 这三类正式控制面状态；不再消费 hidden main / plaintext / worker transcript 文本回调
 - worker 完成回调的正式协议是：最后一条 assistant 响应直接输出单个结构化 JSON，对象中提交 `progressDraft / finalDraft / finalVisibleText / summary / details / risks / actionItems`；若附带 `progressMessageId / finalMessageId`，必须是真实 messageId，禁止使用 `pending / placeholder / sent / <pending...>` 等占位值
