@@ -2,9 +2,123 @@
 
 面向交付团队的通用 Skill 仓库：用于基于 OpenClaw 搭建飞书多机器人多角色多 Agent 协作体系，支持客户环境快速落地、增量上线、可回滚与可升级。
 
+[![CI](https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/github/v/tag/seaworld008/OpenClaw-Feishu-Multi-Agent?sort=semver)](https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tags)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
+适合两类用户：
+
+- 开发者：想复用多 Agent orchestration、runtime、模板与测试能力
+- 客户/交付团队：想直接把飞书多机器人团队交付到生产环境
+
+关键词：
+`openclaw` `feishu` `multi-agent` `team-orchestrator` `customer-delivery` `ops-automation` `support-sla`
+
+## 快速开始 / Quickstart
+
+如果你只想用最短路径判断这个仓库适不适合你，建议按下面顺序：
+
+1. 开发者：
+   - 看 [CONTRIBUTING.md](CONTRIBUTING.md) 和 [SECURITY.md](SECURITY.md)
+   - 跑核心测试：
+
+```bash
+pytest tests/test_openclaw_feishu_multi_agent_skill.py \
+  tests/test_v51_ingress_adapter.py \
+  tests/test_v51_outbox_sender.py \
+  tests/test_v51_runtime_store.py \
+  tests/test_v51_team_controller.py \
+  tests/test_v51_worker_callback_sink.py \
+  -q
+```
+
+2. 交付团队：
+   - 先看 [V5.1 Hardening 交付模板 / 产品手册](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v51-team-orchestrator.md)
+   - 再看 [V5.1 新机器快速启动 SOP](skills/openclaw-feishu-multi-agent-deploy/references/V5.1-新机器快速启动-SOP.md)
+   - 最后套用 [客户首次使用真实案例](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用真实案例.md)
+3. 最小可复制配置：
+   - 看 [examples/](examples/)
+
+## 项目路线图 / Roadmap
+
+- 当前路线图见 [ROADMAP.md](ROADMAP.md)
+- 如果你关心仓库可搜索性与标签，见 [docs/github-topics.md](docs/github-topics.md)
+
+## 5 分钟理解架构
+
+```mermaid
+flowchart LR
+    A["Feishu Ingress"] --> B["controller"]
+    B --> C["outbox"]
+    C --> D["sender"]
+    B --> E["worker callback"]
+    E --> B
+    B --> F["supervisor rollup"]
+```
+
+这条主线的核心价值是：
+
+- LLM 负责内容
+- 代码负责流程
+- worker 可以并行分析
+- 群里消息仍然由控制面统一顺序发布
+- supervisor 最终统一收口负责做“决策型终稿”
+
+如果你想看完整系统架构说明，见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+
+![V5.1 Control Plane Overview](docs/assets/v51-control-plane-overview.png)
+
+## Demo 场景
+
+如果你想快速向同事、客户或外部开发者展示这个项目，见 [DEMO.md](DEMO.md)。
+
+这里已经整理了：
+
+- 商业方案 demo
+- 运维保障服务升级方案 demo
+- 多角色扩展验证 demo
+- 最小可复制配置：见 [examples/](examples/)
+- 发布文章草稿：见 [docs/open-source-launch-post.md](docs/open-source-launch-post.md)
+
+## 开发者入口
+
+如果你是第一次从 GitHub 进入这个仓库，建议先看这里：
+
+1. 项目定位：本 README 顶部
+2. 安全约束：[SECURITY.md](SECURITY.md)
+3. 贡献方式：[CONTRIBUTING.md](CONTRIBUTING.md)
+4. 行为规范：[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+5. 主线实现与测试：`skills/openclaw-feishu-multi-agent-deploy/scripts/` 与 `tests/`
+
+## 交付入口
+
+如果你的目标是直接把项目交付给客户上线，建议从这里进入：
+
+1. [V5.1 Hardening 交付模板 / 产品手册](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v51-team-orchestrator.md)
+2. [V5.1 新机器快速启动 SOP](skills/openclaw-feishu-multi-agent-deploy/references/V5.1-新机器快速启动-SOP.md)
+3. [客户首次使用真实案例](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用真实案例.md)
+4. [客户首次使用-Codex提示词](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用-Codex提示词.md)
+
+## GitHub Topics 建议
+
+建议在 GitHub 仓库 About 中设置这些 topics，提升搜索可发现性：
+
+- `openclaw`
+- `feishu`
+- `multi-agent`
+- `agent-orchestration`
+- `team-orchestrator`
+- `customer-support`
+- `delivery-automation`
+- `sre`
+- `ops-automation`
+- `workflow-engine`
+
+如果你有仓库管理员权限，也可以直接照 [docs/github-topics.md](docs/github-topics.md) 里的清单填写。
+
 ## 当前版本
 
-- `v1.6.3`（2026-03-11）
+- `v1.6.5`（2026-03-16）
 - 默认技术路线：官方插件 `@openclaw/feishu`
 - 当前公开主线版本：`V5.1 Hardening`
 - 当前最新稳定版：`V5.1 Hardening`
