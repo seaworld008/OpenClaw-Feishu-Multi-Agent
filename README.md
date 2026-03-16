@@ -66,7 +66,7 @@ flowchart LR
 
 如果你想看完整系统架构说明，见 [ARCHITECTURE.md](ARCHITECTURE.md)。
 
-![V5.1 Control Plane Overview](docs/assets/v51-control-plane-overview.png)
+![V5.1 Control Plane Overview](docs/assets/v51-control-plane-overview.svg)
 
 ## Demo 场景
 

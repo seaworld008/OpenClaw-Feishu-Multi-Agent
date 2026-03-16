@@ -25,7 +25,7 @@ flowchart LR
 
 Rendered overview:
 
-![V5.1 Control Plane Overview](docs/assets/v51-control-plane-overview.png)
+![V5.1 Control Plane Overview](docs/assets/v51-control-plane-overview.svg)
 
 ## Main Principles
 
