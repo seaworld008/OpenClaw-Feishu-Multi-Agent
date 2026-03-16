@@ -1660,7 +1660,10 @@ class DocumentationConsistencyTests(unittest.TestCase):
 
         self.assertIn("开发者入口", content)
         self.assertIn("交付入口", content)
+        self.assertIn("快速开始 / Quickstart", content)
         self.assertIn("GitHub Topics 建议", content)
+        self.assertIn("actions/workflows/ci.yml/badge.svg", content)
+        self.assertIn("img.shields.io/github/v/tag/seaworld008/OpenClaw-Feishu-Multi-Agent", content)
         self.assertIn("feishu", content.lower())
         self.assertIn("multi-agent", content.lower())
         self.assertIn("team orchestrator", content.lower())

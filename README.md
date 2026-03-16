@@ -2,6 +2,10 @@
 
 面向交付团队的通用 Skill 仓库：用于基于 OpenClaw 搭建飞书多机器人多角色多 Agent 协作体系，支持客户环境快速落地、增量上线、可回滚与可升级。
 
+[![CI](https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/github/v/tag/seaworld008/OpenClaw-Feishu-Multi-Agent?sort=semver)](https://github.com/seaworld008/OpenClaw-Feishu-Multi-Agent/tags)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 适合两类用户：
 
 - 开发者：想复用多 Agent orchestration、runtime、模板与测试能力
@@ -9,6 +13,29 @@
 
 关键词：
 `openclaw` `feishu` `multi-agent` `team-orchestrator` `customer-delivery` `ops-automation` `support-sla`
+
+## 快速开始 / Quickstart
+
+如果你只想用最短路径判断这个仓库适不适合你，建议按下面顺序：
+
+1. 开发者：
+   - 看 [CONTRIBUTING.md](CONTRIBUTING.md) 和 [SECURITY.md](SECURITY.md)
+   - 跑核心测试：
+
+```bash
+pytest tests/test_openclaw_feishu_multi_agent_skill.py \
+  tests/test_v51_ingress_adapter.py \
+  tests/test_v51_outbox_sender.py \
+  tests/test_v51_runtime_store.py \
+  tests/test_v51_team_controller.py \
+  tests/test_v51_worker_callback_sink.py \
+  -q
+```
+
+2. 交付团队：
+   - 先看 [V5.1 Hardening 交付模板 / 产品手册](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v51-team-orchestrator.md)
+   - 再看 [V5.1 新机器快速启动 SOP](skills/openclaw-feishu-multi-agent-deploy/references/V5.1-新机器快速启动-SOP.md)
+   - 最后套用 [客户首次使用真实案例](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用真实案例.md)
 
 ## 开发者入口
 
