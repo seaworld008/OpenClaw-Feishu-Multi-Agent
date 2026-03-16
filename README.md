@@ -37,6 +37,31 @@ pytest tests/test_openclaw_feishu_multi_agent_skill.py \
    - 再看 [V5.1 新机器快速启动 SOP](skills/openclaw-feishu-multi-agent-deploy/references/V5.1-新机器快速启动-SOP.md)
    - 最后套用 [客户首次使用真实案例](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用真实案例.md)
 
+## 项目路线图 / Roadmap
+
+- 当前路线图见 [ROADMAP.md](ROADMAP.md)
+- 如果你关心仓库可搜索性与标签，见 [docs/github-topics.md](docs/github-topics.md)
+
+## 5 分钟理解架构
+
+```mermaid
+flowchart LR
+    A["Feishu Ingress"] --> B["controller"]
+    B --> C["outbox"]
+    C --> D["sender"]
+    B --> E["worker callback"]
+    E --> B
+    B --> F["supervisor rollup"]
+```
+
+这条主线的核心价值是：
+
+- LLM 负责内容
+- 代码负责流程
+- worker 可以并行分析
+- 群里消息仍然由控制面统一顺序发布
+- supervisor 最终统一收口负责做“决策型终稿”
+
 ## 开发者入口
 
 如果你是第一次从 GitHub 进入这个仓库，建议先看这里：
@@ -70,6 +95,8 @@ pytest tests/test_openclaw_feishu_multi_agent_skill.py \
 - `sre`
 - `ops-automation`
 - `workflow-engine`
+
+如果你有仓库管理员权限，也可以直接照 [docs/github-topics.md](docs/github-topics.md) 里的清单填写。
 
 ## 当前版本
 

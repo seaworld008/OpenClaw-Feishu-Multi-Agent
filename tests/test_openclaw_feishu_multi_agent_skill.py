@@ -18,6 +18,8 @@ LICENSE_FILE = REPO_ROOT / "LICENSE"
 CONTRIBUTING_FILE = REPO_ROOT / "CONTRIBUTING.md"
 CODE_OF_CONDUCT_FILE = REPO_ROOT / "CODE_OF_CONDUCT.md"
 SECURITY_FILE = REPO_ROOT / "SECURITY.md"
+ROADMAP_FILE = REPO_ROOT / "ROADMAP.md"
+TOPICS_FILE = REPO_ROOT / "docs/github-topics.md"
 GITHUB_DIR = REPO_ROOT / ".github"
 ISSUE_TEMPLATE_DIR = GITHUB_DIR / "ISSUE_TEMPLATE"
 PR_TEMPLATE_FILE = GITHUB_DIR / "pull_request_template.md"
@@ -1644,6 +1646,7 @@ class DocumentationConsistencyTests(unittest.TestCase):
             CONTRIBUTING_FILE,
             CODE_OF_CONDUCT_FILE,
             SECURITY_FILE,
+            ROADMAP_FILE,
             PR_TEMPLATE_FILE,
             CI_WORKFLOW_FILE,
         ):
@@ -1661,6 +1664,9 @@ class DocumentationConsistencyTests(unittest.TestCase):
         self.assertIn("开发者入口", content)
         self.assertIn("交付入口", content)
         self.assertIn("快速开始 / Quickstart", content)
+        self.assertIn("项目路线图 / Roadmap", content)
+        self.assertIn("5 分钟理解架构", content)
+        self.assertIn("```mermaid", content)
         self.assertIn("GitHub Topics 建议", content)
         self.assertIn("actions/workflows/ci.yml/badge.svg", content)
         self.assertIn("img.shields.io/github/v/tag/seaworld008/OpenClaw-Feishu-Multi-Agent", content)
@@ -1672,6 +1678,8 @@ class DocumentationConsistencyTests(unittest.TestCase):
         contributing = CONTRIBUTING_FILE.read_text(encoding="utf-8")
         conduct = CODE_OF_CONDUCT_FILE.read_text(encoding="utf-8")
         security = SECURITY_FILE.read_text(encoding="utf-8")
+        roadmap = ROADMAP_FILE.read_text(encoding="utf-8")
+        topics = TOPICS_FILE.read_text(encoding="utf-8")
         pr_template = PR_TEMPLATE_FILE.read_text(encoding="utf-8")
         workflow = CI_WORKFLOW_FILE.read_text(encoding="utf-8")
 
@@ -1681,6 +1689,12 @@ class DocumentationConsistencyTests(unittest.TestCase):
         self.assertIn("Contributor Covenant", conduct)
         self.assertIn("appSecret", security)
         self.assertIn("Rotate the exposed credential", security)
+        self.assertIn("Near Term", roadmap)
+        self.assertIn("Mid Term", roadmap)
+        self.assertIn("Long Term", roadmap)
+        self.assertIn("openclaw", topics.lower())
+        self.assertIn("multi-agent", topics.lower())
+        self.assertIn("team-orchestrator", topics.lower())
         self.assertIn("验证", pr_template)
         self.assertIn("pytest", workflow)
 
