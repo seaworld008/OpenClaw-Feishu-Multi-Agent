@@ -2,6 +2,48 @@
 
 面向交付团队的通用 Skill 仓库：用于基于 OpenClaw 搭建飞书多机器人多角色多 Agent 协作体系，支持客户环境快速落地、增量上线、可回滚与可升级。
 
+适合两类用户：
+
+- 开发者：想复用多 Agent orchestration、runtime、模板与测试能力
+- 客户/交付团队：想直接把飞书多机器人团队交付到生产环境
+
+关键词：
+`openclaw` `feishu` `multi-agent` `team-orchestrator` `customer-delivery` `ops-automation` `support-sla`
+
+## 开发者入口
+
+如果你是第一次从 GitHub 进入这个仓库，建议先看这里：
+
+1. 项目定位：本 README 顶部
+2. 安全约束：[SECURITY.md](SECURITY.md)
+3. 贡献方式：[CONTRIBUTING.md](CONTRIBUTING.md)
+4. 行为规范：[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+5. 主线实现与测试：`skills/openclaw-feishu-multi-agent-deploy/scripts/` 与 `tests/`
+
+## 交付入口
+
+如果你的目标是直接把项目交付给客户上线，建议从这里进入：
+
+1. [V5.1 Hardening 交付模板 / 产品手册](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v51-team-orchestrator.md)
+2. [V5.1 新机器快速启动 SOP](skills/openclaw-feishu-multi-agent-deploy/references/V5.1-新机器快速启动-SOP.md)
+3. [客户首次使用真实案例](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用真实案例.md)
+4. [客户首次使用-Codex提示词](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用-Codex提示词.md)
+
+## GitHub Topics 建议
+
+建议在 GitHub 仓库 About 中设置这些 topics，提升搜索可发现性：
+
+- `openclaw`
+- `feishu`
+- `multi-agent`
+- `agent-orchestration`
+- `team-orchestrator`
+- `customer-support`
+- `delivery-automation`
+- `sre`
+- `ops-automation`
+- `workflow-engine`
+
 ## 当前版本
 
 - `v1.6.3`（2026-03-11）

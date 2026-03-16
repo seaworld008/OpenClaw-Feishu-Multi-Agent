@@ -14,6 +14,14 @@ OUTER_SKILL_ROOT = REPO_ROOT.parent
 README_FILE = REPO_ROOT / "README.md"
 CHANGELOG_FILE = REPO_ROOT / "CHANGELOG.md"
 VERSION_FILE = REPO_ROOT / "VERSION"
+LICENSE_FILE = REPO_ROOT / "LICENSE"
+CONTRIBUTING_FILE = REPO_ROOT / "CONTRIBUTING.md"
+CODE_OF_CONDUCT_FILE = REPO_ROOT / "CODE_OF_CONDUCT.md"
+SECURITY_FILE = REPO_ROOT / "SECURITY.md"
+GITHUB_DIR = REPO_ROOT / ".github"
+ISSUE_TEMPLATE_DIR = GITHUB_DIR / "ISSUE_TEMPLATE"
+PR_TEMPLATE_FILE = GITHUB_DIR / "pull_request_template.md"
+CI_WORKFLOW_FILE = GITHUB_DIR / "workflows/ci.yml"
 SKILL_FILE = REPO_ROOT / "skills/openclaw-feishu-multi-agent-deploy/SKILL.md"
 ROOT_SKILL_FILE = OUTER_SKILL_ROOT / "SKILL.md"
 ROOT_CODEX_PROMPT = OUTER_SKILL_ROOT / "references/codex-prompt-templates.md"
@@ -1629,6 +1637,49 @@ class DocumentationConsistencyTests(unittest.TestCase):
         self.assertIn("Windows + WSL2", content)
         self.assertIn("launchd", content)
         self.assertIn("WSL2", content)
+
+    def test_open_source_governance_files_exist(self):
+        for path in (
+            LICENSE_FILE,
+            CONTRIBUTING_FILE,
+            CODE_OF_CONDUCT_FILE,
+            SECURITY_FILE,
+            PR_TEMPLATE_FILE,
+            CI_WORKFLOW_FILE,
+        ):
+            self.assertTrue(path.exists(), str(path))
+
+        bug_template = ISSUE_TEMPLATE_DIR / "bug_report.md"
+        feature_template = ISSUE_TEMPLATE_DIR / "feature_request.md"
+        config_template = ISSUE_TEMPLATE_DIR / "config.yml"
+        for path in (bug_template, feature_template, config_template):
+            self.assertTrue(path.exists(), str(path))
+
+    def test_readme_has_open_source_and_delivery_dual_entry(self):
+        content = README_FILE.read_text(encoding="utf-8")
+
+        self.assertIn("开发者入口", content)
+        self.assertIn("交付入口", content)
+        self.assertIn("GitHub Topics 建议", content)
+        self.assertIn("feishu", content.lower())
+        self.assertIn("multi-agent", content.lower())
+        self.assertIn("team orchestrator", content.lower())
+
+    def test_governance_docs_describe_expected_collaboration_contract(self):
+        contributing = CONTRIBUTING_FILE.read_text(encoding="utf-8")
+        conduct = CODE_OF_CONDUCT_FILE.read_text(encoding="utf-8")
+        security = SECURITY_FILE.read_text(encoding="utf-8")
+        pr_template = PR_TEMPLATE_FILE.read_text(encoding="utf-8")
+        workflow = CI_WORKFLOW_FILE.read_text(encoding="utf-8")
+
+        self.assertIn("开发者入口", contributing)
+        self.assertIn("交付入口", contributing)
+        self.assertIn("small, reviewable", contributing.lower())
+        self.assertIn("Contributor Covenant", conduct)
+        self.assertIn("appSecret", security)
+        self.assertIn("Rotate the exposed credential", security)
+        self.assertIn("验证", pr_template)
+        self.assertIn("pytest", workflow)
 
     def test_skill_documents_platform_policy(self):
         content = SKILL_FILE.read_text(encoding="utf-8")
@@ -3628,8 +3679,8 @@ class RuntimeRegistryTests(unittest.TestCase):
             self.assertIn("三、最终方案", rollup_message)
             self.assertIn("四、执行路线", rollup_message)
             self.assertIn("六、明日三件事", rollup_message)
-            self.assertIn("增长：增长方案已完成", rollup_message)
-            self.assertIn("财审：财审方案已完成", rollup_message)
+            self.assertIn("采纳增长判断：增长方案已完成", rollup_message)
+            self.assertIn("采纳财审判断：财审方案已完成", rollup_message)
             self.assertIn("完整增长方案。", rollup_message)
             self.assertIn("完整财审方案。", rollup_message)
 
