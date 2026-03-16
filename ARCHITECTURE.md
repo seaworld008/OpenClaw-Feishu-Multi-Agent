@@ -23,6 +23,10 @@ flowchart LR
     C --> H["Supervisor rollup"]
 ```
 
+Rendered overview:
+
+![V5.1 Control Plane Overview](docs/assets/v51-control-plane-overview.png)
+
 ## Main Principles
 
 1. `LLM 负责内容，代码负责流程`

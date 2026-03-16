@@ -1,0 +1,71 @@
+{
+  "mode": "plugin",
+  "connectionMode": "websocket",
+  "defaultAccount": "supervisor_bot",
+  "accounts": [
+    {
+      "accountId": "supervisor_bot",
+      "appId": "<replace-supervisor-app-id>",
+      "appSecret": "<replace-supervisor-app-secret>"
+    },
+    {
+      "accountId": "ops_bot",
+      "appId": "<replace-ops-app-id>",
+      "appSecret": "<replace-ops-app-secret>"
+    },
+    {
+      "accountId": "finance_bot",
+      "appId": "<replace-finance-app-id>",
+      "appSecret": "<replace-finance-app-secret>"
+    },
+    {
+      "accountId": "legal_bot",
+      "appId": "<replace-legal-app-id>",
+      "appSecret": "<replace-legal-app-secret>"
+    }
+  ],
+  "roleCatalog": {
+    "supervisor_default": { "kind": "supervisor", "accountId": "supervisor_bot", "visibleLabel": "主管", "systemPrompt": "<replace-supervisor-prompt>" },
+    "ops_default": { "kind": "worker", "accountId": "ops_bot", "visibleLabel": "运营", "systemPrompt": "<replace-ops-prompt>" },
+    "finance_default": { "kind": "worker", "accountId": "finance_bot", "visibleLabel": "财务", "systemPrompt": "<replace-finance-prompt>" },
+    "legal_default": { "kind": "worker", "accountId": "legal_bot", "visibleLabel": "法务", "systemPrompt": "<replace-legal-prompt>" }
+  },
+  "teams": [
+    {
+      "teamKey": "parallel_demo",
+      "group": {
+        "peerId": "oc_replace_parallel_demo",
+        "entryAccountId": "supervisor_bot",
+        "requireMention": true
+      },
+      "supervisor": {
+        "profileId": "supervisor_default",
+        "agentId": "supervisor_parallel_demo"
+      },
+      "workers": [
+        { "profileId": "ops_default", "agentId": "ops_parallel_demo" },
+        { "profileId": "finance_default", "agentId": "finance_parallel_demo" },
+        { "profileId": "legal_default", "agentId": "legal_parallel_demo" }
+      ],
+      "workflow": {
+        "mode": "parallel",
+        "stages": [
+          {
+            "stageKey": "analysis",
+            "mode": "parallel",
+            "agents": [
+              { "agentId": "ops_parallel_demo" },
+              { "agentId": "finance_parallel_demo" },
+              { "agentId": "legal_parallel_demo" }
+            ],
+            "publishOrder": [
+              "ops_parallel_demo",
+              "finance_parallel_demo",
+              "legal_parallel_demo"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

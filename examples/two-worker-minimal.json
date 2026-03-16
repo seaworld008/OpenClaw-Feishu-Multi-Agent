@@ -1,0 +1,77 @@
+{
+  "mode": "plugin",
+  "connectionMode": "websocket",
+  "defaultAccount": "supervisor_bot",
+  "accounts": [
+    {
+      "accountId": "supervisor_bot",
+      "appId": "<replace-supervisor-app-id>",
+      "appSecret": "<replace-supervisor-app-secret>"
+    },
+    {
+      "accountId": "ops_bot",
+      "appId": "<replace-ops-app-id>",
+      "appSecret": "<replace-ops-app-secret>"
+    },
+    {
+      "accountId": "finance_bot",
+      "appId": "<replace-finance-app-id>",
+      "appSecret": "<replace-finance-app-secret>"
+    }
+  ],
+  "roleCatalog": {
+    "supervisor_default": {
+      "kind": "supervisor",
+      "accountId": "supervisor_bot",
+      "visibleLabel": "主管",
+      "systemPrompt": "<replace-supervisor-prompt>"
+    },
+    "ops_default": {
+      "kind": "worker",
+      "accountId": "ops_bot",
+      "visibleLabel": "运营",
+      "systemPrompt": "<replace-ops-prompt>"
+    },
+    "finance_default": {
+      "kind": "worker",
+      "accountId": "finance_bot",
+      "visibleLabel": "财务",
+      "systemPrompt": "<replace-finance-prompt>"
+    }
+  },
+  "teams": [
+    {
+      "teamKey": "minimal_demo",
+      "group": {
+        "peerId": "oc_replace_minimal_demo",
+        "entryAccountId": "supervisor_bot",
+        "requireMention": true
+      },
+      "supervisor": {
+        "profileId": "supervisor_default",
+        "agentId": "supervisor_minimal_demo"
+      },
+      "workers": [
+        {
+          "profileId": "ops_default",
+          "agentId": "ops_minimal_demo"
+        },
+        {
+          "profileId": "finance_default",
+          "agentId": "finance_minimal_demo"
+        }
+      ],
+      "workflow": {
+        "mode": "serial",
+        "stages": [
+          {
+            "agentId": "ops_minimal_demo"
+          },
+          {
+            "agentId": "finance_minimal_demo"
+          }
+        ]
+      }
+    }
+  ]
+}

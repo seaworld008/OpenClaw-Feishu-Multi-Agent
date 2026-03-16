@@ -1,0 +1,60 @@
+{
+  "mode": "plugin",
+  "connectionMode": "websocket",
+  "defaultAccount": "supervisor_bot",
+  "accounts": [
+    { "accountId": "supervisor_bot", "appId": "<replace-supervisor-app-id>", "appSecret": "<replace-supervisor-app-secret>" },
+    { "accountId": "tech_bot", "appId": "<replace-tech-app-id>", "appSecret": "<replace-tech-app-secret>" },
+    { "accountId": "product_bot", "appId": "<replace-product-app-id>", "appSecret": "<replace-product-app-secret>" },
+    { "accountId": "ops_bot", "appId": "<replace-ops-app-id>", "appSecret": "<replace-ops-app-secret>" },
+    { "accountId": "finance_bot", "appId": "<replace-finance-app-id>", "appSecret": "<replace-finance-app-secret>" }
+  ],
+  "roleCatalog": {
+    "supervisor_default": { "kind": "supervisor", "accountId": "supervisor_bot", "visibleLabel": "主管", "systemPrompt": "<replace-supervisor-prompt>" },
+    "tech_default": { "kind": "worker", "accountId": "tech_bot", "visibleLabel": "技术", "systemPrompt": "<replace-tech-prompt>" },
+    "product_default": { "kind": "worker", "accountId": "product_bot", "visibleLabel": "产品", "systemPrompt": "<replace-product-prompt>" },
+    "ops_default": { "kind": "worker", "accountId": "ops_bot", "visibleLabel": "运维", "systemPrompt": "<replace-ops-prompt>" },
+    "finance_default": { "kind": "worker", "accountId": "finance_bot", "visibleLabel": "财务", "systemPrompt": "<replace-finance-prompt>" }
+  },
+  "teams": [
+    {
+      "teamKey": "four_worker_demo",
+      "group": {
+        "peerId": "oc_replace_four_worker_demo",
+        "entryAccountId": "supervisor_bot",
+        "requireMention": true
+      },
+      "supervisor": {
+        "profileId": "supervisor_default",
+        "agentId": "supervisor_four_worker_demo"
+      },
+      "workers": [
+        { "profileId": "tech_default", "agentId": "tech_four_worker_demo" },
+        { "profileId": "product_default", "agentId": "product_four_worker_demo" },
+        { "profileId": "ops_default", "agentId": "ops_four_worker_demo" },
+        { "profileId": "finance_default", "agentId": "finance_four_worker_demo" }
+      ],
+      "workflow": {
+        "mode": "parallel",
+        "stages": [
+          {
+            "stageKey": "analysis",
+            "mode": "parallel",
+            "agents": [
+              { "agentId": "tech_four_worker_demo" },
+              { "agentId": "product_four_worker_demo" },
+              { "agentId": "ops_four_worker_demo" },
+              { "agentId": "finance_four_worker_demo" }
+            ],
+            "publishOrder": [
+              "tech_four_worker_demo",
+              "product_four_worker_demo",
+              "ops_four_worker_demo",
+              "finance_four_worker_demo"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

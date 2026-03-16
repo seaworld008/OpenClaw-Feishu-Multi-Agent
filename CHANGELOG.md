@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.6.5] - 2026-03-16
+
+### Added
+- 新增对外传播与理解资产：
+  - `examples/README.md`
+  - `examples/two-worker-minimal.json`
+  - `examples/parallel-three-worker.json`
+  - `examples/four-worker-decision-rollup.json`
+  - `docs/open-source-launch-post.md`
+  - `docs/assets/v51-control-plane-overview.png`
+
+### Changed
+- README 新增：
+  - `examples/` 入口
+  - 架构图 PNG 展示
+  - 发布文章入口
+- `ARCHITECTURE.md` 增加渲染后的架构图引用
+- 项目版本提升到 `1.6.5`
+
 ## [1.6.4] - 2026-03-16
 
 ### Added

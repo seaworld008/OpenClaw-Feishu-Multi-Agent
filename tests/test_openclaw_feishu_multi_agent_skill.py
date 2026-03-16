@@ -16,6 +16,10 @@ CHANGELOG_FILE = REPO_ROOT / "CHANGELOG.md"
 VERSION_FILE = REPO_ROOT / "VERSION"
 ARCHITECTURE_FILE = REPO_ROOT / "ARCHITECTURE.md"
 DEMO_FILE = REPO_ROOT / "DEMO.md"
+EXAMPLES_DIR = REPO_ROOT / "examples"
+EXAMPLES_README_FILE = EXAMPLES_DIR / "README.md"
+RELEASE_POST_FILE = REPO_ROOT / "docs/open-source-launch-post.md"
+ARCHITECTURE_DIAGRAM_FILE = REPO_ROOT / "docs/assets/v51-control-plane-overview.png"
 LICENSE_FILE = REPO_ROOT / "LICENSE"
 CONTRIBUTING_FILE = REPO_ROOT / "CONTRIBUTING.md"
 CODE_OF_CONDUCT_FILE = REPO_ROOT / "CODE_OF_CONDUCT.md"
@@ -1651,6 +1655,9 @@ class DocumentationConsistencyTests(unittest.TestCase):
             ROADMAP_FILE,
             ARCHITECTURE_FILE,
             DEMO_FILE,
+            EXAMPLES_README_FILE,
+            RELEASE_POST_FILE,
+            ARCHITECTURE_DIAGRAM_FILE,
             PR_TEMPLATE_FILE,
             CI_WORKFLOW_FILE,
         ):
@@ -1672,6 +1679,8 @@ class DocumentationConsistencyTests(unittest.TestCase):
         self.assertIn("5 分钟理解架构", content)
         self.assertIn("完整系统架构", content)
         self.assertIn("Demo 场景", content)
+        self.assertIn("examples/", content)
+        self.assertIn("发布文章", content)
         self.assertIn("```mermaid", content)
         self.assertIn("GitHub Topics 建议", content)
         self.assertIn("actions/workflows/ci.yml/badge.svg", content)
@@ -1687,6 +1696,8 @@ class DocumentationConsistencyTests(unittest.TestCase):
         roadmap = ROADMAP_FILE.read_text(encoding="utf-8")
         architecture = ARCHITECTURE_FILE.read_text(encoding="utf-8")
         demo = DEMO_FILE.read_text(encoding="utf-8")
+        examples = EXAMPLES_README_FILE.read_text(encoding="utf-8")
+        release_post = RELEASE_POST_FILE.read_text(encoding="utf-8")
         topics = TOPICS_FILE.read_text(encoding="utf-8")
         pr_template = PR_TEMPLATE_FILE.read_text(encoding="utf-8")
         workflow = CI_WORKFLOW_FILE.read_text(encoding="utf-8")
@@ -1704,6 +1715,11 @@ class DocumentationConsistencyTests(unittest.TestCase):
         self.assertIn("controller", architecture)
         self.assertIn("运维保障服务升级方案", demo)
         self.assertIn("商业方案", demo)
+        self.assertIn("最小可复制", examples)
+        self.assertIn("two-worker", examples)
+        self.assertIn("four-worker", examples)
+        self.assertIn("为什么现在开源", release_post)
+        self.assertIn("适合谁", release_post)
         self.assertIn("openclaw", topics.lower())
         self.assertIn("multi-agent", topics.lower())
         self.assertIn("team-orchestrator", topics.lower())

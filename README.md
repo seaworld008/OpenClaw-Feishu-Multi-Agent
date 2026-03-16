@@ -36,6 +36,8 @@ pytest tests/test_openclaw_feishu_multi_agent_skill.py \
    - 先看 [V5.1 Hardening 交付模板 / 产品手册](skills/openclaw-feishu-multi-agent-deploy/references/codex-prompt-templates-v51-team-orchestrator.md)
    - 再看 [V5.1 新机器快速启动 SOP](skills/openclaw-feishu-multi-agent-deploy/references/V5.1-新机器快速启动-SOP.md)
    - 最后套用 [客户首次使用真实案例](skills/openclaw-feishu-multi-agent-deploy/references/客户首次使用真实案例.md)
+3. 最小可复制配置：
+   - 看 [examples/](examples/)
 
 ## 项目路线图 / Roadmap
 
@@ -64,6 +66,8 @@ flowchart LR
 
 如果你想看完整系统架构说明，见 [ARCHITECTURE.md](ARCHITECTURE.md)。
 
+![V5.1 Control Plane Overview](docs/assets/v51-control-plane-overview.png)
+
 ## Demo 场景
 
 如果你想快速向同事、客户或外部开发者展示这个项目，见 [DEMO.md](DEMO.md)。
@@ -73,6 +77,8 @@ flowchart LR
 - 商业方案 demo
 - 运维保障服务升级方案 demo
 - 多角色扩展验证 demo
+- 最小可复制配置：见 [examples/](examples/)
+- 发布文章草稿：见 [docs/open-source-launch-post.md](docs/open-source-launch-post.md)
 
 ## 开发者入口
 
@@ -112,7 +118,7 @@ flowchart LR
 
 ## 当前版本
 
-- `v1.6.4`（2026-03-16）
+- `v1.6.5`（2026-03-16）
 - 默认技术路线：官方插件 `@openclaw/feishu`
 - 当前公开主线版本：`V5.1 Hardening`
 - 当前最新稳定版：`V5.1 Hardening`
