@@ -62,6 +62,18 @@ flowchart LR
 - 群里消息仍然由控制面统一顺序发布
 - supervisor 最终统一收口负责做“决策型终稿”
 
+如果你想看完整系统架构说明，见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+
+## Demo 场景
+
+如果你想快速向同事、客户或外部开发者展示这个项目，见 [DEMO.md](DEMO.md)。
+
+这里已经整理了：
+
+- 商业方案 demo
+- 运维保障服务升级方案 demo
+- 多角色扩展验证 demo
+
 ## 开发者入口
 
 如果你是第一次从 GitHub 进入这个仓库，建议先看这里：
@@ -100,7 +112,7 @@ flowchart LR
 
 ## 当前版本
 
-- `v1.6.3`（2026-03-11）
+- `v1.6.4`（2026-03-16）
 - 默认技术路线：官方插件 `@openclaw/feishu`
 - 当前公开主线版本：`V5.1 Hardening`
 - 当前最新稳定版：`V5.1 Hardening`

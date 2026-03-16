@@ -14,6 +14,8 @@ OUTER_SKILL_ROOT = REPO_ROOT.parent
 README_FILE = REPO_ROOT / "README.md"
 CHANGELOG_FILE = REPO_ROOT / "CHANGELOG.md"
 VERSION_FILE = REPO_ROOT / "VERSION"
+ARCHITECTURE_FILE = REPO_ROOT / "ARCHITECTURE.md"
+DEMO_FILE = REPO_ROOT / "DEMO.md"
 LICENSE_FILE = REPO_ROOT / "LICENSE"
 CONTRIBUTING_FILE = REPO_ROOT / "CONTRIBUTING.md"
 CODE_OF_CONDUCT_FILE = REPO_ROOT / "CODE_OF_CONDUCT.md"
@@ -1647,6 +1649,8 @@ class DocumentationConsistencyTests(unittest.TestCase):
             CODE_OF_CONDUCT_FILE,
             SECURITY_FILE,
             ROADMAP_FILE,
+            ARCHITECTURE_FILE,
+            DEMO_FILE,
             PR_TEMPLATE_FILE,
             CI_WORKFLOW_FILE,
         ):
@@ -1666,6 +1670,8 @@ class DocumentationConsistencyTests(unittest.TestCase):
         self.assertIn("快速开始 / Quickstart", content)
         self.assertIn("项目路线图 / Roadmap", content)
         self.assertIn("5 分钟理解架构", content)
+        self.assertIn("完整系统架构", content)
+        self.assertIn("Demo 场景", content)
         self.assertIn("```mermaid", content)
         self.assertIn("GitHub Topics 建议", content)
         self.assertIn("actions/workflows/ci.yml/badge.svg", content)
@@ -1679,6 +1685,8 @@ class DocumentationConsistencyTests(unittest.TestCase):
         conduct = CODE_OF_CONDUCT_FILE.read_text(encoding="utf-8")
         security = SECURITY_FILE.read_text(encoding="utf-8")
         roadmap = ROADMAP_FILE.read_text(encoding="utf-8")
+        architecture = ARCHITECTURE_FILE.read_text(encoding="utf-8")
+        demo = DEMO_FILE.read_text(encoding="utf-8")
         topics = TOPICS_FILE.read_text(encoding="utf-8")
         pr_template = PR_TEMPLATE_FILE.read_text(encoding="utf-8")
         workflow = CI_WORKFLOW_FILE.read_text(encoding="utf-8")
@@ -1692,6 +1700,10 @@ class DocumentationConsistencyTests(unittest.TestCase):
         self.assertIn("Near Term", roadmap)
         self.assertIn("Mid Term", roadmap)
         self.assertIn("Long Term", roadmap)
+        self.assertIn("```mermaid", architecture)
+        self.assertIn("controller", architecture)
+        self.assertIn("运维保障服务升级方案", demo)
+        self.assertIn("商业方案", demo)
         self.assertIn("openclaw", topics.lower())
         self.assertIn("multi-agent", topics.lower())
         self.assertIn("team-orchestrator", topics.lower())
@@ -8201,9 +8213,9 @@ class V51ReadmeAndSkillTests(unittest.TestCase):
         changelog = CHANGELOG_FILE.read_text(encoding="utf-8")
         version = VERSION_FILE.read_text(encoding="utf-8").strip()
 
-        self.assertIn(f"`v{version}`（2026-03-11）", readme)
+        self.assertIn(f"`v{version}`（2026-03-16）", readme)
         self.assertIn("当前最新稳定版：`V5.1 Hardening`", readme)
-        self.assertIn(f"## [{version}] - 2026-03-11", changelog)
+        self.assertIn(f"## [{version}] - 2026-03-16", changelog)
 
     def test_skill_marks_single_bot_and_multi_bot_as_topology_background_only(self):
         content = SKILL_FILE.read_text(encoding="utf-8")

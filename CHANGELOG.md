@@ -1,5 +1,44 @@
 # Changelog
 
+## [1.6.4] - 2026-03-16
+
+### Added
+- 新增开源项目治理与协作基础设施：
+  - `LICENSE`
+  - `CONTRIBUTING.md`
+  - `CODE_OF_CONDUCT.md`
+  - `SECURITY.md`
+  - `.github` issue / PR 模板
+  - `.github/workflows/ci.yml`
+- 新增开源产品化与发现性文档：
+  - `ROADMAP.md`
+  - `ARCHITECTURE.md`
+  - `DEMO.md`
+  - `docs/github-topics.md`
+  - `docs/plans/2026-03-16-open-source-productization-design.md`
+  - `docs/plans/2026-03-16-open-source-productization-implementation-plan.md`
+
+### Changed
+- README 顶部新增：
+  - badges
+  - `Quickstart`
+  - 开发者入口 / 交付入口双导航
+  - Roadmap 与 Topics 入口
+  - 5 分钟理解架构
+  - Demo 场景入口
+- README / 参考文档对外部失效官方链接完成交叉核验与修复。
+- 示例和模板中的飞书 `appSecret` 已统一改成去敏占位符。
+
+### Fixed
+- 修复 supervisor 最终统一收口从“摘要拼接”升级后的脏格式问题：
+  - Python 风格数组字符串不再泄漏到群消息
+  - supervisor 收口改为更稳定的“决策型终稿”
+- 修复公开文档中存在无效 GitHub 路径与过时 OpenClaw 官方文档链接的问题。
+
+### Security
+- 清理仓库当前内容中的硬编码飞书 `appSecret`
+- 新增安全披露与发布去敏说明
+- 明确 live 输入与 `generated/` 产物不应提交到 git
 ## [1.6.3] - 2026-03-11
 
 ### Changed
